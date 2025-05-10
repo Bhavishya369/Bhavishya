@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gliese 667 Cc Exploration - Modern Website</title>
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #fff;
+            background: #0b0c10;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            transition: background 0.5s;
+        }
+
+        nav .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #ff9800;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+        }
+
+        nav ul li {
+            margin-left: 20px;
+        }
+
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: color 0.3s;
+        }
+
+        nav ul li a:hover {
+            color: #ff9800;
+        }
+
+        /* Hero Section */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 20px;
+            position: relative;
+            overflow: hidden;
+            background-image: url("https://static.wikia.nocookie.net/remixfavoriteshowandgame/images/3/31/Gliese_667_Cf.jpg/revision/latest?cb=20161220141800");
+            background-size: cover;
+            background-position: center;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            animation: slideInDown 1s ease forwards;
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            margin-top: 20px;
+            animation: slideInUp 1s ease forwards;
+            opacity: 0;
+            animation-delay: 0.5s;
+            z-index: 1;
+        }
+
+        /* Content Section */
+        .content {
+            background-color: rgba(0, 0, 0, 0.8); 
+            padding: 50px 20px;
+            text-align: center;
+            margin-top: 0; /* Ensure content starts below the navbar */
+        }
+
+        .content h1, .content h2, .content p {
+            margin-bottom: 20px;
+        }
+
+        .content ul {
+            margin-bottom: 30px;
+        }
+
+        .content strong {
+            color: #ff006f;
+        }
+
+        /* Image Carousel */
+        .image-carousel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .carousel-image {
+            max-width: 100%;
+            max-height: 400px;
+            display: none;
+        }
+
+        .active {
+            display: block;
+        }
+
+        .arrow {
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            background-color: transparent;
+            border: none;
+            color: white;
+            font-size: 30px;
+        }
+
+        /* Call-to-Action Section */
+        .cta {
+            padding: 100px 20px;
+            background: linear-gradient(45deg, #ff9800, #f57c00);
+            text-align: center;
+            color: white;
+        }
+
+        .cta h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .cta a {
+            padding: 15px 30px;
+            background-color: white;
+            color: #ff9800;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .cta a:hover {
+            background-color: #f57c00;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Footer */
+        footer {
+            background: #0b0c10;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        /* Animations */
+        @keyframes slideInDown {
+            0% {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInUp {
+            0% {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .carousel-image {
+                width: 100%;
+            }
+        }
+    </style>
+    <script>
+        let currentIndex = 0;
+
+        function showImage(index) {
+            const images = document.querySelectorAll('.carousel-image');
+            images.forEach((img, i) => {
+                img.classList.remove('active');
+                if (i === index) {
+                    img.classList.add('active');
+                }
+            });
+        }
+
+        function nextImage() {
+            const images = document.querySelectorAll('.carousel-image');
+            currentIndex = (currentIndex + 1) % images.length;
+            showImage(currentIndex);
+        }
+
+        function previousImage() {
+            const images = document.querySelectorAll('.carousel-image');
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            showImage(currentIndex);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            showImage(currentIndex);
+        });
+    </script>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav>
+        <div class="logo">Gliese 667 Cc</div>
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="about.html">About</a></li>
+            <li><a href="contact.html">Contact</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div>
+            <h1>Explore Gliese 667 Cc</h1>
+            <p>A Potential Earth-Like World!</p>
+        </div>
+    </section>
+
+    <!-- Content Section -->
+    <div class="content">
+        <h1>Features of Gliese 667 Cc:</h1>
+        <ul>
+            <li>Located in the habitable zone of its star, Gliese 667 C.</li>
+            <li>Approximately 4.5 times the mass of Earth.</li>
+            <li>Potential for liquid water due to its optimal distance from its star.</li>
+            <li>About 23.62 light-years away from Earth.</li>
+            <li>One of the best candidates for habitability among known exoplanets.</li>
+        </ul>
+
+        <h1>Description:</h1>
+        <p>Gliese 667 Cc is a super-Earth exoplanet located in the habitable zone of the red dwarf star Gliese 667 C. Its position allows for the possibility of liquid water, making it a key target in the search for extraterrestrial life.</p>
+        <p><strong>Day 1: Departure from Earth</strong></p>
+        <p>Your journey to Gliese 667 Cc begins with a launch from Earth, setting off on an exciting mission to explore this intriguing exoplanet.</p>
+        <p><strong>Day 2: Approaching the Gliese System</strong></p>
+        <p>As you travel, learn about the unique properties of Gliese 667 C and the characteristics of its planets.</p>
+        <p><strong>Day 3: Arrival at Gliese 667 Cc</strong></p>
+        <p>Welcome to Gliese 667 Cc! Use virtual simulations to explore the planet's surface and its geological features.</p>
+        <p><strong>Day 4: Investigating Habitability</strong></p>
+        <p>Analyze the planet's atmosphere to understand its potential for supporting life and explore its diverse environments.</p>
+        <p><strong>Day 5: Understanding Its Star</strong></p>
+        <p>Learn how Gliese 667 C influences the environment of its planets and what that means for potential habitability.</p>
+        <p><strong>Day 6: Return to Earth</strong></p>
+        <p>As your mission concludes, reflect on the discoveries made and the implications for life beyond Earth.</p>
+        <p><strong>What to Bring and Wear</strong></p>
+        <ul>
+            <li>Advanced space suits for varying planetary conditions.</li>
+            <li>Scientific tools for atmospheric and geological analysis.</li>
+            <li>Cameras to capture stunning visuals of the exoplanet.</li>
+            <li>A thirst for knowledge and adventure!</li>
+        </ul>
+        <p><strong>Important Information</strong></p>
+        <ul>
+            <li>Your safety will be assured by a team of experts in astrobiology and space exploration.</li>
+            <li>Real-time communication with Earth will be maintained throughout your journey.</li>
+            <li>The itinerary can be customized based on your interests and mission goals.</li>
+        </ul>
+        <p>Prepare for an adventure to Gliese 667 Cc, where new worlds await exploration!</p>
+        
+        <!-- Image Carousel Section -->
+        <h1>Image Gallery:</h1>
+        <div class="image-carousel">
+            <button class="arrow" onclick="previousImage()">&#10094;</button>
+            <img src="https://cdn.shopify.com/s/files/1/0742/7719/1954/files/gliese-581g-6_1024x1024.jpg?v=1682465181" class="carousel-image" alt="Gliese 667 Cc Image 1">
+            <img src="https://userscontent2.emaze.com/images/db876ef6-b8b4-425b-a7d0-9c9401558743/1c72dbcc-d014-4210-b611-fbdabf6ab5fd.png" class="carousel-image" alt="Gliese 667 Cc Image 2">
+            <img src="https://www.sfu.ca/~sjao/Sorren_HackademiaSubmission_Online/planetTrans/gliese-667cc(2).png" class="carousel-image" alt="Gliese 667 Cc Image 3">
+            <button class="arrow" onclick="nextImage()">&#10095;</button>
+        </div>
+
+        <h1>Distance:</h1>
+        <p>Approximately 23.62 light-years from Earth</p>
+
+        <h1>Landing Site:</h1>
+        <p>Gliese 667 Cc</p>
+    </div>
+
+    <!-- Call-to-Action Section -->
+    <div class="cta">
+        <h2>Ready to Book Your Adventure?</h2>
+        <a href="NasaBha2 - gliese 667 Cc two.html">Book Now</a>
+    </div>
+
+    <!-- Footer Section -->
+    <footer>
+        <p>&copy; 2024 Space Exploration Tours. All rights reserved.</p>
+    </footer>
+</body>
+</html>

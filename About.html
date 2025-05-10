@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to right, #e0c3fc, #8ec5fc); /* Sky blue to light purple gradient */
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: #333;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #5e35b1; /* Deep purple color */
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            font-family: 'Georgia', serif; /* Change to serif font for elegance */
+        }
+
+        .content {
+            background: linear-gradient(to right, #ffffff, #d1c4e9); /* Light purple gradient */
+            padding: 40px;
+            border-radius: 30px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            border: 3px solid #7e57c2; /* Purple border for the content box */
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+
+        .content:hover {
+            transform: scale(1.02); /* Slightly enlarge on hover */
+        }
+
+        .icon-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 70px;
+            height: 70px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: box-shadow 0.3s ease, transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .icon-container:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .icon-container img {
+            width: 50px;
+            height: 50px;
+            transition: transform 0.3s ease;
+        }
+
+        .icon-container:hover img {
+            transform: rotate(10deg);
+        }
+
+        p {
+            font-size: 1.2em; /* Increased font size */
+            color: #444;
+            margin-bottom: 15px;
+        }
+
+        .contact-details {
+            margin-top: 20px;
+            font-size: 1em;
+            color: #333;
+            background: linear-gradient(to right, #d1c4e9, #bbdefb); /* Purple to sky blue gradient */
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.3s ease;
+            position: relative;
+            z-index: 1;
+            text-align: center; /* Center-align the text */
+        }
+
+        .contact-details:hover {
+            background: linear-gradient(to right, #bbdefb, #90caf9); /* Darker blue on hover */
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            justify-content: center; /* Center items horizontally */
+            margin: 15px 0;
+            padding: 10px; /* Added padding for contact items */
+            background: rgba(255, 255, 255, 0.9); /* White background with transparency */
+            border-radius: 10px; /* Rounded corners for contact items */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .contact-item:hover {
+            transform: translateY(-3px); /* Lift effect on hover */
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .contact-item img {
+            width: 25px; /* Increased icon size */
+            margin-right: 10px;
+        }
+
+        .contact-details p {
+            margin: 5px 0;
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 20px;
+            text-align: center;
+            width: 100%;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .footer a {
+            color: #5e35b1; /* Purple color for links */
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+            color: #4a148c; /* Darker purple on hover */
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2.5em;
+            }
+            .content {
+                padding: 20px;
+            }
+            .contact-item img {
+                width: 20px; /* Smaller icon for mobile */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <a href="index.html">
+        <div class="icon-container">
+            <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Home Icon">
+        </div>
+    </a>
+
+    <div class="content">
+        <h1>About Us</h1>
+        <p>For Any Queries Regarding Our Project, Contact Us:</p>
+        <div class="contact-details">
+            <div class="contact-item">
+                <a href="https://wa.me/7994004728" target="_blank">
+                    <img src="https://img.icons8.com/ios-filled/50/000000/whatsapp.png" alt="WhatsApp Icon"/>
+                    <p><strong>Coordinator:</strong> 7994004728</p>
+                </a>
+            </div>
+            <div class="contact-item">
+                <a href="tel:9947269232">
+                    <img src="https://img.icons8.com/ios-filled/50/000000/phone.png" alt="Phone Icon"/>
+                    <p><strong>Phone:</strong> 7994004728</p>
+                </a>
+            </div>
+            <div class="contact-item">
+                <a href="mailto:maheshmanikandan108@gmail.com">
+                    <img src="https://img.icons8.com/ios-filled/50/000000/mail.png" alt="Email Icon"/>
+                    <p><strong>Email:</strong> maheshmanikandan108@gmail.com</p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>&copy; 2024 Your Company Name. All rights reserved.</p>
+        <p>Follow us on <a href="https://www.instagram.com" target="_blank">Instagram</a> | <a href="https://www.facebook.com" target="_blank">Facebook</a></p>
+    </div>
+
+</body>
+</html>

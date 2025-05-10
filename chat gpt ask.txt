@@ -1,0 +1,287 @@
+ 
+like mercury 's rectangle and its features ,like that do for every planet's rectangle and give the functions and features that we give for mercury ( the features ,the description ,the distance,  the landing sight,the book now button with the hover effect)
+give the five features of the planets for every other  planet from this :
+Mercury:
+
+Closest planet to the Sun.
+Extremely hot surface temperatures during the day and very cold at night due to the lack of atmosphere.
+No natural satellites (moons).
+Surface is covered in craters, and it has many scarps (cliffs) due to tectonic activity.
+Orbits the Sun in just 88 Earth days.
+Venus:
+
+Similar in size and composition to Earth, often referred to as Earth's "sister planet."
+Thick, toxic atmosphere primarily composed of carbon dioxide, with clouds of sulfuric acid.
+Surface temperature is incredibly high due to the greenhouse effect, making it the hottest planet in the solar system.
+No natural moons.
+Retrograde rotation, meaning it spins on its axis in the opposite direction of most other planets.
+Earth:
+
+Only known planet to support life.
+Abundant liquid water on its surface.
+Home to a diverse range of ecosystems and life forms.
+One natural satellite, the Moon.
+A dynamic surface with tectonic plate movement and various geological features.
+Mars:
+
+Often called the "Red Planet" due to its reddish appearance.
+Has the largest volcano in the solar system, Olympus Mons, and a vast canyon system, Valles Marineris.
+Evidence of liquid water in the past, and potential for microbial life.
+Two small natural moons, Phobos and Deimos.
+Dust storms can cover the entire planet for months.
+Jupiter:
+
+Largest planet in the solar system, a gas giant.
+Has a strong magnetic field and a massive system of rings.
+Over 70 known moons, with the four largest being called the Galilean moons (Io, Europa, Ganymede, and Callisto).
+Prominent banded structure in its atmosphere, with the Great Red Spot, a persistent storm.
+Generates more heat than it receives from the Sun due to internal processes.
+Saturn:
+
+Known for its stunning system of rings, composed of ice and rock particles.
+Second-largest planet in the solar system.
+Extensive moon system, with over 80 known moons, including Titan, the second-largest moon in the solar system.
+Unique hexagonal cloud pattern at its north pole.
+Low density compared to other gas giants; it would float in water if placed in a large enough container.
+Uranus:
+
+Tilted almost 90 degrees on its side, appearing to roll along its orbital path.
+Blue-green color due to methane in its atmosphere.
+Rings and a system of over 20 known moons.
+Unusual rotational characteristics, with its axis nearly parallel to its orbit.
+Very cold temperatures and high-speed winds in its atmosphere.
+Neptune:
+
+Eighth and farthest planet from the Sun.
+Similar in appearance to Uranus, with a blue color due to methane in its atmosphere.
+Strong winds and the fastest winds in the solar system, reaching speeds of up to 1,600 kilometers per hour (1,000 miles per hour).
+Rings and a system of over 10 known moons, including Triton, which is the only large moon in the solar system with a retrograde orbit.
+Active weather patterns and dark storm systems in its atmosphere.
+Take the description of the planet from this :
+for venus:
+Venus Voyage: Unveiling the Mysteries of the Sweltering Planet
+
+Welcome to the Venus Voyage, your ticket to the second planet from the sun, where a thrilling adventure awaits! As a futuristic space tourism agency, we're thrilled to offer you the chance to explore Venus, a world of extreme heat and intriguing mysteries.
+
+Day 1: Departure from Earth
+Your Venus adventure begins with a rocket launch from Earth, heading towards the sweltering planet of Venus. While aboard our state-of-the-art spacecraft, you'll have a chance to learn about the wonders of the solar system, thanks to NASA's wealth of knowledge and stunning images captured by their spacecraft and telescopes like the James Webb Space Telescope (JWST).
+
+Day 2: Arrival and Atmospheric Exploration
+Upon arriving in Venusian orbit, you'll be awe-struck by the planet's thick, hazy atmosphere. Your exploration starts with a tour of our Venusian space station, where you can acclimate to the unique environment and enjoy panoramic views of the planet's surface. Learn about NASA's past and ongoing missions to Venus and their contributions to our understanding of the solar system.
+
+Day 3: Surface Exploration - The Enigmatic Landscape
+Strap into our specially designed Venus lander as we descend to the planet's surface. Explore the eerie, high-temperature terrain and discover the secrets hidden beneath the thick clouds. Visit the enormous Venusian volcanoes, such as Maat Mons and Sapas Mons, and witness their otherworldly beauty. Our expert guides will educate you on Venus' extreme weather, geological wonders, and its potential for future colonization.
+
+Day 4: Venusian Wonders - The Highland Plateaus
+Embark on a journey to Venus' highland plateaus, where you'll encounter vast stretches of rocky terrain and mysterious landscapes. Explore the remnants of ancient volcanoes and learn about Venus' volcanic history. Witness the incredible surface features and marvel at the power of planetary forces at play.
+
+Day 5: Return to Earth
+As your Venus adventure comes to a close, take one last look at the sweltering planet and cherish the knowledge gained from your journey. You'll return to Earth with a deeper understanding of Venus, thanks to NASA's groundbreaking research and our expert guides.
+
+What to Bring and Wear
+
+Specialized Venusian exploration suits provided by our agency for all surface activities.
+Sturdy, closed-toe footwear suitable for rocky terrain.
+Cameras and recording devices for capturing the Venusian experience.
+A sense of wonder and a thirst for knowledge!
+Important Information
+
+Safety is our top priority, and all activities are guided by experienced planetary scientists and astrobiologists.
+Our Venusian space station offers comfortable accommodations and delightful Venus-inspired cuisine.
+Communication with Earth is maintained throughout your journey.
+Please note that this itinerary is subject to change based on Venusian conditions and mission updates.
+for mars :
+Mars Adventure Extravaganza: Your Ultimate Martian Odyssey
+
+Welcome to the Mars Adventure Extravaganza, your gateway to the Red Planet! As a futuristic space tourism agency, we're thrilled to offer you an immersive and educational journey to Mars, the fourth planet from the sun, and one of the most intriguing destinations in our solar system.
+
+Day 1: Arrival on the Martian Frontier
+Your Mars adventure begins with a breathtaking rocket launch from Earth's orbiting space station. After a smooth transition to the deep-space liner, you'll enjoy an exhilarating journey to Mars. Upon arrival, you'll be greeted by the captivating Martian landscape. Stay at our state-of-the-art Martian habitat, where you can relax, acclimate to the Martian environment, and indulge in authentic Martian cuisine.
+
+Day 2: Olympus Mons - The Colossus of Mars
+On your second day, prepare for an unforgettable trip to Olympus Mons, the tallest mountain in the entire solar system. Marvel at its immense size and explore the rugged terrain, while our expert guides provide you with fascinating insights into the planet's geology. Don't forget to snap some extraordinary photos against the Martian backdrop!
+
+Day 3: Valles Marineris - The Martian Grand Canyon
+Your next stop takes you to Valles Marineris, a colossal canyon system stretching across Mars. Strap in for an exhilarating rover ride as you descend into the heart of this geological wonder. Witness the vast chasms and towering cliffs while our knowledgeable guides reveal the secrets of its formation.
+
+Day 4: Historic NASA Landing Sites
+On day four, we take you back in time to visit the historic landing sites of NASA's Viking and Sojourner missions. Step foot on the very spots where humanity's exploration of Mars began. Admire the remnants of these pioneering missions and learn about the groundbreaking discoveries they made.
+
+Day 5: Free Exploration and Departure
+Your final day on Mars is yours to explore as you wish. Whether you want to hike the Martian dunes, study the Martian soil, or simply soak in the breathtaking Martian vistas, this is your opportunity to create your own Martian adventure. In the evening, we'll bid farewell to Mars and embark on the journey back to Earth.
+
+What to Bring and Wear
+
+Comfortable spacesuit provided by our agency for all excursions.
+Sturdy and comfortable closed-toe shoes for exploration.
+Cameras and personal devices for capturing memories.
+An adventurous spirit and a thirst for knowledge!
+Important Information
+
+All activities are guided by expert astrobiologists and geologists to ensure safety and enriching experiences.
+Our Martian habitat offers comfortable accommodations and delicious Martian cuisine.
+Communication with Earth is maintained throughout your stay.
+Please note that this itinerary is subject to change based on Martian conditions and mission updates.
+for jupiter :
+Jupiter Odyssey: A Grand Adventure to the King of Planets
+
+Welcome to the Jupiter Odyssey, where you can embark on a breathtaking journey to the largest planet in our solar system, Jupiter! As a futuristic space tourism agency, we've created an innovative tool that enables you to craft personalized itineraries for your Jupiter expedition while learning about the captivating worlds within our solar system, all in a fun and educational space tourism game.
+
+Day 1: Launch from Earth
+Your extraordinary journey begins with a thrilling rocket launch from Earth's spaceport. While en route to Jupiter, immerse yourself in the fascinating world of NASA's space exploration. Discover the incredible missions and data collected from telescopes like the James Webb Space Telescope (JWST) as you traverse the depths of space.
+
+Day 2: Earth-orbiting Space Station Stopover
+Before reaching Jupiter, enjoy a brief stay at an Earth-orbiting space station. Here, you'll experience a taste of life in space and learn about the importance of these stations in facilitating deep-space travel. Our virtual space station module will provide insights into daily life in microgravity.
+
+Day 3: Arrival in the Jovian System
+Upon entering the Jovian system, you'll be greeted by the majestic sight of Jupiter's swirling clouds and massive storms. Our interactive tool will introduce you to the wonders of this gas giant and its intriguing moons. Prepare for the adventure of a lifetime as we approach Jupiter's mesmerizing orbit.
+
+Day 4: Tour of the Galilean Moons
+Journey to the Galilean moons of Jupiter: Io, Europa, Ganymede, and Callisto. Our tool allows you to select which of these captivating worlds to explore. Witness the volcanic eruptions on Io, the icy landscapes of Europa, the enormous surface features on Ganymede, and the ancient, cratered terrain of Callisto.
+
+Day 5: Jupiter's Great Red Spot
+Delve into the mysteries of Jupiter's iconic Great Red Spot, a massive storm that has raged for centuries. Use our tool to choose your preferred mode of exploration, from a close flyby to a deep dive into the turbulent clouds. Learn about the latest research and observations conducted by NASA's spacecraft.
+
+Day 6: Return to Earth
+As your Jupiter Odyssey comes to a close, relish your newfound knowledge of this awe-inspiring planet. You'll return to Earth with a deep appreciation for the marvels of our solar system and the invaluable contributions of NASA's missions and telescopes like the JWST.
+
+What to Bring and Wear
+
+Comfortable, futuristic spacesuits designed for Jupiter's unique environment.
+Sturdy footwear for safe movement in microgravity and on Jupiter's moons.
+Cameras and recording devices for capturing the incredible sights of Jupiter and its moons.
+A curious mind and a sense of wonder!
+Important Information
+
+Safety is paramount, and all activities are guided by experienced planetary scientists and astrobiologists.
+Our virtual space station offers a realistic experience of life in microgravity.
+Communication with Earth is maintained throughout your journey.
+Please note that this itinerary is customizable based on your preferences and mission updates.
+for saturn :
+Saturn Sojourn: A Mesmerizing Expedition to the Ringed Giant
+
+Welcome to the Saturn Sojourn, where you can embark on an awe-inspiring journey to the magnificent gas giant, Saturn! As a futuristic space tourism agency, we've crafted an innovative tool that allows you to create tailored itineraries for your Saturn adventure while immersing yourself in NASA's captivating discoveries and missions.
+
+Day 1: Launch from Earth
+Your incredible journey begins with a thrilling rocket launch from Earth's spaceport. As you venture towards Saturn, our interactive tool will provide a virtual space experience, offering fascinating insights into the universe through data and images captured by NASA's spacecraft and telescopes, including the James Webb Space Telescope (JWST).
+
+Day 2: Earth-orbiting Space Station Stopover
+Before reaching Saturn, enjoy a brief stay at an Earth-orbiting space station. Here, you'll learn about the critical role of these stations in deep-space travel and gain firsthand experience of life beyond Earth. Our virtual space station module will offer a glimpse into daily life in microgravity.
+
+Day 3: Arrival in Saturn's Orbit
+Prepare to be mesmerized as you enter Saturn's orbit. Marvel at the breathtaking rings and the planet's distinctive features. Our tool will introduce you to Saturn's rich history, its significance in the solar system, and the remarkable missions that have explored this celestial wonder.
+
+Day 4: Rings of Saturn - A Cosmic Ballet
+Delve into the intricate dance of Saturn's rings. Choose your preferred method of exploration through our tool, from a close flyby to an up-close look at individual ring structures. Gain insights into the formation and composition of these remarkable ring systems.
+
+Day 5: Titan - Saturn's Mysterious Moon
+Embark on an adventure to Titan, Saturn's largest moon. Customize your exploration by selecting activities like hiking across Titan's icy plains or studying its unique atmosphere and lakes. Our tool will provide insights into the potential for future exploration and colonization of this enigmatic world.
+
+Day 6: Enceladus - The Ice Moon
+Explore Enceladus, one of Saturn's intriguing ice moons. Use our tool to plan your expedition, whether it's discovering the geysers spouting from its icy surface or uncovering clues about the potential for life beneath its frozen crust. Learn about the discoveries made by NASA's spacecraft.
+
+Day 7: Return to Earth
+As your Saturn Sojourn concludes, reflect on the wonders you've witnessed and the knowledge you've gained about this majestic gas giant and its intriguing moons. Return to Earth with a deeper appreciation for the mysteries of our solar system, thanks to NASA's remarkable missions.
+
+What to Bring and Wear
+
+Customized spacesuits designed for the unique environments of Saturn's moons.
+Sturdy footwear suitable for exploring varied terrains.
+Cameras and recording devices for capturing the splendors of Saturn and its moons.
+An inquisitive spirit and a sense of wonder!
+Important Information
+
+Safety is paramount, and all activities are guided by experienced planetary scientists and astrobiologists.
+Our virtual space station provides a realistic experience of life in microgravity.
+Communication with Earth is maintained throughout your journey.
+Please note that this itinerary is customizable based on your preferences and mission updates.
+for uranus:
+Uranus Unveiled: A Journey to the Mysterious Ice Giant
+
+Welcome to the Uranus Unveiled expedition, where you can embark on a captivating journey to the distant and enigmatic ice giant, Uranus! As a futuristic space tourism agency, we've created a cutting-edge tool that empowers you to craft tailor-made itineraries for your Uranus adventure while immersing yourself in NASA's stunning discoveries and missions.
+
+Day 1: Launch from Earth
+Your extraordinary voyage commences with a spectacular rocket launch from Earth's spaceport. As you journey towards Uranus, our interactive tool will provide a virtual space experience, offering intriguing insights into the outer reaches of our solar system through NASA's remarkable spacecraft and telescopes, including the James Webb Space Telescope (JWST).
+
+Day 2: Earth-orbiting Space Station Stopover
+Before reaching Uranus, enjoy a brief stopover at an Earth-orbiting space station. Here, you'll get a glimpse into the daily life of space travelers and understand the crucial role of these stations in facilitating deep-space exploration. Our virtual space station module will give you a taste of microgravity living.
+
+Day 3: Arrival in Uranus' Realm
+Prepare to be spellbound as you approach the mesmerizing ice giant, Uranus. Admire its subtle yet unique features and marvel at its captivating rings and moons. Our tool will introduce you to Uranus' intriguing history, its place in our solar system, and the remarkable missions that have ventured into its distant domain.
+
+Day 4: Uranus' Rings - A Subtle Beauty
+Dive into the understated elegance of Uranus' rings. Customize your exploration through our tool, choosing from different modes of observation, whether it's a close-up flyby or detailed study of individual ring particles. Discover the mysteries behind these ethereal rings.
+
+Day 5: Miranda - A Moon of Marvels
+Embark on an exploration of Miranda, one of Uranus' fascinating moons. Use our tool to tailor your activities, from hiking its rugged terrain to studying its unique geology. Gain insights into the curious features that make Miranda an object of scientific intrigue.
+
+Day 6: Triton - A Visitor from Neptune
+Venture to Triton, a moon with a story to tell. Customize your Triton expedition through our tool, whether it's observing the geysers erupting from its icy surface or investigating the possibility of past or present subsurface oceans. Learn about the mysteries of Triton and its connection to distant Neptune.
+
+Day 7: Return to Earth
+As your Uranus Unveiled journey concludes, reflect on the wonders you've encountered and the knowledge you've gained about this distant ice giant and its remarkable moons. Return to Earth with a profound appreciation for the mysteries of the outer solar system, thanks to NASA's extraordinary missions.
+
+What to Bring and Wear
+
+Specially designed spacesuits suited for the challenging conditions of outer solar system moons.
+Sturdy footwear for exploring various terrains.
+Cameras and recording devices for capturing the unique sights of Uranus and its moons.
+An inquisitive spirit and a sense of wonder!
+Important Information
+
+Safety is our utmost priority, and all activities are guided by experienced planetary scientists and astrobiologists.
+Our virtual space station offers an authentic experience of life in microgravity.
+Communication with Earth is maintained throughout your journey.
+Please note that this itinerary is customizable based on your preferences and mission updates.
+for neptune:
+Neptune Odyssey: A Voyage to the Mystical Ice Giant
+
+Welcome to the Neptune Odyssey, an extraordinary journey that offers the opportunity to explore the distant and enigmatic ice giant, Neptune! As a futuristic space tourism agency, we've designed a cutting-edge tool that empowers you to create tailored itineraries for your Neptune adventure while immersing yourself in NASA's awe-inspiring discoveries and missions.
+
+Day 1: Launch from Earth
+Your remarkable voyage commences with a thrilling rocket launch from Earth's spaceport. As you journey towards Neptune, our interactive tool will provide a virtual space experience, offering captivating insights into the outer realms of our solar system through NASA's remarkable spacecraft and telescopes, including the James Webb Space Telescope (JWST).
+
+Day 2: Earth-orbiting Space Station Stopover
+Before reaching Neptune, enjoy a brief stopover at an Earth-orbiting space station. Here, you'll gain insights into the daily life of space travelers and comprehend the pivotal role of these stations in facilitating deep-space exploration. Our virtual space station module will provide a taste of microgravity living.
+
+Day 3: Arrival in Neptune's Domain
+Prepare to be mesmerized as you approach the enigmatic ice giant, Neptune. Admire its captivating deep blue hue and intriguing atmospheric features. Our tool will introduce you to Neptune's mysterious history, its place in our solar system, and the fascinating missions that have ventured into its distant reaches.
+
+Day 4: The Great Dark Spot - An Atmospheric Mystery
+Dive into the mysteries of Neptune's atmosphere and its enigmatic feature, the Great Dark Spot. Customize your exploration through our tool, choosing from different modes of observation to unravel the secrets of this colossal storm system. Learn about NASA's observations and ongoing research.
+
+Day 5: Triton - A Moon of Surprises
+Embark on an exploration of Triton, Neptune's largest moon and a world of intrigue. Use our tool to tailor your activities, from investigating its geysers spouting nitrogen to studying its unique retrograde orbit. Gain insights into the fascinating discoveries made by NASA's Voyager 2 spacecraft.
+
+Day 6: Return to Earth
+As your Neptune Odyssey concludes, reflect on the wonders you've encountered and the knowledge you've gained about this distant ice giant and its remarkable moon. Return to Earth with a profound appreciation for the mysteries of the outer solar system, thanks to NASA's extraordinary missions.
+
+What to Bring and Wear
+
+Specially designed spacesuits suited for the unique environments of outer solar system moons.
+Sturdy footwear for exploring varied terrains.
+Cameras and recording devices for capturing the unique sights of Neptune and its moon.
+An inquisitive spirit and a sense of wonder!
+Important Information
+
+Safety is our utmost priority, and all activities are guided by experienced planetary scientists and astrobiologists.
+Our virtual space station offers an authentic experience of life in microgravity.
+Communication with Earth is maintained throughout your journey.
+Please note that this itinerary is customizable based on your preferences and mission updates.
+                                                                                      distance
+to venus:82.269 million km
+to mars:140 million miles
+to jupiter:613.16 million km
+to  saturn: 1.2 billion km 
+to uranus::2.6 billion . km
+to neptune:4.3billion.km
+                        landing sight
+venus : venus
+mars: mars
+jupiter: international outer space station of jupiter
+saturn: international outer space station of saturn
+uranus:international outer space station of uranus
+neptune:international outer space station of neptune 
+
+follow my every instruction carefully and implement everything without any change
+give full code with the full functions as i instruted above

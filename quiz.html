@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exoplanet Quiz</title>
+    <style>
+        body {
+            background: url('https://starwalk.space/gallery/images/what-is-space/1920x1080.jpg') no-repeat center center fixed;
+            background-size: cover;
+            font-family: Arial, sans-serif;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            margin-top: 30px;
+            text-align: center;
+            color: #e0e0e0;
+            font-size: 3em;
+        }
+        .quiz-container {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+            max-width: 600px;
+            width: 100%;
+            margin: 20px;
+        }
+        .question {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+        }
+        .options {
+            list-style: none;
+            padding: 0;
+        }
+        .options li {
+            margin-bottom: 10px;
+        }
+        .options input {
+            margin-right: 10px;
+        }
+        .submit-btn, .retry-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover, .retry-btn:hover {
+            background-color: #45a049;
+        }
+        #timer {
+            margin: 20px 0;
+            font-size: 1.2em;
+            color: #fff;
+        }
+        #result {
+            font-size: 1.5em;
+            margin-top: 20px;
+        }
+        .correct-answer {
+            margin-top: 5px;
+            font-size: 1em;
+            color: #FFD700;
+        }
+        .back-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+        }
+        .correct {
+            background-color: #28a745;
+            color: white;
+            font-weight: bold;
+        }
+        .wrong {
+            background-color: #ff4d4d;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Back Button -->
+    <a href="index.html">
+        <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-btn">
+    </a>
+
+    <h1>Exoplanet Quiz</h1>
+
+    <div class="quiz-container">
+        <form id="quizForm">
+            <div id="quizQuestions"></div>
+            <button type="button" class="submit-btn" onclick="submitQuiz()">Submit</button>
+        </form>
+        <div id="timer">Time taken: <span id="timeTaken">0</span> seconds</div>
+        <div id="result"></div>
+        <button type="button" class="retry-btn" style="display:none;" onclick="retryQuiz()">Retry</button>
+    </div>
+
+    <script>
+        // Full list of 30 questions
+        const questions = [
+            { question: "What is an exoplanet?", options: ["A planet outside our solar system", "A planet within our solar system", "A star", "A moon"], answer: 0 },
+            { question: "Which method is commonly used to detect exoplanets?", options: ["Transit method", "Solar flare method", "Magnetic field detection", "Gravitational wave method"], answer: 0 },
+            { question: "The closest exoplanet to Earth is:", options: ["Proxima b", "Kepler-22b", "TRAPPIST-1e", "Gliese 581g"], answer: 0 },
+            { question: "Who discovered the first confirmed exoplanet?", options: ["Galileo Galilei", "Alexander Wolszczan", "Isaac Newton", "Nicolaus Copernicus"], answer: 1 },
+            { question: "What is the 'habitable zone'?", options: ["The region around a star where liquid water can exist", "The region where life has been detected", "The region where planets are destroyed by their star", "The region with the highest temperature"], answer: 0 },
+            { question: "How many exoplanets have been discovered as of 2023?", options: ["More than 5000", "Less than 1000", "Around 2000", "None"], answer: 0 },
+            { question: "Which of the following is a super-Earth?", options: ["Kepler-452b", "TRAPPIST-1e", "Proxima b", "Jupiter"], answer: 0 },
+            { question: "The 'radial velocity' method detects exoplanets by:", options: ["Measuring the star's wobble caused by the planet's gravity", "Observing the planet's light directly", "Detecting magnetic fields", "Measuring changes in the planet's temperature"], answer: 0 },
+            { question: "Which exoplanet orbits a star similar to the Sun?", options: ["Kepler-452b", "WASP-12b", "HD 209458b", "Proxima b"], answer: 0 },
+            { question: "The TRAPPIST-1 system is famous for:", options: ["Having seven Earth-sized planets", "Being the first discovered system with no planets", "Hosting the largest gas giant", "Being the closest star to the Sun"], answer: 0 },
+            { question: "What is the name of the first exoplanet discovered around a sun-like star?", options: ["51 Pegasi b", "TRAPPIST-1e", "Proxima b", "Kepler-22b"], answer: 0 },
+            { question: "Which of the following exoplanets is known to have a thick atmosphere of carbon dioxide?", options: ["Venus", "WASP-96b", "Mars", "Kepler-186f"], answer: 1 },
+            { question: "The Kepler Space Telescope is most famous for discovering:", options: ["Thousands of exoplanets using the transit method", "Black holes", "Neutron stars", "Asteroids in the Kuiper belt"], answer: 0 },
+            { question: "Which star system is known for hosting multiple potentially habitable exoplanets?", options: ["TRAPPIST-1", "Alpha Centauri", "Andromeda Galaxy", "Milky Way"], answer: 0 },
+            { question: "How does the transit method detect exoplanets?", options: ["By observing the dimming of a star's light when a planet passes in front of it", "By detecting the planet's magnetic field", "By photographing the planet directly", "By measuring the gravitational pull on the star"], answer: 0 },
+            { question: "Which exoplanet is located in the habitable zone of its star?", options: ["Proxima b", "Jupiter", "WASP-12b", "Neptune"], answer: 0 },
+            { question: "The first exoplanet detected was discovered orbiting:", options: ["A pulsar", "A sun-like star", "A white dwarf", "A red giant"], answer: 0 },
+            { question: "What type of planet is often referred to as a 'hot Jupiter'?", options: ["A gas giant that orbits very close to its star", "An icy moon", "A rocky planet", "A super-Earth"], answer: 0 },
+            { question: "Which exoplanet system was the first to be directly imaged?", options: ["HR 8799", "51 Pegasi b", "TRAPPIST-1", "Kepler-452b"], answer: 0 },
+            { question: "The term 'exomoon' refers to:", options: ["A moon that orbits an exoplanet", "A planet in the Kuiper Belt", "A comet that travels between star systems", "A moon within our solar system"], answer: 0 },
+            { question: "The star Proxima Centauri hosts which exoplanet?", options: ["Proxima b", "Kepler-186f", "TRAPPIST-1d", "WASP-12b"], answer: 0 },
+            { question: "Exoplanet HD 189733b is known for:", options: ["Raining glass", "Having extreme temperatures", "Being the largest exoplanet", "Having a ring system larger than Saturn's"], answer: 0 },
+            { question: "Which space mission is focused on finding Earth-sized exoplanets?", options: ["TESS", "Apollo", "Voyager", "Cassini"], answer: 0 },
+            { question: "What is the main goal of the James Webb Space Telescope (JWST) regarding exoplanets?", options: ["To study the atmospheres of exoplanets", "To directly photograph exoplanets", "To find new planets in our solar system", "To monitor black holes"], answer: 0 },
+            { question: "Kepler-22b is notable because:", options: ["It's in the habitable zone", "It's the largest planet ever discovered", "It's the coldest known planet", "It's orbiting the oldest known star"], answer: 0 },
+            { question: "Which exoplanet has the fastest known winds?", options: ["HD 80606 b", "Jupiter", "Saturn", "WASP-76b"], answer: 0 },
+            { question: "Which exoplanet discovery method detects the wobble of a star?", options: ["Radial velocity", "Transit method", "Direct imaging", "Microlensing"], answer: 0 },
+            { question: "Which exoplanet is known to have a lava ocean?", options: ["Kepler-10b", "Mars", "Kepler-22b", "Proxima b"], answer: 0 },
+            { question: "What is the main characteristic of a 'super-Earth'?", options: ["A rocky planet larger than Earth but smaller than Neptune", "A gas giant", "A planet that orbits two stars", "A dwarf planet"], answer: 0 }
+        ];
+
+        // Shuffle and randomly select 15 questions from the list of 30
+        function getRandomQuestions() {
+            let shuffled = questions.sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, 15);
+        }
+
+        let selectedQuestions = getRandomQuestions();
+        let timer;
+        let timeTaken = 0;
+
+        // Start the timer
+        function startTimer() {
+            timeTaken = 0;
+            timer = setInterval(() => {
+                timeTaken++;
+                document.getElementById('timeTaken').textContent = timeTaken;
+            }, 1000);
+        }
+
+        // Stop the timer
+        function stopTimer() {
+            clearInterval(timer);
+        }
+
+        // Generate quiz questions
+        function generateQuiz() {
+            const quizQuestions = document.getElementById('quizQuestions');
+            selectedQuestions.forEach((q, index) => {
+                const questionBlock = document.createElement('div');
+                questionBlock.classList.add('question-block');
+                questionBlock.innerHTML = `
+                    <div class="question">${index + 1}. ${q.question}</div>
+                    <ul class="options">
+                        ${q.options.map((option, i) => `
+                            <li>
+                                <label>
+                                    <input type="radio" name="question${index}" value="${i}">
+                                    ${String.fromCharCode(97 + i)}. ${option}
+                                </label>
+                            </li>
+                        `).join('')}
+                    </ul>
+                `;
+                quizQuestions.appendChild(questionBlock);
+            });
+        }
+
+        // Retry quiz function
+        function retryQuiz() {
+            location.reload();
+        }
+
+        // Submit quiz function
+        function submitQuiz() {
+            stopTimer();
+            const result = document.getElementById('result');
+            let score = 0;
+
+            selectedQuestions.forEach((q, index) => {
+                const selectedOption = document.querySelector(`input[name="question${index}"]:checked`);
+                
+                // Create a container for the question
+                const questionBlock = document.querySelector(`.question-block:nth-child(${index + 1})`);
+
+                // Display the correct answer
+                let answerDisplay = document.createElement('div');
+                answerDisplay.classList.add('correct-answer');
+
+                if (selectedOption && parseInt(selectedOption.value) === q.answer) {
+                    score++;
+                    selectedOption.parentElement.classList.add('correct');
+                } else if (selectedOption) {
+                    selectedOption.parentElement.classList.add('wrong');
+                }
+
+                // Display correct answer below the question
+                answerDisplay.innerHTML = `<strong>Answer:</strong> ${String.fromCharCode(97 + q.answer)}. ${q.options[q.answer]}`;
+                questionBlock.appendChild(answerDisplay);
+            });
+
+            result.innerHTML = `You scored ${score} out of ${selectedQuestions.length}`;
+            document.querySelector('.retry-btn').style.display = 'block';
+        }
+
+        // Initialize the quiz
+        window.onload = () => {
+            generateQuiz();
+            startTimer();
+        };
+    </script>
+</body>
+</html>

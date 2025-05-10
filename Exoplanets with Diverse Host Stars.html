@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exoplanets with Diverse Host Stars</title>
+    <script>
+        // Function to redirect after 1 second
+        function redirect() {
+            setTimeout(function() {
+                window.location.href = "sechost.html"; // Replace with your target URL
+            }, 1000); // 1000 milliseconds = 1 second
+        }
+
+        // Call the redirect function when the window loads
+        window.onload = redirect;
+    </script>
+   <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-image: url('https://letstalkgeography.com/wp-content/uploads/2023/12/exoplanet-Feature-2048x1148.jpeg.webp');
+            background-size: cover;
+            background-position: center;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding-top: 20px;
+        }
+
+        .header-box {
+            background: rgba(25, 25, 25, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 60px;
+            max-width: 1200px;
+        }
+
+        .planet-box {
+            background: rgba(20, 20, 20, 0.85);
+            width: 220px;
+            height: 420px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            position: relative;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            opacity: 0; /* Initially hidden */
+        }
+
+        /* Enlarging effect on hover */
+        .planet-box:hover {
+            transform: translateY(-20px) scale(1.2);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6);
+            background: rgba(40, 40, 40, 0.95);
+        }
+
+        @keyframes slideInFromLeft {
+            0% {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromTop {
+            0% {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromBottom {
+            0% {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromRight {
+            0% {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .planet-box:nth-child(1) {
+            animation: slideInFromLeft 0.8s ease-in-out forwards;
+            animation-delay: 0s;
+        }
+
+        .planet-box:nth-child(2) {
+            animation: slideInFromTop 0.8s ease-in-out forwards;
+            animation-delay: 0.1s;
+        }
+
+        .planet-box:nth-child(3) {
+            animation: slideInFromBottom 0.8s ease-in-out forwards;
+            animation-delay: 0.2s;
+        }
+
+        .planet-box:nth-child(4) {
+            animation: slideInFromTop 0.8s ease-in-out forwards;
+            animation-delay: 0.3s;
+        }
+
+        .planet-box:nth-child(5) {
+            animation: slideInFromRight 0.8s ease-in-out forwards;
+            animation-delay: 0.4s;
+        }
+
+        .planet-box video {
+            width: 100%;
+            height: 50%;
+            object-fit: cover;
+            border-bottom: 2px solid #555;
+        }
+
+        .planet-info {
+            padding: 20px;
+        }
+
+        .planet-info h2 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            color: #ffcc00;
+            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ffcc00;
+        }
+
+        .planet-info p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #ddd;
+        }
+
+        .thinking-bubble {
+            position: absolute;
+            background: #fff;
+            border-radius: 10px;
+            width: 250px;
+            padding: 10px;
+            text-align: center;
+            color: #000;
+            font-size: 16px;
+            line-height: 1.6;
+            display: none;
+            z-index: 10;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 10px;
+        }
+
+        .thinking-bubble::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -10px;
+            border-width: 10px;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-box">
+        <h1>Exoplanets with Diverse Host Stars</h1>
+    </div>
+
+    <div class="container">
+        <!-- Planet 1 -->
+        <div class="planet-box" onclick="showModal(this, 'Proxima b orbits a red dwarf star, the closest star to our solar system.')">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="\Navigation.js\aPROXIMA-B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Proxima b</h2>
+                <p>Proxima b orbits the red dwarf star Proxima Centauri, the closest star to our solar system.</p>
+            </div>
+            <div class="thinking-bubble">Orbits a red dwarf star!</div>
+        </div>
+
+        <!-- Planet 2 -->
+        <div class="planet-box" onclick="showModal(this, 'TRAPPIST-1e orbits an ultracool dwarf star with seven other Earth-sized planets.')">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="\Navigation.js\a.TRAPPIST-1E.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>TRAPPIST-1e</h2>
+                <p>TRAPPIST-1e orbits an ultracool dwarf star and is one of seven Earth-sized planets in its system.</p>
+            </div>
+            <div class="thinking-bubble">Ultracool dwarf star system!</div>
+        </div>
+
+        <!-- Planet 3 -->
+        <div class="planet-box" onclick="showModal(this, 'Kepler-452b orbits a G-type star, similar to our Sun.')">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="\Navigation.js\a.KEPLER-452B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Kepler-452b</h2>
+                <p>Kepler-452b orbits a G-type star, often called Earth's cousin due to its similar conditions.</p>
+            </div>
+            <div class="thinking-bubble">Orbits a G-type star!</div>
+        </div>
+
+        <!-- Planet 4 -->
+        <div class="planet-box" onclick="showModal(this, 'HD 209458b orbits a G-type star and is the first exoplanet discovered in transit.')">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="\Navigation.js\a..HD 209458b.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>HD 209458b</h2>
+                <p>HD 209458b orbits a G-type star and was the first exoplanet discovered to transit its star.</p>
+            </div>
+            <div class="thinking-bubble">First exoplanet discovered in transit!</div>
+        </div>
+
+        <!-- Planet 5 -->
+        <div class="planet-box" onclick="showModal(this, 'WASP-12b orbits a G-type star, known for its scorching hot temperatures.')">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="\Navigation.js\a.WASP-12B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>WASP-12b</h2>
+                <p>WASP-12b is a gas giant exoplanet known for its scorching temperatures, orbiting a G-type star.</p>
+            </div>
+            <div class="thinking-bubble">Scorching hot temperatures!</div>
+        </div>
+    </div>
+
+    <script>
+        function showModal(element, text) {
+            const bubble = element.querySelector('.thinking-bubble');
+            bubble.textContent = text;
+            bubble.style.display = 'block';
+            setTimeout(() => {
+                bubble.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

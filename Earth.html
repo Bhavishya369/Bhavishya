@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-image: url("https://cdn.commonwealthclub.org/s3fs-public/styles/hero/public/2020-07/Hero%20Future%20Earth.jpg?itok=DAQ-dOwk");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-position: center;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+
+        .content {
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black background for the entire content */
+            padding: 20px;
+            padding-top: 80px; /* Adjust top padding to make room for the back button */
+        }
+
+        /* Style for the back button */
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            background-color: darkblue; /* Dark blue background for the circle */
+            border-radius: 50%;
+            color: white; /* Text color for the arrow */
+            font-size: 32px; /* Increased font size for the arrow */
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .back-button:hover {
+            background-color: #001f3f; /* Darken the background color on hover */
+        }
+
+        .back-button::before {
+            content: "\2190"; /* Unicode arrow-left character */
+            font-weight: bold; /* Make the arrow thicker */
+        }
+
+        .book-now-button {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .book-button {
+            background-color: yellow; /* Yellow background for "Book now" */
+            color: black; /* Text color for "Book now" */
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .book-button:hover {
+            background-color: orange; /* Change the background color on hover */
+        }
+
+        /* Custom styles for headings */
+        h1 {
+            color: #ffff00; /* Orange-red color for h1 */
+        }
+
+        h2 {
+            color: hwb(65 0% 0%); /* Blue color for h2 */
+        }
+
+        strong {
+            color: #ff006f; /* Red color for strong text */
+        }
+    </style>
+</head>
+<body>
+    <!-- Back button to navigate to destination.html -->
+    <a class="back-button" href="destination.html"></a>
+
+    <div class="content">
+        <h1>Features:</h1>
+        <ul>
+            <li>The third planet from the Sun and the only known planet supporting diverse life forms.</li>
+            <li>Diverse landscapes, including mountains, oceans, forests, and deserts.</li>
+            <li>Rich biodiversity with millions of species, including humans.</li>
+            <li>Unique atmosphere composed of nitrogen, oxygen, and other gases, supporting life as we know it.</li>
+            <li>The cradle of human civilization and the birthplace of exploration beyond its boundaries.</li>
+        </ul>
+
+        <h2>Description:</h2>
+        <p>Earth Expedition: Discover the Wonders of the Galactic Oasis</p>
+        <p>Welcome to the Earth Expedition, a unique journey to explore the one and only planet known to support a diverse range of life forms - Earth! In this futuristic space tourism experience, we invite you to rediscover our home planet from a perspective like never before.</p>
+        <p><strong>Day 1: Departure to Orbit</strong></p>
+        <p>Your adventure begins with a remarkable space launch from a cutting-edge spaceport. As you ascend into orbit, you'll gain a newfound appreciation for the beautiful blue planet below. Learn about Earth's vital role in our solar system and the fascinating history of space exploration from our expert guides.</p>
+        <p><strong>Day 2: International Space Station Stopover</strong></p>
+        <p>Experience life aboard the International Space Station (ISS), a symbol of international cooperation in space. Engage in activities that astronauts do in microgravity, such as eating, sleeping, and conducting experiments. Witness breathtaking views of Earth from the ISS windows.</p>
+        <p><strong>Day 3: A Spacewalk with Earth Below</strong></p>
+        <p>Put on your spacesuit and venture outside the ISS for a spacewalk. Float in the vastness of space while gazing at the incredible sight of Earth below. Our guides will provide insights into Earth's geology, climate, and ecosystems, making this a truly educational experience.</p>
+        <p><strong>Day 4: Return to Earth</strong></p>
+        <p>Your Earth Expedition concludes with a return journey to the planet's surface. As you re-enter Earth's atmosphere, witness the spectacular view of our planet's landscapes. Reflect on the importance of Earth's unique environment and the need for its preservation.</p>
+        <p><strong>What to Bring and Wear</strong></p>
+        <ul>
+            <li>Spacesuit designed for extravehicular activities and spacewalks.</li>
+            <li>A sense of wonder and appreciation for the beauty of our home planet.</li>
+        </ul>
+        <p><strong>Important Information</strong></p>
+        <ul>
+            <li>Your safety is our utmost priority, and all activities are conducted under the supervision of experienced astronauts and space experts.</li>
+            <li>Participation in this unique Earth Expedition is limited, so book your journey today.</li>
+            <li>This itinerary is subject to change based on space station availability and mission updates.</li>
+        </ul>
+        <p>Prepare for an extraordinary expedition as you explore Earth from space, gaining a deeper understanding of our home planet and a heightened sense of environmental stewardship. Join us on this once-in-a-lifetime Earth Expedition and rediscover the wonders of your own galactic oasis!</p>
+        <h1>Distances from Other Celestial Bodies:</h1>
+        <ul>
+            <li>From Mercury: 91 million km</li>
+            <li>From Venus: 38 million km</li>
+            <li>From Mars: 225 million km</li>
+            <li>From Jupiter: 778 million km</li>
+            <li>From Saturn: 1.4 billion km</li>
+            <li>From Uranus: 2.9 billion km</li>
+            <li>From Neptune: 4.5 billion km</li>
+        </ul>
+
+             <!-- Book now button -->
+<div class="book-now-button">
+    <button class="book-button" onclick="window.location.href='card page.html'">Book now</button>
+</div>
+
+    </div>
+</body>
+</html>

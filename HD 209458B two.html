@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">  
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HD 209458b Exploration - Modern Website</title>
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #fff;
+            background: #0b0c10;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            transition: background 0.5s;
+        }
+
+        nav .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #ff9800;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+        }
+
+        nav ul li {
+            margin-left: 20px;
+        }
+
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: color 0.3s;
+        }
+
+        nav ul li a:hover {
+            color: #ff9800;
+        }
+
+        /* Hero Section */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 20px;
+            position: relative;
+            overflow: hidden;
+            background-image: url("https://science.nasa.gov/wp-content/uploads/2023/11/gasgiant-7.jpg?w=1024");
+            background-size: cover;
+            background-position: center;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            animation: slideInDown 1s ease forwards;
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            margin-top: 20px;
+            animation: slideInUp 1s ease forwards;
+            opacity: 0;
+            animation-delay: 0.5s;
+            z-index: 1;
+        }
+
+        .hero a {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 15px 30px;
+            background-color: #ff9800;
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+            animation-delay: 1s;
+            z-index: 1;
+        }
+
+        .hero a:hover {
+            background-color: #f57c00;
+            transform: scale(1.05);
+        }
+
+        /* Animations */
+        @keyframes slideInDown {
+            0% {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInUp {
+            0% {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Content Section */
+        .content {
+            background-color: rgba(0, 0, 0, 0.8); 
+            padding: 50px 20px;
+            text-align: center;
+        }
+
+        .content h1, .content h2, .content p {
+            margin-bottom: 20px;
+        }
+
+        .content ul {
+            margin-bottom: 30px;
+        }
+
+        .content strong {
+            color: #ff006f;
+        }
+
+        /* Image Carousel */
+        .image-carousel {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .carousel-image {
+            max-width: 100%;
+            max-height: 400px;
+            display: none;
+        }
+
+        .active {
+            display: block;
+        }
+
+        .arrow {
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            background-color: transparent;
+            border: none;
+            color: white;
+            font-size: 30px;
+            margin: 0 10px;
+        }
+
+        /* Call-to-Action Section */
+        .cta {
+            padding: 100px 20px;
+            background: linear-gradient(45deg, #ff9800, #f57c00);
+            text-align: center;
+            color: white;
+        }
+
+        .cta h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .cta a {
+            padding: 15px 30px;
+            background-color: white;
+            color: #ff9800;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .cta a:hover {
+            background-color: #f57c00;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Footer */
+        footer {
+            background: #0b0c10;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        /* Media Queries */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .carousel-image {
+                width: 100%;
+            }
+        }
+    </style>
+    <script>
+        let currentIndex = 0;
+
+        function showImage(index) {
+            const images = document.querySelectorAll('.carousel-image');
+            images.forEach((img, i) => {
+                img.classList.remove('active');
+                if (i === index) {
+                    img.classList.add('active');
+                }
+            });
+        }
+
+        function nextImage() {
+            const images = document.querySelectorAll('.carousel-image');
+            currentIndex = (currentIndex + 1) % images.length;
+            showImage(currentIndex);
+        }
+
+        function previousImage() {
+            const images = document.querySelectorAll('.carousel-image');
+            currentIndex = (currentIndex - 1 + images.length) % images.length;
+            showImage(currentIndex);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            showImage(currentIndex);
+        });
+    </script>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav>
+        <div class="logo">HD 209458b</div>
+        <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#cta">Book Now</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div>
+            <h1>Explore HD 209458b</h1>
+            <p>The first transiting exoplanet!</p>
+            <a href="#features">Discover More</a>
+        </div>
+    </section>
+
+    <!-- Content Section -->
+    <div class="content" id="features">
+        <h1>Features of HD 209458b:</h1>
+        <ul>
+            <li>Known as "Osiris," it's the first exoplanet discovered transiting its star.</li>
+            <li>Located approximately 159 light-years from Earth in the constellation Pegasus.</li>
+            <li>Hot Jupiter with a short orbital period of about 3.5 days.</li>
+            <li>Atmospheric studies revealed evidence of sodium and carbon-containing compounds.</li>
+            <li>Potentially has high temperatures, making it an interesting case for exoplanet research.</li>
+        </ul>
+
+        <h1>Description:</h1>
+        <p>HD 209458b, often referred to as Osiris, made history as the first exoplanet discovered transiting its star, allowing scientists to gather significant atmospheric data. This gas giant orbits very close to its host star, leading to extreme temperatures and fascinating atmospheric conditions.</p>
+
+        <h1>Image Gallery:</h1>
+        <div class="image-carousel">
+            <button class="arrow" onclick="previousImage()">&#10094;</button>
+            <img src="https://scitechdaily.com/images/Researchers-Estimate-the-Magnetic-Field-of-Exoplanet-HD-209458b-777x728.jpg" class="carousel-image active" alt="HD 209458b Image 1">
+            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT6TXZoM2ClfD1bB22wP3WiBi8bnZm-qlS8_Q&s" class="carousel-image" alt="HD 209458b Image 2">
+            <img src="https://science.nasa.gov/wp-content/uploads/2023/11/gasgiant-7.jpg?w=1024" class="carousel-image" alt="HD 209458b Image 3">
+            <button class="arrow" onclick="nextImage()">&#10095;</button>
+        </div>
+
+        <h1>Distance:</h1>
+        <p>Approximately 159 light-years from Earth</p>
+
+        <h1>Landing Site:</h1>
+        <p>HD 209458b</p>
+    </div>
+
+    <!-- Call-to-Action Section -->
+    <div class="cta" id="cta">
+        <h2>Ready for an adventure?</h2>
+        <a href="NasaBha2 - HD 209458D two.html">Book now</a>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        &copy; 2024 HD 209458b Exploration. All rights reserved.
+    </footer>
+
+</body>
+</html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Back Button with Stylish Arrow</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #0e1a2b;
+            font-family: Arial, sans-serif;
+        }
+
+        .back-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #1b1b2f;
+            border: 2px solid #0f4c75;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            width: 60px;
+            height: 60px;
+        }
+
+        .back-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 300%;
+            height: 300%;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: all 0.5s ease;
+            transform: translate(-50%, -50%) scale(0);
+            border-radius: 50%;
+        }
+
+        .back-button:hover::before {
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .back-button:hover {
+            background-color: #0f4c75;
+            box-shadow: 0 0 15px rgba(50, 130, 184, 0.7), 0 0 20px rgba(50, 130, 184, 0.5);
+        }
+
+        .arrow {
+            position: relative;
+            width: 20px;
+            height: 20px;
+            border-left: 4px solid #fff;
+            border-bottom: 4px solid #fff;
+            transform: rotate(45deg);
+            top: 50%;
+            left: 50%;
+            transform-origin: center;
+            transition: transform 0.3s ease;
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        .back-button:hover .arrow {
+            transform: translate(-40%, -50%) rotate(45deg);
+        }
+    </style>
+</head>
+<body>
+
+    <a href="your-previous-page.html" class="back-button">
+        <div class="arrow"></div>
+    </a>
+
+</body>
+</html>
+<img src="https://astrophotographylens.com/cdn/shop/articles/trappist-1e-1.jpg?v=1708573977" class="carousel-image" alt="TRAPPIST-1e Image 1">
+<img src="https://cdn.shopify.com/s/files/1/0742/7719/1954/files/trappist-1e-3_1024x1024.jpg?v=1682466218" class="carousel-image" alt="TRAPPIST-1e Image 2">
+<img src="https://sos.noaa.gov/ftp_mirror/astronomy/trappist/Trappist_1D_Shadow/media/thumbnail_big.jpg" class="carousel-image" alt="TRAPPIST-1e Image 3">
+<img src="https://astrophotographylens.com/cdn/shop/articles/trappist-1e-1.jpg?v=1708573977" class="carousel-image" alt="TRAPPIST-1e Image 4">
+<button class="arrow right" onclick="nextImage()">&#10095;</button>

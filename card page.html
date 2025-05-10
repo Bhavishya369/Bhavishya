@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book a Ticket</title>
+    <style>
+        body {
+            background-image: url('https://dylantaylor.org/wp-content/uploads/Dylan-Taylor-10-Ways-Space-Exploration-Benefits-Earth.jpg');
+            background-size: cover;
+            color: rgb(255, 255, 255);
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden; /* Prevent overflow for smooth transition */
+        }
+
+        .container {
+            max-width: 400px;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .button {
+            background-color: yellow;
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        .button:hover {
+            background-color: #ffcc00;
+        }
+
+        .confirming-box {
+            background-color: white;
+            width: 100%;
+            min-height: 4cm;
+            padding: 20px;
+            border-radius: 10px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none; /* Hide initially */
+        }
+
+        /* CSS for the grey transparent box */
+        .explore-box {
+            background-color: rgba(51, 51, 51, 0.8); /* Grey transparent background */
+            padding: 20px;
+            border-radius: 20px; /* Curved corners for premium feel */
+            margin-top: 20px;
+            color: white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5); /* Add shadow for depth */
+        }
+
+        /* CSS for animation */
+        .loader {
+            width: 100px;
+            height: 100px;
+            border: none;
+            background: url('https://cdn.dribbble.com/users/475723/screenshots/2666648/media/ee00998b061575d66e29e52e07ef7d46.gif') center no-repeat;
+            background-size: cover;
+            margin: 0 auto;
+            animation: dot-animation 1.5s infinite;
+        }
+
+        /* Style for confirming text */
+        .confirming-text {
+            font-weight: bold;
+            font-size: 20px;
+            color: black;
+        }
+
+        video {
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: none; /* Hide initially */
+            z-index: 100; /* Make sure it's on top */
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        input {
+            width: 100%;
+            padding: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Book a Ticket</h1>
+        <form id="booking-form">
+            <label for="date">Journey Date</label>
+            <input type="date" id="date" name="date" required><br>
+            <label for="card-id">Card ID:</label>
+            <input type="text" id="card-id" name="card-id" required><br>
+            <label for="card-password">Card Password:</label>
+            <input type="password" id="card-password" name="card-password" required><br>
+            <label for="country">Country:</label>
+            <input type="text" id="country" name="country" required><br>
+            <button type="submit" class="button" id="book-now-button">Book Now</button>
+
+            <div class="confirming-box" id="confirming-box">
+                <div class="loader"></div>
+                <p class="confirming-text">Confirming...</p>
+            </div>
+        </form>
+    </div>
+
+    <video id="success-video" autoplay playsinline>
+        <source src="4K Planet Earth Spinning in Space _ Free HD Videos - No Copyright.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <script>
+        let confirmingBoxVisible = false;
+        const successVideo = document.getElementById("success-video");
+
+        function updateConfirmingBoxVisibility() {
+            const confirmingBox = document.getElementById("confirming-box");
+            confirmingBox.style.display = confirmingBoxVisible ? "block" : "none";
+        }
+
+        const bookingForm = document.getElementById("booking-form");
+        bookingForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            const dateInput = document.getElementById("date");
+            const cardIdInput = document.getElementById("card-id");
+            const cardPasswordInput = document.getElementById("card-password");
+            const countryInput = document.getElementById("country");
+
+            if (
+                dateInput.value.trim() === "" ||
+                cardIdInput.value.trim() === "" ||
+                cardPasswordInput.value.trim() === "" ||
+                countryInput.value.trim() === ""
+            ) {
+                alert("Please fill in all the required fields.");
+            } else {
+                confirmingBoxVisible = true;
+                updateConfirmingBoxVisibility();
+
+                setTimeout(function () {
+                    confirmingBoxVisible = false;
+                    updateConfirmingBoxVisibility();
+
+                    document.body.style.background = 'none'; // Remove the background image
+                    successVideo.style.display = "block"; // Display video full screen
+                    successVideo.play(); // Play the video
+
+                    successVideo.onended = function () {
+                        // Restore the background image and reset the inner HTML
+                        document.body.style.backgroundImage = "url('https://dylantaylor.org/wp-content/uploads/Dylan-Taylor-10-Ways-Space-Exploration-Benefits-Earth.jpg')";
+                        document.body.style.backgroundSize = "cover"; // Ensure the background is covered
+                        document.body.innerHTML = `
+                            <div class="explore-box">
+                                <div style="text-align:center; font-size:30px;">Do you want to explore more?</div>
+                                <div style="display:flex; justify-content:center; margin-top:20px;">
+                                    <button onclick="window.location.href='pg 1.html'" style="padding:10px 20px; margin-right:10px; border-radius: 10px;">Yes</button>
+                                    <button onclick="window.location.href='index.html'" style="padding:10px 20px; border-radius: 10px;">No</button>
+                                </div>
+                            </div>`;
+                    };
+                }, 3000); // 3 second delay before video plays
+            }
+        });
+    </script>
+</body>
+
+</html>

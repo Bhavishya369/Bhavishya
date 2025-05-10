@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   
+    <title>Habitable Exoplanets</title>
+    <script>
+        // Function to redirect after 1 second
+        function redirect() {
+            setTimeout(function() {
+                window.location.href = "secfirst.html"; // Replace with your target URL
+            }, 1500); // 1000 milliseconds = 1 second
+        }
+
+        // Call the redirect function when the window loads
+        window.onload = redirect;
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-image: url('https://img.freepik.com/free-photo/glowing-sky-sphere-orbits-starry-galaxy-generated-by-ai_188544-15599.jpg?w=1060&t=st=1727762504~exp=1727763104~hmac=a7608f9a4bbf9eb71aafc6f83c2dd47c31d1dec8a2eb8d0d542fe972fc5c5c57');
+            background-size: cover;
+            background-position: center;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding-top: 20px;
+        }
+
+        .header-box {
+            background: rgba(25, 25, 25, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 60px;
+            max-width: 1200px;
+        }
+
+        .planet-box {
+            background: rgba(20, 20, 20, 0.85);
+            width: 220px;
+            height: 420px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            position: relative;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            opacity: 0; /* Initially hidden */
+        }
+
+        /* Enlarging effect on hover */
+        .planet-box:hover {
+            transform: translateY(-20px) scale(1.2);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6);
+            background: rgba(40, 40, 40, 0.95);
+        }
+
+        @keyframes slideInFromLeft {
+            0% {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromTop {
+            0% {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromBottom {
+            0% {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromRight {
+            0% {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .planet-box:nth-child(1) {
+            animation: slideInFromLeft 0.8s ease-in-out forwards;
+            animation-delay: 0s;
+        }
+
+        .planet-box:nth-child(2) {
+            animation: slideInFromTop 0.8s ease-in-out forwards;
+            animation-delay: 0.1s;
+        }
+
+        .planet-box:nth-child(3) {
+            animation: slideInFromBottom 0.8s ease-in-out forwards;
+            animation-delay: 0.2s;
+        }
+
+        .planet-box:nth-child(4) {
+            animation: slideInFromTop 0.8s ease-in-out forwards;
+            animation-delay: 0.3s;
+        }
+
+        .planet-box:nth-child(5) {
+            animation: slideInFromRight 0.8s ease-in-out forwards;
+            animation-delay: 0.4s;
+        }
+
+        .planet-box video {
+            width: 100%;
+            height: 50%;
+            object-fit: cover;
+            border-bottom: 2px solid #555;
+        }
+
+        .planet-info {
+            padding: 20px;
+        }
+
+        .planet-info h2 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            color: #ffcc00;
+            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ffcc00;
+        }
+
+        .planet-info p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #ddd;
+        }
+
+        .thinking-bubble {
+            position: absolute;
+            background: #fff;
+            border-radius: 10px;
+            width: 250px;
+            padding: 10px;
+            text-align: center;
+            color: #000;
+            font-size: 16px;
+            line-height: 1.6;
+            display: none;
+            z-index: 10;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 10px;
+        }
+
+        .thinking-bubble::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -10px;
+            border-width: 10px;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-box">
+        <h1>Habitable Exoplanets</h1>
+    </div>
+
+    <div class="container">
+        <!-- Planet 1 -->
+        <div class="planet-box" data-url="proxima b.html" onclick="openSite(this)">
+            
+            <video autoplay loop muted>
+                <source src="aPROXIMA-B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Proxima b</h2>
+                <p>Proxima b is located in the habitable zone of the closest star, Proxima Centauri, just 4.2 light-years away.</p>
+            </div>
+            <div class="thinking-bubble">Proxima b is in the habitable zone!</div>
+        </div>
+
+        <!-- Planet 2 -->
+        <div class="planet-box" data-url="trappist 1e.html" onclick="openSite(this)">
+            <video autoplay loop muted>
+                <source src="a.TRAPPIST-1E.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>TRAPPIST-1e</h2>
+                <p>One of the seven Earth-like planets orbiting TRAPPIST-1, it lies in the star's habitable zone.</p>
+            </div>
+            <div class="thinking-bubble">TRAPPIST-1e has potential water!</div>
+        </div>
+
+        <!-- Planet 3 -->
+        <div class="planet-box" data-url="kepler-452b.html" onclick="openSite(this)">
+            <video autoplay loop muted>
+                <source src="a.KEPLER-452B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Kepler-452b</h2>
+                <p>This exoplanet is about 1.5 times the size of Earth and lies in the habitable zone of its star.</p>
+            </div>
+            <div class="thinking-bubble">Kepler-452b may be Earth-like!</div>
+        </div>
+
+        <!-- Planet 4 -->
+        <div class="planet-box" data-url="Gliese 667 CC.html" onclick="openSite(this)">
+            <video autoplay loop muted>
+                <source src="a.GLIESE 667 Cc.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Gliese 667 Cc</h2>
+                <p>Gliese 667 Cc orbits within its star's habitable zone and is about 22 light-years away.</p>
+            </div>
+            <div class="thinking-bubble">LHS 1140 b has potential for atmosphere!</div>
+        </div>
+
+        <!-- Planet 5 -->
+        <div class="planet-box" data-url="K2-18B.html" onclick="openSite(this)">
+            <video autoplay loop muted>
+                <source src="a.K2-18B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>K2-18b</h2>
+                <p>K2-18b is located in its star's habitable zone and has water vapor in its atmosphere.</p>
+            </div>
+            <div class="thinking-bubble">TOI 700 d is Earth-sized!</div>
+        </div>
+    </div>
+
+    <script>
+        // Function to show the thinking bubble and redirect
+        function openSite(planetBox) {
+            const thinkingBubble = planetBox.querySelector('.thinking-bubble');
+            thinkingBubble.style.display = 'block';
+            setTimeout(() => {
+                thinkingBubble.style.display = 'none';
+            }, 3000);
+            
+            // Redirect after showing the thinking bubble
+            const url = planetBox.getAttribute('data-url');
+            setTimeout(() => {
+                window.location.href = url;
+            }, 3000); // Change duration as needed
+        }
+
+        // Make planet boxes visible with a staggered animation
+        document.querySelectorAll('.planet-box').forEach((box, index) => {
+            box.style.opacity = 1; // Make visible
+        });
+    </script>
+</body>
+</html>

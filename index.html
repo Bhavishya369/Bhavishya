@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronicles of exoplanet exploration</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-image: url('background , index 123.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+
+        /* New transparent box around the top section */
+        .top-section {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.5); /* Transparent background */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 2;
+            border-radius: 15px;
+            margin: 10px;
+        }
+
+        .container {
+            position: relative;
+            text-align: center;
+            margin-top: 100px;
+        }
+
+        /* Adjusted logo positioning */
+        .logo-container {
+            margin-left: 20px;
+        }
+
+        .logo-container img {
+            width: 1.5cm;
+            height: 1.5cm;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.3s;
+            background-color: white;
+        }
+
+        .logo-container img:hover {
+            transform: scale(1.2);
+        }
+
+        /* Top navbar for navigation links */
+        .top-navbar {
+            display: flex;
+            justify-content: space-evenly;
+        }
+
+        .top-navbar a {
+            text-decoration: none;
+            font-size: 16px;
+            padding: 10px 20px;
+            background-color: black;
+            color: white;
+            border-radius: 20px;
+            border: 2px solid white; /* Added outline */
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+            margin: 0 10px; /* Added gap between buttons */
+        }
+
+        .top-navbar a:hover {
+            background-color: white;
+            color: black;
+            border-color: black; /* Change outline on hover */
+        }
+
+        /* Separated Login and Sign-up buttons */
+        .auth-buttons {
+            display: flex;
+            gap: 10px; /* Adds space between the two buttons */
+            margin-right: 20px;
+        }
+
+        .auth-button {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+            font-size: 16px;
+            font-weight: bold;
+            border: 2px solid white; /* Added outline to auth buttons */
+        }
+
+        .auth-button:hover {
+            background-color: white;
+            color: black;
+            border-color: black; /* Change outline on hover */
+        }
+
+        .trip-text {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+
+        .image-above-text {
+            width: 4cm;
+            height: 4cm;
+            display: block;
+            margin: 0 auto 20px auto;
+            border-radius: 20%;
+        }
+
+        .explore-button {
+            width: 100px;
+            height: 100px;
+            background-color: black;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: absolute;
+            left: 17.5cm;
+            top: calc(50% - 2.5cm);
+            box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5);
+            border: 4px solid white;
+            transition: background-color 0.3s, border-color 0.3s, transform 0.3s;
+        }
+
+        .explore-button:hover {
+            background-color: white;
+            border-color: black;
+            transform: scale(1.1);
+        }
+
+        .explore-button a {
+            text-decoration: none;
+            color: blue;
+            font-weight: bold;
+            font-size: 18px;
+            transition: color 0.3s;
+        }
+
+        .explore-button:hover a {
+            color: black;
+        }
+
+        .description {
+            font-size: 16px;
+            text-align: center;
+            color: #fcbe61;
+            margin-top: 20px;
+            max-width: 600px;
+            font-weight: 900;
+            margin-top: -0.5cm;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.444);
+        }
+    </style>
+</head>
+<body>
+    <!-- Top section wrapped in a transparent container -->
+    <div class="top-section">
+        <div class="logo-container">
+            <a href="https://www.spaceappschallenge.org/nasa-space-apps-2024/challenges/chronicles-of-exoplanet-exploration/" target="_blank">
+                <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQK2W5HxQ5MsJPNBdDeSVD4oJ1XK-uS-G30DQ&s" alt="Logo 1">
+            </a>
+        </div>
+
+        <!-- Top navigation links -->
+        <div class="top-navbar">
+            <a href="about.html">About</a>
+            <a href="https://science.nasa.gov/exoplanets/">Nasa & Exoplanets</a>
+            <a href="Idea.html">Our Idea</a>
+            <a href="Future idea.html">Future Idea</a>
+            <a href="https://www.canva.com/design/DAGSrrN4p1c/IDzxptyVgiA4KYf9tUicRA/view?utm_content=DAGSrrN4p1c&utm_campaign=designshare&utm_medium=link&utm_source=editor" target="_blank">Details</a>
+            <a href="quiz.html">Quiz</a>
+        </div>
+        
+
+        <!-- Login and Sign Up buttons separated -->
+        <div class="auth-buttons">
+            <a href="login.html" class="auth-button">Login</a>
+            <a href="login.html" class="auth-button">Sign Up</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <img src="bhavishya.jpg" alt="Image" class="image-above-text">
+        <div class="trip-text">
+            <p>Explore beyond your limits!<br>Discover the wonders</p>
+        </div>
+        <a href="login.html" class="explore-button">Explore</a>
+    </div>
+
+    <div class="description">
+        <strong>Immerse yourself in the fascinating universe of exoplanets <br>Uncover the secrets they hold<br>Step into a universe of endless possibilities!</strong>
+    </div>
+</body>
+</html>

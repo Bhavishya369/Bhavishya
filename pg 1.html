@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chronicles of Exoplanet Exploration</title>
+    <style>
+        body {
+            background-image: url('pg background.jpg');
+            background-size: cover;
+            margin: 0;
+            padding: 0;
+            font-family: 'Trebuchet MS', sans-serif;
+            color: #fff;
+            overflow-y: scroll;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+        }
+        .title {
+            font-size: 54px;
+            text-align: center;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
+        }
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        .button {
+            background-color: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 36px;
+            height: 250px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            color: rgb(255, 255, 255); /* Set button text color to white */
+        }
+        .button:hover {
+            background-color: rgba(0, 123, 255, 0.3);
+            transform: translateY(-10px);
+        }
+        .image-button img {
+            width: 50%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 20px 0 0 20px;
+            transition: transform 0.3s ease;
+        }
+        .button:hover img {
+            transform: scale(1.1);
+        }
+        .image-button span {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-left: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.7);
+            color: rgb(189, 195, 196); /* Set text color to white */
+        }
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 60px; /* Increased width */
+            height: 60px; /* Increased height */
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='login.html';">
+    <div class="container">
+        <div class="title">Explore the Cosmos</div>
+        <div class="button-container">
+            <button class="button image-button" onclick="window.location.href='Habitable exoplanet.html';">
+                <img src="https://images.fineartamerica.com/images/artworkimages/mediumlarge/3/beautiful-view-of-planet-earth-from-space-timelapse-and-stars-incredivfx.jpg" alt="Earth">
+                <span>Habitable Exoplanets</span>
+            </button>
+            <button class="button image-button" onclick="window.location.href='gas giants.html';">
+                <img src="https://t4.ftcdn.net/jpg/05/80/04/77/360_F_580047743_cMquzDuJLPFmEZa9u9Y7nahMaFQyu69k.jpg" alt="Gas Giants">
+                <span>Gas Giants</span>
+            </button>
+            <button class="button image-button" onclick="window.location.href='super earths.html';">
+                <img src="https://odishabytes.com/wp-content/uploads/2020/06/earth-like-planet.jpg" alt="Super-Earths">
+                <span>Super-Earths</span>
+            </button>
+            <button class="button image-button" onclick="window.location.href='Exoplanets with Diverse Host Stars.html';">
+                <img src="https://media.assettype.com/freepressjournal/2023-12/0ce6a0b8-9afd-47c1-8f5e-5cba2de5ba4b/spaceship_orbits_dark_galaxy_glowing_blue_comet_generated_by_ai.jpg?width=1200" alt="Exoplanets with Diverse Host Stars">
+                <span>Exoplanets with Diverse Host Stars</span>
+            </button>
+        </div>
+    </div>
+</body>
+</html>

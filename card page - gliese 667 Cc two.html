@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book a Ticket</title>
+    <style>
+        body {
+            background-image: url('https://dylantaylor.org/wp-content/uploads/Dylan-Taylor-10-Ways-Space-Exploration-Benefits-Earth.jpg');
+            background-size: cover;
+            color: #f0f0f0;
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .container {
+            background: rgba(20, 20, 40, 0.9); /* Increased opacity for solid background */
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .container:hover {
+            transform: scale(1.02);
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #6a0dad, #2575fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 16px;
+            color: #fff;
+            text-align: left;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: fadeIn 0.6s forwards;
+            animation-delay: 0.2s;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #6a0dad, #2575fc);
+            color: #fff;
+            font-size: 16px;
+            transition: background-color 0.3s ease-in-out, transform 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.6s forwards;
+            animation-delay: 0.4s;
+        }
+
+        input:focus {
+            background-color: rgba(255, 255, 255, 0.2);
+            outline: none;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            transform: scale(1.02);
+        }
+
+        .button {
+            background: linear-gradient(45deg, #6a0dad, #2575fc);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: 600;
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 10px rgba(106, 13, 173, 0.3);
+            margin-top: 10px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeIn 0.6s forwards;
+            animation-delay: 0.6s;
+        }
+
+        .button:hover {
+            background-color: #8a2be2;
+            box-shadow: 0 6px 15px rgba(138, 43, 226, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .confirming-box {
+            background-color: rgba(255, 255, 255, 0.85);
+            width: 100%;
+            min-height: 4cm;
+            padding: 20px;
+            border-radius: 10px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .confirming-text {
+            font-weight: bold;
+            font-size: 20px;
+            color: black;
+        }
+
+        .loader {
+            width: 100px;
+            height: 100px;
+            border: none;
+            background: url('https://cdn.dribbble.com/users/475723/screenshots/2666648/media/ee00998b061575d66e29e52e07ef7d46.gif') center no-repeat;
+            background-size: cover;
+            margin: 0 auto;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        video {
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Book a Ticket</h1>
+        <form id="booking-form">
+            <label for="date">Journey Date</label>
+            <input type="date" id="date" name="date" required><br>
+            <label for="country">Country:</label>
+            <input type="text" id="country" name="country" required><br>
+
+            <!-- Card ID and Password Fields -->
+            <label for="card-id">Card ID:</label>
+            <input type="text" id="card-id" name="card-id" required><br>
+            <label for="card-password">Card Password:</label>
+            <input type="password" id="card-password" name="card-password" required><br>
+
+            <button type="submit" class="button" id="book-now-button">Book Now</button>
+
+            <div class="confirming-box" id="confirming-box">
+                <div class="loader"></div>
+                <p class="confirming-text">Confirming...</p>
+            </div>
+        </form>
+    </div>
+
+    <video id="success-video" autoplay playsinline>
+        <source src="video of gliese 667 Cc two.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <script>
+        let confirmingBoxVisible = false;
+        const successVideo = document.getElementById("success-video");
+
+        function updateConfirmingBoxVisibility() {
+            const confirmingBox = document.getElementById("confirming-box");
+            confirmingBox.style.display = confirmingBoxVisible ? "block" : "none";
+        }
+
+        const bookingForm = document.getElementById("booking-form");
+        bookingForm.addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            const dateInput = document.getElementById("date");
+            const countryInput = document.getElementById("country");
+            const cardIdInput = document.getElementById("card-id");
+            const cardPasswordInput = document.getElementById("card-password");
+
+            const bookingDetails = {
+                date: dateInput.value,
+                country: countryInput.value,
+                cardId: cardIdInput.value,
+                cardPassword: cardPasswordInput.value
+            };
+
+            console.log("Booking Details:", bookingDetails);
+
+            confirmingBoxVisible = true;
+            updateConfirmingBoxVisibility();
+
+            // Simulate a network request
+            setTimeout(function () {
+                confirmingBoxVisible = false;
+                updateConfirmingBoxVisibility();
+                successVideo.style.display = "block";
+                successVideo.play();
+
+                // Reset form after booking
+                bookingForm.reset();
+            }, 3000);
+        });
+    </script>
+</body>
+
+</html>

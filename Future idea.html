@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Futuristic Ideas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Raleway:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+        /* General styling */
+        body {
+            font-family: 'Orbitron', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-image: url('minecraftbg.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Dark overlay for contrast */
+        .overlay {
+            background-color: rgba(0, 0, 0, 0.6);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Main content container */
+        .container {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            width: 80%;
+            max-width: 900px;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .container:hover {
+            transform: scale(1.05);
+        }
+
+        /* Header styles */
+        .header-box {
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            color: #00ff99;
+            text-transform: uppercase;
+            text-shadow: 0 0 15px #00ff99, 0 0 25px #00ff99;
+            animation: glow 2s infinite alternate;
+        }
+
+        /* Glowing animation for the header */
+        @keyframes glow {
+            0% {
+                text-shadow: 0 0 15px #00ff99, 0 0 25px #00ff99;
+            }
+            100% {
+                text-shadow: 0 0 30px #00ff99, 0 0 45px #00ff99;
+            }
+        }
+
+        /* Text content styles */
+        .content p {
+            font-family: 'Raleway', sans-serif;
+            font-size: 1.3rem;
+            color: #f1f1f1;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+
+        /* Explore button */
+        button {
+            padding: 15px 50px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #ffcc33, #ff9900);
+            color: #000;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(255, 165, 0, 0.5);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Button hover effect */
+        button:hover {
+            background: linear-gradient(45deg, #ff9900, #ffcc33);
+            box-shadow: 0 15px 30px rgba(255, 165, 0, 0.7);
+            transform: scale(1.1);
+        }
+
+        /* Animated glowing ring effect */
+        button::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 0, 0.5), rgba(0, 0, 0, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 0;
+        }
+
+        button:hover::before {
+            opacity: 1;
+            animation: rotate 2s infinite linear;
+        }
+
+        @keyframes rotate {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        button span {
+            position: relative;
+            z-index: 1;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Dark overlay for readability -->
+    <div class="overlay"></div>
+
+    <!-- Main content -->
+    <div class="container">
+        <div class="header-box">
+            <h1>Our Futuristic Ideas</h1>
+        </div>
+
+        <div class="content">
+            <p>
+                We are excited to announce our plans to create a unique terrain for each exoplanet tour, with one of the world's mostly played games both by children and adult, in Minecraft! 
+                This will not only provide an immersive experience for our users but also enhance their learning about 
+                these fascinating worlds. Users will be able to explore the terrains and visualize the exoplanets in 
+                a creative and engaging way.
+            </p>
+            <p>
+                Our goal is to combine education with entertainment, allowing users to book a virtual ticket to each 
+                exoplanet and then explore its terrain in a sandbox environment. We believe this innovative approach 
+                will help to inspire curiosity about space and planetary systems.
+            </p>
+            <button onclick="startExploring()"><span>Start Exploring</span></button>
+        </div>
+    </div>
+
+    <script>
+        function startExploring() {
+            window.location.href = 'Gamedemo.html';  // Link to explore page
+        }
+    </script>
+
+</body>
+</html>

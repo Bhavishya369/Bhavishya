@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxima b Exploration - Modern Website</title>
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #fff;
+            background: #0b0c10;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            transition: background 0.5s;
+        }
+
+        nav .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #ff9800;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+        }
+
+        nav ul li {
+            margin-left: 20px;
+        }
+
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: color 0.3s;
+        }
+
+        nav ul li a:hover {
+            color: #ff9800;
+        }
+
+        /* Hero Section with Slideshow Background */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 20px;
+            position: relative;
+            overflow: hidden;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            animation: slideInDown 1s ease forwards;
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            margin-top: 20px;
+            animation: slideInUp 1s ease forwards;
+            opacity: 0;
+            animation-delay: 0.5s;
+            z-index: 1;
+        }
+
+        .hero a {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 15px 30px;
+            background-color: #ff9800;
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+            animation-delay: 1s;
+            z-index: 1;
+        }
+
+        .hero a:hover {
+            background-color: #f57c00;
+            transform: scale(1.05);
+        }
+
+        /* Background Slideshow */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            animation: slideshow 15s infinite;
+            z-index: 0;
+        }
+
+        @keyframes slideshow {
+            0% {
+                background-image: url('https://science.nasa.gov/wp-content/uploads/2023/09/proxima_b_th.jpg?w=480');
+            }
+            33% {
+                background-image: url('https://i.insider.com/57c45811dd08950a3e8b4998?width=800&format=jpeg&auto=webp');
+            }
+            66% {
+                background-image: url('https://upload.wikimedia.org/wikipedia/commons/5/5d/Proxima_Centauri_b.jpg');
+            }
+            100% {
+                background-image: url('https://thehill.com/wp-content/uploads/sites/2/2020/12/ca_usa_from_space_istock.jpg?strip=1');
+            }
+        }
+
+        /* Animations */
+        @keyframes slideInDown {
+            0% {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInUp {
+            0% {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Features Section */
+        .features {
+            padding: 80px 20px;
+            background: #1f2833;
+            text-align: center;
+        }
+
+        .features h2 {
+            font-size: 3rem;
+            margin-bottom: 40px;
+        }
+
+        .features ul {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            list-style: none;
+            gap: 40px;
+        }
+
+        .features li {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 300px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            transition: transform 0.3s ease;
+        }
+
+        .features li:hover {
+            transform: translateY(-10px);
+        }
+
+        .features li h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #ff9800;
+        }
+
+        /* Call-to-Action Section */
+        .cta {
+            padding: 100px 20px;
+            background: linear-gradient(45deg, #ff9800, #f57c00);
+            text-align: center;
+            color: white;
+        }
+
+        .cta h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .cta p {
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+        }
+
+        .cta a {
+            padding: 15px 30px;
+            background-color: white;
+            color: #ff9800;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .cta a:hover {
+            background-color: #f57c00;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Footer */
+        footer {
+            background: #0b0c10;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        /* Media Queries */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .features ul {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav>
+        <div class="logo">Proxima b Exploration</div>
+        <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#cta">Book Now</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div>
+            <h1>Discover Proxima b</h1>
+            <p>A journey to the closest exoplanet in the habitable zone.</p>
+            <a href="#features">Explore More</a>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <h2>Features of Proxima b</h2>
+        <ul>
+            <li>
+                <h3>Orbiting the Closest Star</h3>
+                <p>Proxima b orbits Proxima Centauri, the closest star to the Sun.</p>
+            </li>
+            <li>
+                <h3>Potential for Liquid Water</h3>
+                <p>Located in the habitable zone, it may support liquid water.</p>
+            </li>
+            <li>
+                <h3>Research Subject</h3>
+                <p>Proxima b is a focus for studies on human colonization.</p>
+            </li>
+            <li>
+                <h3>Extraterrestrial Life</h3>
+                <p>It is being researched for signs of extraterrestrial life.</p>
+            </li>
+        </ul>
+    </section>
+
+    <!-- Call-to-Action Section -->
+    <section class="cta" id="cta">
+        <h2>Book Your Journey Today!</h2>
+        <p>Reserve your seat for the once-in-a-lifetime exploration of Proxima b.</p>
+        <a href="NasaBha2 - proxima b two.html">Book Now</a>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>Proxima b Exploration. NASA.</p>
+    </footer>
+
+</body>
+</html>

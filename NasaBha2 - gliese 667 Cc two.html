@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronicles of exoplanet exploration</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: url('https://www.bu.edu/files/2022/07/feat-STScI-01G7ETNMR8CBHQQ64R4CVA1E6T-1600x900.jpg') no-repeat center center fixed;
+            background-size: cover;
+            background-attachment: fixed;
+            color: #fff;
+        }
+
+        header {
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+            position: relative;
+        }
+
+        /* Updated Sleeker Back Button */
+        .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .back-button:hover {
+            background-color: rgba(0, 115, 230, 0.8);
+            border-color: rgba(0, 115, 230, 1);
+            transform: scale(1.1);
+            box-shadow: 0px 6px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .back-button img {
+            width: 30px;
+            height: 30px;
+        }
+
+        h1 {
+            margin: 0;
+            padding: 0;
+            font-size: 48px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+        }
+
+        .package-btns {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .package-btn {
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            width: 160px;
+            height: 160px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+
+        .package-btn.selected {
+            background-color: #4CAF50;
+            border-color: #4CAF50;
+            color: white;
+        }
+
+        .package-btn:hover {
+            background-color: #4CAF50;
+            border-color: #4CAF50;
+            color: white;
+        }
+
+        #confirm-button {
+            display: none;
+            background-color: #0073e6;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 12px 24px;
+            margin-top: 20px;
+            cursor: pointer;
+            font-size: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        #confirm-button:hover {
+            background-color: #005bb5;
+        }
+
+        .package-name {
+            font-size: 18px;
+        }
+
+        .package-price {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- Updated Back Button -->
+        <a href="Gliese 667 CC two.html" class="back-button">
+            <img src="https://cdn-icons-png.flaticon.com/128/271/271220.png" alt="Back Icon">
+        </a>
+        <h1>Explore the Universe</h1>
+    </header>
+
+    <div class="container">
+        <ul class="package-btns">
+            <li class="package-btn" data-price="999">
+                <span class="package-name">1 Day Package</span>
+                <span class="package-price">9,999 tokens</span>
+            </li>
+            <li class="package-btn" data-price="6999">
+                <span class="package-name">3 Day Package</span>
+                <span class="package-price">29,997 tokens</span>
+            </li>
+            <li class="package-btn" data-price="44999">
+                <span class="package-name">5 Day Package</span>
+                <span class="package-price">49,995 tokens</span>
+            </li>
+            <li class="package-btn" data-price="2999">
+                <span class="package-name">1 Week Package</span>
+                <span class="package-price">69,993 tokens</span>
+            </li>
+            <li class="package-btn" data-price="14999">
+                <span class="package-name">2 Week Package</span>
+                <span class="package-price">1,39,986 tokens</span>
+            </li>
+            <li class="package-btn" data-price="59999">
+                <span class="package-name">1 Month Package</span>
+                <span class="package-price">2,79,972 tokens</span>
+            </li>
+            <li class="package-btn" data-price="4999">
+                <span class="package-name">2 Month Package</span>
+                <span class="package-price">5,59,994 tokens</span>
+            </li>
+            <li class="package-btn" data-price="24999">
+                <span class="package-name">3 Month Package</span>
+                <span class="package-price">8,39,916 tokens</span>
+            </li>
+            <li class="package-btn" data-price="74999">
+                <span class="package-name">6 Month Package</span>
+                <span class="package-price">16,79,832 tokens</span>
+            </li>
+        </ul>
+        <button id="confirm-button">Confirm</button>
+    </div>
+
+    <script>
+        const packageBtns = document.querySelectorAll('.package-btn');
+        const confirmButton = document.getElementById('confirm-button');
+
+        packageBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Deselect all buttons
+                packageBtns.forEach(btn => {
+                    btn.classList.remove('selected');
+                });
+
+                // Select the clicked button
+                btn.classList.add('selected');
+
+                // Show the confirm button
+                confirmButton.style.display = 'block';
+            });
+        });
+
+        confirmButton.addEventListener('click', () => {
+            window.location.href = 'card page - gliese 667 Cc two.html'; // Navigate to Cardno.html
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planetary Tourism Office</title>
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #background-video {
+            display: none; /* Initially hide the video */
+            position: absolute;
+            top: 0;
+            left: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -1;
+        }
+
+        .background-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("ultra-detailed-nebula-abstract-wallpaper-4.jpg");
+            background-size: cover;
+            z-index: 0;
+        }
+
+        #continue-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 50px;
+            display: none; /* Initially hide the continue button */
+            z-index: 1;
+            transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #continue-button:hover {
+            background-color: #2980b9; /* Hover effect */
+            transform: translate(-50%, -50%) scale(1.05); /* Zoom in on hover */
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow on hover */
+        }
+
+        .skip-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        .skip-button:hover {
+            background-color: #c0392b; /* Hover effect */
+        }
+
+        .play-presentation-button {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 50px;
+            display: none; /* Initially hide the play presentation button */
+            z-index: 1;
+            transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .play-presentation-button:hover {
+            background-color: #2980b9; /* Hover effect */
+            transform: translate(-50%, -50%) scale(1.05); /* Zoom in on hover */
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow on hover */
+        }
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <div class="background-image"></div>
+        <video autoplay id="background-video">
+            <source src="first page video.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <button class="continue-button" id="continue-button">Click to Continue</button>
+        <button class="skip-button" id="skip-button">Skip</button>
+        <button class="play-presentation-button" id="play-presentation-button">Play Presentation</button>
+    </div>
+
+    <script>
+        var video = document.getElementById("background-video");
+        var continueButton = document.getElementById("continue-button");
+        var skipButton = document.getElementById("skip-button");
+        var playPresentationButton = document.getElementById("play-presentation-button");
+        var backgroundImage = document.querySelector(".background-image");
+
+        // Show the background image, continue button, and play presentation button when the page loads
+        backgroundImage.style.display = "block";
+        continueButton.style.display = "block";
+        playPresentationButton.style.display = "block";
+
+        continueButton.addEventListener("click", function() {
+            video.style.display = "block"; // Show the video
+            backgroundImage.style.display = "none"; // Hide the background image
+            continueButton.style.display = "none"; // Hide the continue button
+            playPresentationButton.style.display = "none"; // Hide the play presentation button
+            video.play(); // Start playing the video
+        });
+
+        playPresentationButton.addEventListener("click", function() {
+            // Open the presentation in a new tab when the "Play Presentation" button is clicked
+            window.open("https://www.canva.com/design/DAGSrrN4p1c/3rnEkx7qRn-d2n8Svne0aw/view?utm_content=DAGSrrN4p1c&utm_campaign=designshare&utm_medium=link&utm_source=editor", "_blank");
+        });
+
+        video.addEventListener("ended", function() {
+            // Video has ended, navigate to "index.html"
+            window.location.href = "index.html";
+        });
+
+        skipButton.addEventListener("click", function() {
+            // Manually navigate to "index.html" when the "Skip" button is clicked
+            window.location.href = "index.html";
+        });
+    </script>
+</body>
+</html>

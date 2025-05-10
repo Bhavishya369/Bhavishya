@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kepler-22b Exploration - Modern Website</title>
+    <style>
+        /* Global Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #fff;
+            background: #0b0c10;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+            transition: background 0.5s;
+        }
+
+        nav .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #ff9800;
+        }
+
+        nav ul {
+            list-style: none;
+            display: flex;
+        }
+
+        nav ul li {
+            margin-left: 20px;
+        }
+
+        nav ul li a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: color 0.3s;
+        }
+
+        nav ul li a:hover {
+            color: #ff9800;
+        }
+
+        /* Hero Section with Slideshow Background */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 20px;
+            position: relative;
+            overflow: hidden;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            animation: slideInDown 1s ease forwards;
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            margin-top: 20px;
+            animation: slideInUp 1s ease forwards;
+            opacity: 0;
+            animation-delay: 0.5s;
+            z-index: 1;
+        }
+
+        .hero a {
+            display: inline-block;
+            margin-top: 40px;
+            padding: 15px 30px;
+            background-color: #ff9800;
+            color: white;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: fadeIn 1s ease forwards;
+            animation-delay: 1s;
+            z-index: 1;
+        }
+
+        .hero a:hover {
+            background-color: #f57c00;
+            transform: scale(1.05);
+        }
+
+        /* Background Slideshow */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            animation: slideshow 15s infinite;
+            z-index: 0;
+        }
+
+        @keyframes slideshow {
+            0% {
+                background-image: url('https://i.redd.it/kepler-22b-is-an-exoplanet-that-might-be-covered-in-a-v0-o3wiamibb1ub1.png?width=1606&format=png&auto=webp&s=507e700012632d77cb0eb400bfd9b1bb7138f97a');
+            }
+            33% {
+                background-image: url('https://static.independent.co.uk/s3fs-public/thumbnails/image/2011/12/05/18/Planet.jpg?width=1200&height=1200&fit=crop');
+            }
+            66% {
+                background-image: url('https://science.nasa.gov/wp-content/uploads/2024/03/Kepler22b.jpg?w=1024');
+            }
+            100% {
+                background-image: url('data:image/jpeg;base64,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');
+            }
+        }
+
+        /* Animations */
+        @keyframes slideInDown {
+            0% {
+                transform: translateY(-100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInUp {
+            0% {
+                transform: translateY(100px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Features Section */
+        .features {
+            padding: 80px 20px;
+            background: #1f2833;
+            text-align: center;
+        }
+
+        .features h2 {
+            font-size: 3rem;
+            margin-bottom: 40px;
+        }
+
+        .features ul {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            list-style: none;
+            gap: 40px;
+        }
+
+        .features li {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 300px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            transition: transform 0.3s ease;
+        }
+
+        .features li:hover {
+            transform: translateY(-10px);
+        }
+
+        .features li h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #ff9800;
+        }
+
+        /* Call-to-Action Section */
+        .cta {
+            padding: 100px 20px;
+            background: linear-gradient(45deg, #ff9800, #f57c00);
+            text-align: center;
+            color: white;
+        }
+
+        .cta h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .cta p {
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+        }
+
+        .cta a {
+            padding: 15px 30px;
+            background-color: white;
+            color: #ff9800;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .cta a:hover {
+            background-color: #f57c00;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Footer */
+        footer {
+            background: #0b0c10;
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-size: 0.9rem;
+        }
+
+        /* Media Queries */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .features ul {
+                flex-direction: column;
+            }
+
+            .carousel img {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav>
+        <div class="logo">Kepler-22b</div>
+        <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#cta">Book Now</a></li>
+        </ul>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div>
+            <h1>Discover Kepler-22b</h1>
+            <p>A journey to the exoplanet located in the habitable zone.</p>
+            <a href="#features">Explore More</a>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <h2>Features of Kepler-22b</h2>
+        <ul>
+            <li>
+                <h3>Habitable Zone</h3>
+                <p>Kepler-22b is located in the habitable zone, potentially allowing for liquid water.</p>
+            </li>
+            <li>
+                <h3>Exoplanetary Discovery</h3>
+                <p>It was the first confirmed exoplanet in the habitable zone of a sun-like star.</p>
+            </li>
+            <li>
+                <h3>Potential for Life</h3>
+                <p>Scientists speculate that conditions on Kepler-22b might support life.</p>
+            </li>
+            <li>
+                <h3>Virtual Exploration</h3>
+                <p>Experience a fully immersive exploration of Kepler-22b’s environment.</p>
+            </li>
+        </ul>
+    </section>
+
+    <!-- Call-to-Action Section -->
+    <section class="cta" id="cta">
+        <h2>Book Your Journey Today!</h2>
+        <p>Reserve your seat for the once-in-a-lifetime exploration of Kepler-22b.</p>
+        <a href="NasaBha2 - kepler-22b.html">Book Now</a>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>Kepler-22b Exploration. NASA.</p>
+    </footer>
+
+</body>
+</html>

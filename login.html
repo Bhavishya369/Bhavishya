@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: url('login background 123.png') no-repeat center center/cover;
+            overflow: hidden;
+        }
+
+        .login-container {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            padding: 40px 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0px 4px 30px rgba(0, 0, 0, 0.1);
+            width: 350px;
+            text-align: center;
+        }
+
+        .login-container h2 {
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        .login-container label {
+            display: block;
+            text-align: left;
+            margin-bottom: 8px;
+            color: #d1d5db;
+        }
+
+        .login-container input[type="text"],
+        .login-container input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: none;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        .login-container input[type="submit"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #6d28d9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .login-container input[type="submit"]:hover {
+            background-color: #4c1d95;
+        }
+
+        /* Back button style */
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+        }
+
+        /* Verifying animation styles */
+        .verification-box {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            text-align: center;
+        }
+
+        .verification-message {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 5px; /* Reduced margin to bring it closer to the animation */
+        }
+
+        .verification-box img {
+            width: 5cm; /* Adjusted to a larger size */
+            height: 3cm; /* Adjusted to match width */
+            border-radius: 10px; /* Gives a soft curved box look */
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Added shadow for a premium feel */
+        }
+    </style>
+</head>
+
+<body>
+    <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='index.html';">
+
+    <div class="login-container">
+        <h2>Login</h2>
+        <form id="login-form" onsubmit="return showVerificationMessage()">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" required>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required>
+
+            <label for="robo-id">Robo ID</label>
+            <input type="text" id="robo-id" name="robo-id" required>
+
+            <label for="neuralink-no">Neuralink No</label>
+            <input type="text" id="neuralink-no" name="neuralink-no" required>
+
+            <label for="teleportation-id">Teleportation ID</label>
+            <input type="text" id="teleportation-id" name="teleportation-id" required>
+
+            <input type="submit" value="Login">
+        </form>
+    </div>
+
+    <!-- Verifying Animation -->
+    <div class="verification-box" id="verification-box">
+        <div class="verification-message">Verifying...</div>
+        <img src="https://miro.medium.com/v2/resize:fit:1400/1*CsJ05WEGfunYMLGfsT2sXA.gif" alt="Loading Animation">
+    </div>
+
+    <script>
+        // Show verification message and then redirect
+        function showVerificationMessage() {
+            // Show the verification message
+            var verificationBox = document.getElementById('verification-box');
+            verificationBox.style.display = 'block';
+
+            // Simulate a delay of 2 seconds before redirecting
+            setTimeout(function () {
+                window.location.href = 'pg 1.html';
+            }, 2000);
+
+            // Prevent the form from submitting normally
+            return false;
+        }
+    </script>
+
+</body>
+
+</html>

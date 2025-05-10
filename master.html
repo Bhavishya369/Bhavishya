@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planetary Tourism Office</title> <!-- Added title -->
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-image: url('https://media.istockphoto.com/id/513931924/photo/space-shuttle-orbiting-earth.jpg?s=2048x2048&w=is&k=20&c=yarIgEmCCIjBbfnWAXQNbe0JaTp19yObi_KufDjUa5U='); /* Updated background image */
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+
+        .container {
+            position: relative;
+            text-align: center; /* Center the text */
+        }
+
+        .explore-button {
+            width: 100px;
+            height: 100px;
+            background-color: black;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: absolute;
+            left: 17.5cm; /* Move 0.5cm left */
+            top: calc(50% - 2.5cm); /* Move 0.5cm down */
+            box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5); /* Add a shadow */
+            border: 4px solid white; /* Add a thicker white border */
+            transition: background-color 0.3s, border-color 0.3s, transform 0.3s;
+            cursor: pointer; /* Add pointer cursor to indicate it's clickable */
+        }
+
+        .explore-button:hover {
+            background-color: white; /* Change background color on hover */
+            border-color: black; /* Change border color on hover */
+            transform: scale(1.1); /* Scale up on hover */
+        }
+
+        .explore-button a {
+            text-decoration: none;
+            color: #ffe4b5; /* Skin-colored text (Light Coral) */
+            font-weight: bold;
+            font-size: 18px;
+            transition: color 0.3s; /* Add transition for text color */
+        }
+
+        .explore-button:hover a {
+            color: black; /* Change text color to black on hover */
+        }
+
+        .trip-text {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            /* position: relative;
+            top: 0.5cm; */ /* Remove this to keep the text in the actual position */
+        }
+
+        .description {
+            font-size: 16px;
+            text-align: center;
+            color: #ffe4b5; /* Skin-colored text (Light Coral) */
+            margin-top: 20px;
+            max-width: 600px;
+            font-weight: 900; /* Set font weight to make it ultra bold */
+            margin-top: -0.5cm; /* Move the text 0.5cm above */
+        }
+        
+        .logo {
+            width: 150px; /* Adjust the size to make it a little bigger */
+            height: 150px; /* 1:1 aspect ratio */
+            margin-bottom: 10px; /* Adjust the margin as needed */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Add the corrected logo image above the "wanna make" text -->
+        <img src="C:\Users\sanee\OneDrive\Desktop\New folder\navigation.js\logo.jpg.jpg" alt="Logo" class="logo">
+        <div class="trip-text">
+            <p>Do you wanna make a trip<br>to planets</p>
+        </div>
+        <!-- Make the whole circle clickable by wrapping it with an anchor tag -->
+        <a href="login.html" class="explore-button">Explore</a>
+    </div>
+    <div class="description">
+        <!-- Make the text ultra-bold and move it 0.5cm above -->
+        <strong>Outer Space Tourism<br>Your Adventure Beyond Earth<br>Experience the thrill of space travel with Outer Space Tourism!</strong>
+    </div>
+    
+    <!-- JavaScript to play audio when the cursor moves -->
+    <audio id="background-audio" loop autoplay muted>
+        <source src="C:\Users\sanee\OneDrive\Desktop\New folder\navigation.js\SciFi Ambience Loop.mp3.mp4" type="audio/mp4">
+        Your browser does not support the audio element.
+    </audio>
+    
+    <script>
+        var audio = document.getElementById('background-audio');
+        document.addEventListener('mousemove', function() {
+            if (audio.muted) {
+                audio.muted = false;
+                audio.play();
+            }
+        });
+    </script>
+</body>
+</html>

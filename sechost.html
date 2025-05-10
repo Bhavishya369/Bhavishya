@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exoplanets with Diverse Host Stars</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-image: url('https://letstalkgeography.com/wp-content/uploads/2023/12/exoplanet-Feature-2048x1148.jpeg.webp');
+            background-size: cover;
+            background-position: center;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding-top: 20px;
+        }
+
+        .header-box {
+            background: rgba(25, 25, 25, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            color: #00ffff;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 60px;
+            max-width: 1200px;
+        }
+
+        .planet-box {
+            background: rgba(20, 20, 20, 0.85);
+            width: 220px;
+            height: 420px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            text-align: center;
+            position: relative;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+        }
+
+        .planet-box:hover {
+            transform: translateY(-20px) scale(1.2);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.6);
+            background: rgba(40, 40, 40, 0.95);
+        }
+
+        .tilt-left:hover {
+            transform: translateY(-20px) scale(1.2) rotate(-5deg);
+        }
+
+        .tilt-right:hover {
+            transform: translateY(-20px) scale(1.2) rotate(5deg);
+        }
+
+        .planet-box video {
+            width: 100%;
+            height: 50%;
+            object-fit: cover;
+            border-bottom: 2px solid #555;
+        }
+
+        .planet-info {
+            padding: 20px;
+        }
+
+        .planet-info h2 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            color: #ffcc00;
+            text-shadow: 0 0 5px #ffcc00, 0 0 10px #ffcc00;
+        }
+
+        .planet-info p {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #ddd;
+        }
+
+        .thinking-bubble {
+            position: absolute;
+            background: #fff;
+            border-radius: 10px;
+            width: 250px;
+            padding: 10px;
+            text-align: center;
+            color: #000;
+            font-size: 16px;
+            line-height: 1.6;
+            display: none;
+            z-index: 10;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 10px;
+        }
+
+        .thinking-bubble::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -10px;
+            border-width: 10px;
+            border-style: solid;
+            border-color: white transparent transparent transparent;
+        }
+
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            .planet-box {
+                width: 90%;
+                height: auto;
+            }
+
+            h1 {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-box">
+        <h1>Exoplanets with Diverse Host Stars</h1>
+    </div>
+
+    <div class="container">
+        <!-- Planet 1 -->
+        <div class="planet-box tilt-left" data-url="proxima b two.html" onclick="redirectToUrl(this)">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="aPROXIMA-B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Proxima b</h2>
+                <p>Proxima b orbits the red dwarf star Proxima Centauri, the closest star to our solar system.</p>
+            </div>
+            <div class="thinking-bubble">Orbits a red dwarf star!</div>
+        </div>
+
+        <!-- Planet 2 -->
+        <div class="planet-box tilt-right" data-url="trappist 1e two.html" onclick="redirectToUrl(this)">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="a.TRAPPIST-1E.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>TRAPPIST-1e</h2>
+                <p>TRAPPIST-1e orbits an ultracool dwarf star and is one of seven Earth-sized planets in its system.</p>
+            </div>
+            <div class="thinking-bubble">Ultracool dwarf star system!</div>
+        </div>
+
+        <!-- Planet 3 -->
+        <div class="planet-box" data-url="kepler 452bB two.html" onclick="redirectToUrl(this)">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="a.KEPLER-452B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>Kepler-452b</h2>
+                <p>Kepler-452b orbits a G-type star, often called Earth's cousin due to its similar conditions.</p>
+            </div>
+            <div class="thinking-bubble">Orbits a G-type star!</div>
+        </div>
+
+        <!-- Planet 4 -->
+        <div class="planet-box tilt-left" data-url="HD 209458B two.html" onclick="redirectToUrl(this)">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="a..HD 209458b.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>HD 209458b</h2>
+                <p>HD 209458b orbits a G-type star and was the first exoplanet discovered to transit its star.</p>
+            </div>
+            <div class="thinking-bubble">First exoplanet discovered in transit!</div>
+        </div>
+
+        <!-- Planet 5 -->
+        <div class="planet-box tilt-right" data-url="WASP-12B two.html" onclick="redirectToUrl(this)">
+            <video width="100%" height="50%" autoplay loop muted>
+                <source src="a.WASP-12B.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <div class="planet-info">
+                <h2>WASP-12b</h2>
+                <p>WASP-12b is a gas giant exoplanet known for its scorching temperatures, orbiting a G-type star.</p>
+            </div>
+            <div class="thinking-bubble">Scorching hot temperatures!</div>
+        </div>
+    </div>
+
+    <script>
+        function redirectToUrl(planetBox) {
+            const url = planetBox.getAttribute('data-url');
+            window.location.href = url; // Navigate to the specified URL
+        }
+    </script>
+</body>
+</html>
