@@ -31,6 +31,20 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
+    async function loadNote() {
+      const noteSnap = await get(ref(db, 'secretNote'));
+      if (noteSnap.exists()) {
+        const noteData = noteSnap.val();
+        document.getElementById("secret-notes").value = noteData.content || "";
+        document.getElementById("last-updated").textContent = noteData.timestamp
+          ? `Last updated: ${new Date(noteData.timestamp).toLocaleString()}`
+          : "Last updated: Unknown";
+      } else {
+        document.getElementById("secret-notes").value = "";
+        document.getElementById("last-updated").textContent = "Last updated: Never";
+      }
+    }
+
     window.addEventListener("DOMContentLoaded", () => {
       const form = document.getElementById("login-form");
       form.addEventListener("submit", async (e) => {
@@ -48,9 +62,7 @@
         if (allValues.includes(secretCode)) {
           document.querySelector(".login-container").style.display = "none";
           document.getElementById("secret-section").style.display = "block";
-
-          const noteSnap = await get(ref(db, 'secretNote'));
-          document.getElementById("secret-notes").value = noteSnap.exists() ? noteSnap.val() : "";
+          await loadNote();
         } else {
           document.getElementById("verification-box").style.display = "block";
 
@@ -73,14 +85,24 @@
 
     window.saveNote = () => {
       const content = document.getElementById("secret-notes").value;
-      set(ref(db, 'secretNote'), content).then(() => alert("Note saved."));
+      const timestamp = Date.now();
+      set(ref(db, 'secretNote'), { content, timestamp }).then(() => {
+        document.getElementById("last-updated").textContent = `Last updated: ${new Date(timestamp).toLocaleString()}`;
+        alert("Note saved.");
+      });
     }
 
     window.deleteNote = () => {
       remove(ref(db, 'secretNote')).then(() => {
         document.getElementById("secret-notes").value = "";
+        document.getElementById("last-updated").textContent = "Last updated: Never";
         alert("Note deleted.");
       });
+    }
+
+    window.refreshNote = async () => {
+      await loadNote();
+      alert("Note refreshed.");
     }
 
     window.backToLogin = () => {
@@ -146,7 +168,7 @@
     input[type="submit"], .secret-section button {
       width: 100%;
       padding: 10px;
-      margin-top: 20px;
+      margin-top: 10px;
       background-color: #6d28d9;
       color: white;
       border: none;
@@ -181,6 +203,7 @@
 
     .secret-section .buttons {
       display: flex;
+      flex-direction: column;
       gap: 10px;
       margin-top: 10px;
     }
@@ -192,6 +215,12 @@
       width: 40px;
       height: 40px;
       cursor: pointer;
+    }
+
+    .timestamp {
+      font-size: 0.9rem;
+      margin-top: 10px;
+      color: #d1d5db;
     }
   </style>
 </head>
@@ -229,11 +258,11 @@
   <div class="secret-section" id="secret-section">
     <h2>Secret Notes</h2>
     <textarea id="secret-notes" placeholder="Write something secret..."></textarea>
+    <p class="timestamp" id="last-updated">Last updated: -</p>
     <div class="buttons">
       <button onclick="saveNote()">Save</button>
       <button onclick="deleteNote()">Delete</button>
-    </div>
-    <div style="margin-top: 20px;">
+      <button onclick="refreshNote()">Refresh</button>
       <button onclick="backToLogin()">Back to Login</button>
     </div>
   </div>
