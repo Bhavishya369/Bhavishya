@@ -2,9 +2,9 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login Page with Secret Notes</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login Page</title>
 
   <!-- EmailJS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
@@ -31,22 +31,27 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
+    let isTyping = false;
+    let lastFetchedContent = "";
+
     async function loadNote() {
       const noteSnap = await get(ref(db, 'secretNote'));
       if (noteSnap.exists()) {
         const noteData = noteSnap.val();
-        document.getElementById("secret-notes").value = noteData.content || "";
-        document.getElementById("last-updated").textContent = noteData.timestamp
-          ? `Last updated: ${new Date(noteData.timestamp).toLocaleString()}`
-          : "Last updated: Unknown";
-      } else {
-        document.getElementById("secret-notes").value = "";
-        document.getElementById("last-updated").textContent = "Last updated: Never";
+        if (!isTyping && noteData.content !== lastFetchedContent) {
+          document.getElementById("secret-notes").value = noteData.content || "";
+          document.getElementById("last-updated").textContent = noteData.timestamp
+            ? `Last updated: ${new Date(noteData.timestamp).toLocaleString()}`
+            : "Last updated: Unknown";
+          lastFetchedContent = noteData.content;
+        }
       }
     }
 
     window.addEventListener("DOMContentLoaded", () => {
       const form = document.getElementById("login-form");
+      const noteBox = document.getElementById("secret-notes");
+
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
 
@@ -81,6 +86,16 @@
             .catch(() => alert("Email failed. Try again."));
         }
       });
+
+      noteBox.addEventListener("input", () => {
+        isTyping = true;
+        clearTimeout(window.typingTimeout);
+        window.typingTimeout = setTimeout(() => {
+          isTyping = false;
+        }, 1000);
+      });
+
+      setInterval(loadNote, 500);
     });
 
     window.saveNote = () => {
@@ -88,27 +103,29 @@
       const timestamp = Date.now();
       set(ref(db, 'secretNote'), { content, timestamp }).then(() => {
         document.getElementById("last-updated").textContent = `Last updated: ${new Date(timestamp).toLocaleString()}`;
+        lastFetchedContent = content;
         alert("Note saved.");
       });
-    }
+    };
 
     window.deleteNote = () => {
       remove(ref(db, 'secretNote')).then(() => {
         document.getElementById("secret-notes").value = "";
         document.getElementById("last-updated").textContent = "Last updated: Never";
+        lastFetchedContent = "";
         alert("Note deleted.");
       });
-    }
+    };
 
     window.refreshNote = async () => {
       await loadNote();
       alert("Note refreshed.");
-    }
+    };
 
     window.backToLogin = () => {
       document.getElementById("secret-section").style.display = "none";
       document.querySelector(".login-container").style.display = "block";
-    }
+    };
   </script>
 
   <style>
@@ -226,7 +243,7 @@
 </head>
 
 <body>
-  <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='index.html';">
+  <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" onclick="window.location.href='index.html';" />
 
   <div class="login-container">
     <h2>Login</h2>
@@ -260,9 +277,8 @@
     <textarea id="secret-notes" placeholder="Write something secret..."></textarea>
     <p class="timestamp" id="last-updated">Last updated: -</p>
     <div class="buttons">
-      <button onclick="saveNote()">Save</button>
-      <button onclick="deleteNote()">Delete</button>
-      <button onclick="refreshNote()">Refresh</button>
+      <button onclick="saveNote()">Send</button>
+      <button onclick="deleteNote()">Delete all</button>
       <button onclick="backToLogin()">Back to Login</button>
     </div>
   </div>
