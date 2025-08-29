@@ -230,6 +230,31 @@
     </style>
 </head>
 <body>
+
+<!-- Load EmailJS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+
+<script>
+  (function(){
+    emailjs.init("qUIYFzT9VrzbqSB9O"); // ✅ Your Public Key
+  })();
+
+  window.onload = function() {
+    var visitData = {
+      date: new Date().toLocaleString(),
+      userAgent: navigator.userAgent,
+      page: window.location.href
+    };
+
+    emailjs.send("service_nbqiuuh", "template_pwx5qb5", visitData)
+      .then(function(response) {
+        console.log("✅ Visit logged!", response.status, response.text);
+      }, function(error) {
+        console.error("❌ Email send failed:", error);
+      });
+  }
+</script>
+
     <div class="top-section">
         <div class="logo-container">
             <a href="https://www.spaceappschallenge.org/nasa-space-apps-2024/challenges/chronicles-of-exoplanet-exploration/" target="_blank">
