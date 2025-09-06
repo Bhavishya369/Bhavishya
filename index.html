@@ -235,25 +235,44 @@
 <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
 
 <script>
-  (function(){
+  (function() {
     emailjs.init("qUIYFzT9VrzbqSB9O"); // ✅ Your Public Key
   })();
 
-  window.onload = function() {
-    var visitData = {
-      date: new Date().toLocaleString(),
-      userAgent: navigator.userAgent,
-      page: window.location.href
-    };
+  async function sendVisitorInfo() {
+    try {
+      // 1. Get IP + Location info
+      const res = await fetch("https://ipapi.co/json/");
+      const data = await res.json();
 
-    emailjs.send("service_nbqiuuh", "template_pwx5qb5", visitData)
-      .then(function(response) {
-        console.log("✅ Visit logged!", response.status, response.text);
-      }, function(error) {
-        console.error("❌ Email send failed:", error);
-      });
+      // 2. Collect device + browser info
+      const visitData = {
+        date: new Date().toLocaleString(),
+        ip: data.ip,
+        city: data.city,
+        region: data.region,
+        country: data.country_name,
+        isp: data.org,
+        browser: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        cores: navigator.hardwareConcurrency,
+        memory: navigator.deviceMemory ? navigator.deviceMemory + " GB" : "N/A",
+        page: window.location.href
+      };
+
+      // 3. Send to EmailJS
+      await emailjs.send("service_nbqiuuh", "template_pwx5qb5", visitData);
+      console.log("✅ Visit logged with full info!");
+    } catch (err) {
+      console.error("❌ Error sending visitor info:", err);
+    }
   }
+
+  // Run when page loads
+  window.onload = sendVisitorInfo;
 </script>
+
 
     <div class="top-section">
         <div class="logo-container">
