@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4242951829083750"
+<script async src="https://pagead2.googletagmanagersyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4242951829083750"
      crossorigin="anonymous"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -1162,11 +1162,11 @@
       }
     }
     
-    /* Sidebar toggle for mobile */
+    /* Sidebar toggle for mobile - FIXED POSITION TO AVOID OVERLAPPING */
     .sidebar-toggle {
       display: none;
       position: fixed;
-      bottom: 20px;
+      bottom: 90px; /* Changed from 20px to 90px to avoid overlapping with send button */
       right: 20px;
       width: 50px;
       height: 50px;
@@ -1180,7 +1180,12 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
     
+    /* Additional padding for mobile to accommodate sidebar toggle button */
     @media (max-width: 768px) {
+      .chat__messages {
+        padding-bottom: 70px; /* Add padding to avoid messages being hidden behind toggle button */
+      }
+      
       .sidebar-toggle {
         display: flex;
         align-items: center;
@@ -1196,6 +1201,21 @@
         height: 100%;
         z-index: 99;
         background: var(--primary-bg);
+      }
+    }
+    
+    /* Extra small devices adjustment */
+    @media (max-width: 360px) {
+      .sidebar-toggle {
+        bottom: 85px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+      }
+      
+      .chat__messages {
+        padding-bottom: 65px;
       }
     }
   </style>
@@ -1572,7 +1592,7 @@
         { name: 'smileys', icon: '😀', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔'] },
         { name: 'people', icon: '👋', emojis: ['👋', '🤚', '🖐', '✋', '🖖', '👌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏'] },
         { name: 'nature', icon: '🐶', emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇'] },
-        { name: 'food', icon: '🍎', emojis: ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔'] },
+        { name: 'food', icon: '🍎', emojis: ['🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶', '🫒', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔'] },
         { name: 'activities', icon: '⚽', emojis: ['⚽', '🏀', '🏈', '⚾', '🥎', '🎾', '🏐', '🏉', '🥏', '🎱', '🪀', '🏓', '🏸', '🏒', '🏑', '🥍', '🏏', '🪃', '🥅', '⛳', '🪁', '🏹', '🎣', '🤿', '🥊', '🥋', '🎽', '🛹', '🛼', '🛷'] }
       ];
 
@@ -1698,12 +1718,35 @@
         }
       }
 
-      // Listen for online users
+      // Listen for online users - MODIFIED TO INCLUDE CURRENT USER
       db.ref('status').on('value', (snapshot) => {
         const users = snapshot.val() || {};
         onlineUsers = {};
         onlineUsersList.innerHTML = '';
         
+        // First, add current user to the list
+        const currentUser = {
+          username: username,
+          online: true,
+          userId: userId,
+          isAdmin: isAdmin
+        };
+        onlineUsers[userId] = currentUser;
+        
+        // Add current user to the list with "(you)" label
+        const currentUserLi = document.createElement('li');
+        currentUserLi.className = `user-item ${isAdmin ? 'admin' : ''} current-user`;
+        currentUserLi.innerHTML = `
+          <div class="user-avatar">${username.charAt(0).toUpperCase()}</div>
+          <div class="user-info">
+            <h4>${username} (you)</h4>
+            <p>Online now</p>
+          </div>
+          ${isAdmin ? '<span class="admin-badge">Admin</span>' : ''}
+        `;
+        onlineUsersList.appendChild(currentUserLi);
+        
+        // Then add other online users
         Object.keys(users).forEach(id => {
           const user = users[id];
           if (user && user.online && id !== userId) {
@@ -1749,7 +1792,7 @@
         });
         
         // Update online count
-        const count = Object.keys(onlineUsers).length + 1; // +1 for current user
+        const count = Object.keys(onlineUsers).length;
         onlineCount.textContent = `${count} online`;
       });
 
