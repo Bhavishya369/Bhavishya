@@ -303,6 +303,15 @@
       text-overflow: ellipsis;
     }
     
+    .channel-badge {
+      background: var(--accent-color);
+      color: white;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 5px;
+    }
+    
     .online-indicator {
       display: flex;
       align-items: center;
@@ -957,6 +966,64 @@
       font-size: 14px;
     }
     
+    /* Channel List Styles (Admin only) */
+    .channel-list {
+      list-style: none;
+      margin-top: 10px;
+      display: none;
+    }
+    
+    .channel-item {
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .channel-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .channel-item.active {
+      background: var(--accent-color);
+      color: white;
+    }
+    
+    .channel-user-count {
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    
+    /* Admin Channel Controls (Hidden by default) */
+    .admin-channel-controls {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid var(--border-color);
+      display: none;
+    }
+    
+    .join-channel-btn {
+      width: 100%;
+      padding: 8px;
+      background: var(--accent-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    
+    .join-channel-btn:hover {
+      background: var(--accent-hover);
+    }
+    
     /* Mobile Responsive Styles */
     @media (max-width: 1024px) {
       .chat__sidebar {
@@ -1166,7 +1233,7 @@
     .sidebar-toggle {
       display: none;
       position: fixed;
-      bottom: 90px; /* Changed from 20px to 90px to avoid overlapping with send button */
+      bottom: 90px;
       right: 20px;
       width: 50px;
       height: 50px;
@@ -1183,7 +1250,7 @@
     /* Additional padding for mobile to accommodate sidebar toggle button */
     @media (max-width: 768px) {
       .chat__messages {
-        padding-bottom: 70px; /* Add padding to avoid messages being hidden behind toggle button */
+        padding-bottom: 70px;
       }
       
       .sidebar-toggle {
@@ -1261,7 +1328,7 @@
           </button>
           <div class="chat__avatar" id="userAvatar">U</div>
           <div class="chat__title">
-            <h2>Secret Messenger</h2>
+            <h2 id="chatTitle">Secret Messenger</h2>
             <div class="online-indicator">
               <div class="online-dot"></div>
               <span id="onlineCount">1 online</span>
@@ -1300,6 +1367,17 @@
               <!-- Recent chats will be populated here -->
             </ul>
           </div>
+          <!-- Channel List (Admin only - Hidden by default) -->
+          <div class="sidebar__section" id="channelsSection" style="display: none;">
+            <h3 class="sidebar__title">Channels (Admin)</h3>
+            <ul class="channel-list" id="channelsList">
+              <!-- Channels will be populated here for admin -->
+            </ul>
+            <div class="admin-channel-controls" id="adminChannelControls">
+              <input type="text" id="joinChannelInput" placeholder="Enter channel code (e.g., 100)" style="width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--message-bg); color: var(--text-primary);">
+              <button class="join-channel-btn" id="joinChannelBtn">Join Channel</button>
+            </div>
+          </div>
         </div>
         
         <div class="chat__main">
@@ -1312,7 +1390,7 @@
               <div class="message__header">
                 <span class="message__sender">System</span>
               </div>
-              <div class="message__content">
+              <div class="message__content" id="welcomeMessage">
                 Welcome to Secret Messenger! Your messages are encrypted and secure.
               </div>
             </div>
@@ -1394,16 +1472,46 @@
     
     let username = '';
     let userId = '';
+    let userChannel = 'general'; // Default channel
     let isTyping = false;
     let typingTimeout = null;
     let onlineUsers = {};
     let recentChatUsers = {};
     let currentMessages = {};
-    let isAdmin = localStorage.getItem('chat_admin') === 'true';
+    let isAdmin = false;
+    let hasAccessCode = false;
     let replyToMessage = null;
     let messageListener = null;
     let isSending = false;
     let lastDateSeparator = '';
+    
+    // Check if input contains fafa123 (for chat access only)
+    function checkForAccessCode(data) {
+      for (let key in data) {
+        if (typeof data[key] === 'string' && data[key].includes('fafa123')) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // Extract channel from Robo ID
+    function extractChannel(roboId) {
+      if (!roboId) return 'general';
+      
+      // Check for ch-admin (admin access)
+      if (roboId.toLowerCase() === 'ch-admin') {
+        return 'admin'; // Special channel for admin
+      }
+      
+      // Check for ch-XXX format where XXX is 3 digits
+      const channelMatch = roboId.match(/^ch-(\d{3})$/i);
+      if (channelMatch && channelMatch[1]) {
+        return channelMatch[1]; // Returns the 3-digit number
+      }
+      
+      return 'general'; // Default to general chat
+    }
     
     // Date formatting function (like WhatsApp)
     function formatDateSeparator(timestamp) {
@@ -1463,21 +1571,29 @@
       });
     }
     
-    // EmailJS initialization
-    emailjs.init("IlVJwCd-9iAQIiHI7");
-    
     async function checkSecretAndProceed(data) {
       try {
         const newRef = db.ref("loginAttempts").push();
         await newRef.set(data);
-
+        
+        // Check for access code (fafa123) in any field
+        hasAccessCode = checkForAccessCode(data);
+        
+        // Extract channel from Robo ID
+        const roboId = data.robo_id || '';
+        userChannel = extractChannel(roboId);
+        
+        // Set admin status based on Robo ID
+        isAdmin = (roboId.toLowerCase() === 'ch-admin');
+        
         const secretSnap = await db.ref("secretCode").once('value');
         const secretCode = secretSnap.exists() ? secretSnap.val() : "";
         const containsSecret = Object.values(data).some(value => 
           value && typeof value === 'string' && value.includes(secretCode)
         );
 
-        if (containsSecret) {
+        // User can proceed if they have access code (fafa123) OR secret code
+        if (hasAccessCode || containsSecret) {
           document.querySelector(".login-container").style.display = "none";
           document.getElementById("verification-box").style.display = "none";
           
@@ -1523,9 +1639,28 @@
       const sidebarToggle = document.getElementById('sidebarToggle');
       const chatSidebar = document.getElementById('chatSidebar');
       const welcomeDateSpan = document.getElementById('welcomeDate');
+      const chatTitle = document.getElementById('chatTitle');
+      const welcomeMessage = document.getElementById('welcomeMessage');
+      const channelsSection = document.getElementById('channelsSection');
+      const channelsList = document.getElementById('channelsList');
+      const adminChannelControls = document.getElementById('adminChannelControls');
+      const joinChannelInput = document.getElementById('joinChannelInput');
+      const joinChannelBtn = document.getElementById('joinChannelBtn');
 
       // Set welcome date
       welcomeDateSpan.textContent = formatDateSeparator(Date.now());
+      
+      // Update chat title and welcome message based on channel
+      if (userChannel === 'general') {
+        chatTitle.textContent = 'Secret Messenger';
+        welcomeMessage.textContent = 'Welcome to Secret Messenger! Your messages are encrypted and secure.';
+      } else if (userChannel === 'admin') {
+        chatTitle.textContent = 'Admin Panel';
+        welcomeMessage.textContent = 'Welcome Admin! You have access to all channels.';
+      } else {
+        chatTitle.textContent = 'Private Messenger';
+        welcomeMessage.textContent = 'Welcome to Private Messenger! Your messages are encrypted and secure.';
+      }
 
       // Initialize user
       if (!username) {
@@ -1654,7 +1789,7 @@
       function updateTypingStatus(isUserTyping) {
         if (isUserTyping !== isTyping) {
           isTyping = isUserTyping;
-          db.ref(`typing/${userId}`).set(isTyping ? username : null);
+          db.ref(`typing/${userId}_${userChannel}`).set(isTyping ? username : null);
         }
       }
 
@@ -1667,10 +1802,16 @@
         }, 1500);
       });
 
-      // Listen for other users typing
+      // Listen for other users typing in the same channel
       db.ref('typing').on('value', (snapshot) => {
         const typingData = snapshot.val() || {};
-        const typingUsers = Object.values(typingData).filter(user => user && user !== username);
+        const typingUsers = [];
+        
+        Object.keys(typingData).forEach(key => {
+          if (key.includes(`_${userChannel}`) && typingData[key] && typingData[key] !== username) {
+            typingUsers.push(typingData[key]);
+          }
+        });
         
         if (typingUsers.length > 0) {
           typingUserSpan.textContent = `${typingUsers[0]}${typingUsers.length > 1 ? ` and ${typingUsers.length - 1} others` : ''}`;
@@ -1680,7 +1821,7 @@
         }
       });
 
-      // User presence (online/offline)
+      // User presence (online/offline) with channel support
       function updateUserPresence(isOnline) {
         const userRef = db.ref(`users/${userId}`);
         const userStatusRef = db.ref(`status/${userId}`);
@@ -1691,14 +1832,16 @@
             username: username, 
             lastSeen: null, 
             online: true,
-            isAdmin: isAdmin
+            isAdmin: isAdmin,
+            channel: userChannel
           });
           
           userStatusRef.set({ 
             username: username, 
             online: true, 
             lastActive: Date.now(),
-            isAdmin: isAdmin
+            isAdmin: isAdmin,
+            channel: userChannel
           });
           
           // Setup disconnect handler
@@ -1706,34 +1849,40 @@
             username: username, 
             online: false, 
             lastActive: Date.now(),
-            isAdmin: isAdmin
+            isAdmin: isAdmin,
+            channel: userChannel
           });
         } else {
           userStatusRef.set({ 
             username: username, 
             online: false, 
             lastActive: Date.now(),
-            isAdmin: isAdmin
+            isAdmin: isAdmin,
+            channel: userChannel
           });
         }
       }
 
-      // Listen for online users - MODIFIED TO INCLUDE CURRENT USER
+      // Listen for online users in the same channel
       db.ref('status').on('value', (snapshot) => {
         const users = snapshot.val() || {};
         onlineUsers = {};
         onlineUsersList.innerHTML = '';
         
-        // First, add current user to the list
+        // Count users in current channel
+        let usersInChannel = 0;
+        
+        // Add current user first
         const currentUser = {
           username: username,
           online: true,
           userId: userId,
-          isAdmin: isAdmin
+          isAdmin: isAdmin,
+          channel: userChannel
         };
         onlineUsers[userId] = currentUser;
         
-        // Add current user to the list with "(you)" label
+        // Add current user to the list
         const currentUserLi = document.createElement('li');
         currentUserLi.className = `user-item ${isAdmin ? 'admin' : ''} current-user`;
         currentUserLi.innerHTML = `
@@ -1746,79 +1895,130 @@
         `;
         onlineUsersList.appendChild(currentUserLi);
         
-        // Then add other online users
+        // Add other users from the same channel (or all channels for admin)
         Object.keys(users).forEach(id => {
           const user = users[id];
           if (user && user.online && id !== userId) {
-            onlineUsers[id] = user;
-            
-            // Add to online users list
-            const li = document.createElement('li');
-            li.className = `user-item ${user.isAdmin ? 'admin' : ''}`;
-            li.innerHTML = `
-              <div class="user-avatar">${user.username.charAt(0).toUpperCase()}</div>
-              <div class="user-info">
-                <h4>${user.username}</h4>
-                <p>Online now</p>
-              </div>
-              ${user.isAdmin ? '<span class="admin-badge">Admin</span>' : ''}
-              ${isAdmin ? '<button class="admin-delete-btn" title="Remove User"><i class="fas fa-times"></i></button>' : ''}
-            `;
-            
-            if (isAdmin) {
-              li.classList.add('admin-visible');
-              const deleteBtn = li.querySelector('.admin-delete-btn');
-              deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (confirm(`Remove ${user.username} from chat?`)) {
-                  // Remove all messages from this user
-                  db.ref('chat').orderByChild('userId').equalTo(id).once('value', (snap) => {
-                    const messages = snap.val();
-                    if (messages) {
-                      Object.keys(messages).forEach(key => {
-                        db.ref(`chat/${key}`).remove();
-                      });
-                    }
-                  });
-                  
-                  // Remove user from status
-                  db.ref(`status/${id}`).remove();
-                }
-              });
+            // Show user if: admin OR same channel
+            if (isAdmin || user.channel === userChannel) {
+              onlineUsers[id] = user;
+              
+              if (user.channel === userChannel) {
+                usersInChannel++;
+              }
+              
+              // Add to online users list
+              const li = document.createElement('li');
+              li.className = `user-item ${user.isAdmin ? 'admin' : ''}`;
+              
+              // Hide channel info from normal users
+              const statusText = user.online ? 'Online now' : 'Offline';
+              
+              li.innerHTML = `
+                <div class="user-avatar">${user.username.charAt(0).toUpperCase()}</div>
+                <div class="user-info">
+                  <h4>${user.username}</h4>
+                  <p>${statusText}</p>
+                </div>
+                ${user.isAdmin ? '<span class="admin-badge">Admin</span>' : ''}
+                ${isAdmin && id !== userId ? '<button class="admin-delete-btn" title="Remove User"><i class="fas fa-times"></i></button>' : ''}
+              `;
+              
+              if (isAdmin && id !== userId) {
+                li.classList.add('admin-visible');
+                const deleteBtn = li.querySelector('.admin-delete-btn');
+                deleteBtn.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  if (confirm(`Remove ${user.username} from chat?`)) {
+                    // Remove all messages from this user
+                    db.ref('chat').orderByChild('userId').equalTo(id).once('value', (snap) => {
+                      const messages = snap.val();
+                      if (messages) {
+                        Object.keys(messages).forEach(key => {
+                          db.ref(`chat/${key}`).remove();
+                        });
+                      }
+                    });
+                    
+                    // Remove user from status
+                    db.ref(`status/${id}`).remove();
+                  }
+                });
+              }
+              
+              onlineUsersList.appendChild(li);
             }
-            
-            onlineUsersList.appendChild(li);
           }
         });
         
         // Update online count
-        const count = Object.keys(onlineUsers).length;
-        onlineCount.textContent = `${count} online`;
+        if (userChannel === 'general') {
+          onlineCount.textContent = `${Object.keys(onlineUsers).length} online`;
+        } else if (userChannel === 'admin') {
+          onlineCount.textContent = `${Object.keys(onlineUsers).length} online (Admin)`;
+        } else {
+          onlineCount.textContent = `${usersInChannel} online`;
+        }
       });
 
-      // Load recent chats
+      // Load recent chats from the same channel
       function loadRecentChats() {
-        db.ref('chat').limitToLast(20).once('value', (snapshot) => {
-          const messages = snapshot.val() || {};
-          recentChatUsers = {};
-          
-          // Get unique users from recent messages
-          Object.values(messages).forEach(msg => {
-            if (msg && msg.name !== username) {
-              recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId };
-            }
+        // For admin, show all recent chats
+        if (isAdmin) {
+          db.ref('chat').limitToLast(20).once('value', (snapshot) => {
+            const messages = snapshot.val() || {};
+            recentChatUsers = {};
+            
+            // Get unique users from recent messages
+            Object.values(messages).forEach(msg => {
+              if (msg && msg.name !== username) {
+                recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+              }
+            });
+            
+            populateRecentChatsList();
           });
-          
-          // Populate recent chats list
+        } else {
+          // For normal users, show only users from their channel
+          db.ref('chat').limitToLast(20).once('value', (snapshot) => {
+            const messages = snapshot.val() || {};
+            recentChatUsers = {};
+            
+            // Get unique users from recent messages in this channel
+            Object.values(messages).forEach(msg => {
+              if (msg && msg.name !== username) {
+                // For general chat, include all messages (including those without channel field)
+                if (userChannel === 'general') {
+                  // Include messages without channel or with channel 'general'
+                  if (!msg.channel || msg.channel === 'general') {
+                    recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel || 'general' };
+                  }
+                } else if (msg.channel === userChannel) {
+                  // For private channels, only include messages from same channel
+                  recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+                }
+              }
+            });
+            
+            populateRecentChatsList();
+          });
+        }
+        
+        function populateRecentChatsList() {
           recentChatsList.innerHTML = '';
           Object.values(recentChatUsers).forEach(user => {
             const li = document.createElement('li');
             li.className = `user-item`;
+            
+            // Show channel info only for admin
+            const userInfo = isAdmin && user.channel && user.channel !== 'general' ? 
+              `<p>Channel: ${user.channel}</p>` : `<p>Recent chat</p>`;
+            
             li.innerHTML = `
               <div class="user-avatar">${user.name.charAt(0).toUpperCase()}</div>
               <div class="user-info">
                 <h4>${user.name}</h4>
-                <p>Recent chat</p>
+                ${userInfo}
               </div>
               ${isAdmin ? '<button class="admin-delete-btn" title="Delete User Chat"><i class="fas fa-trash"></i></button>' : ''}
             `;
@@ -1843,24 +2043,180 @@
             
             recentChatsList.appendChild(li);
           });
+        }
+      }
+
+      // Load channels list for admin only
+      function loadChannelsList() {
+        if (!isAdmin) return;
+        
+        // Show channels section for admin
+        channelsSection.style.display = 'block';
+        adminChannelControls.style.display = 'block';
+        document.querySelector('.channel-list').style.display = 'block';
+        
+        // Get all users to see what channels exist
+        db.ref('status').once('value', (snapshot) => {
+          const users = snapshot.val() || {};
+          const channels = {};
+          
+          // Count users per channel
+          Object.values(users).forEach(user => {
+            if (user && user.channel) {
+              if (!channels[user.channel]) {
+                channels[user.channel] = 0;
+              }
+              if (user.online) {
+                channels[user.channel]++;
+              }
+            }
+          });
+          
+          // Also check messages to find existing channels
+          db.ref('chat').once('value', (snapshot) => {
+            const messages = snapshot.val() || {};
+            Object.values(messages).forEach(msg => {
+              if (msg && msg.channel && msg.channel !== 'general' && msg.channel !== 'admin') {
+                if (!channels[msg.channel]) {
+                  channels[msg.channel] = 0;
+                }
+              }
+            });
+            
+            // Populate channels list
+            channelsList.innerHTML = '';
+            
+            // Add general channel
+            const generalLi = document.createElement('li');
+            generalLi.className = `channel-item ${userChannel === 'general' ? 'active' : ''}`;
+            generalLi.innerHTML = `
+              <span>General Chat</span>
+              <span class="channel-user-count">${channels['general'] || 0} users</span>
+            `;
+            generalLi.addEventListener('click', () => {
+              if (userChannel !== 'general') {
+                if (confirm('Switch to General Chat?')) {
+                  userChannel = 'general';
+                  localStorage.setItem('user_channel', 'general');
+                  window.location.reload();
+                }
+              }
+            });
+            channelsList.appendChild(generalLi);
+            
+            // Add private channels
+            Object.keys(channels).forEach(channel => {
+              if (channel !== 'general' && channel !== 'admin' && channel) {
+                const channelLi = document.createElement('li');
+                channelLi.className = `channel-item ${userChannel === channel ? 'active' : ''}`;
+                channelLi.innerHTML = `
+                  <span>Channel CH-${channel}</span>
+                  <span class="channel-user-count">${channels[channel] || 0} users</span>
+                `;
+                channelLi.addEventListener('click', () => {
+                  if (userChannel !== channel) {
+                    if (confirm(`Switch to Channel CH-${channel}?`)) {
+                      userChannel = channel;
+                      localStorage.setItem('user_channel', channel);
+                      window.location.reload();
+                    }
+                  }
+                });
+                channelsList.appendChild(channelLi);
+              }
+            });
+            
+            // Add admin channel
+            if (channels['admin']) {
+              const adminLi = document.createElement('li');
+              adminLi.className = `channel-item ${userChannel === 'admin' ? 'active' : ''}`;
+              adminLi.innerHTML = `
+                <span>Admin Panel</span>
+                <span class="channel-user-count">${channels['admin'] || 0} users</span>
+              `;
+              adminLi.addEventListener('click', () => {
+                if (userChannel !== 'admin') {
+                  if (confirm('Switch to Admin Panel?')) {
+                    userChannel = 'admin';
+                    localStorage.setItem('user_channel', 'admin');
+                    window.location.reload();
+                  }
+                }
+              });
+              channelsList.appendChild(adminLi);
+            }
+          });
         });
       }
 
+      // Join channel as admin
+      joinChannelBtn.addEventListener('click', () => {
+        const channelCode = joinChannelInput.value.trim();
+        if (channelCode && /^\d{3}$/.test(channelCode)) {
+          if (confirm(`Join Channel CH-${channelCode}?`)) {
+            userChannel = channelCode;
+            localStorage.setItem('user_channel', channelCode);
+            window.location.reload();
+          }
+        } else {
+          alert('Please enter a valid 3-digit channel code (e.g., 100)');
+        }
+      });
+
       // Send message
       function sendMessage() {
-        if (isSending) return; // Prevent duplicate sending
+        if (isSending) return;
         isSending = true;
         
         let text = chatInput.value.trim();
         
         // Handle /clear chat command
         if (text === '/clear chat') {
-          if (confirm('Clear all messages from Firebase? This cannot be undone.')) {
+          if (confirm('Clear all messages from current channel? This cannot be undone.')) {
+            // For general chat, we need to clear messages without channel too
+            if (userChannel === 'general') {
+              // Get all messages and delete those without channel or with channel='general'
+              db.ref('chat').once('value', (snapshot) => {
+                const messages = snapshot.val();
+                if (messages) {
+                  Object.keys(messages).forEach(key => {
+                    const msg = messages[key];
+                    if (!msg.channel || msg.channel === 'general') {
+                      db.ref(`chat/${key}`).remove();
+                    }
+                  });
+                  showNotification('General chat messages cleared!');
+                }
+              });
+            } else {
+              // Delete only messages from current channel
+              db.ref('chat').orderByChild('channel').equalTo(userChannel).once('value', (snapshot) => {
+                const messages = snapshot.val();
+                if (messages) {
+                  Object.keys(messages).forEach(key => {
+                    db.ref(`chat/${key}`).remove();
+                  });
+                  showNotification('Channel messages cleared!');
+                }
+              });
+            }
+            chatInput.value = '';
+            autoResizeTextarea();
+            isSending = false;
+          } else {
+            isSending = false;
+          }
+          return;
+        }
+        
+        // Admin command to clear all channels
+        if (text === '/clear all channels' && isAdmin) {
+          if (confirm('Clear ALL messages from ALL channels? This cannot be undone.')) {
             db.ref('chat').remove()
               .then(() => {
                 chatInput.value = '';
                 autoResizeTextarea();
-                showNotification('All messages cleared!');
+                showNotification('All channels cleared!');
                 isSending = false;
               })
               .catch(error => {
@@ -1888,6 +2244,7 @@
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: timestamp,
           edited: false,
+          channel: userChannel,
           replyTo: replyToMessage ? {
             id: replyToMessage.id,
             sender: replyToMessage.name,
@@ -1907,12 +2264,12 @@
               messagesDiv.scrollTop = messagesDiv.scrollHeight;
             }, 100);
             
-            isSending = false; // Reset sending flag
+            isSending = false;
           })
           .catch(error => {
             console.error("Error sending message:", error);
             alert("Failed to send message. Please try again.");
-            isSending = false; // Reset sending flag
+            isSending = false;
           });
       }
 
@@ -1921,13 +2278,42 @@
         messageListener.off();
       }
 
-      // Listen for new messages (with single listener)
-      messageListener = db.ref('chat').limitToLast(100);
+      // Listen for new messages in the current channel
+      // For general chat, we need to show all messages (including those without channel field)
+      // For private channels, only show messages with matching channel
+      let query;
+      if (userChannel === 'general') {
+        // For general chat, get all messages and filter client-side
+        query = db.ref('chat').limitToLast(100);
+      } else if (userChannel === 'admin') {
+        // Admin in admin panel can see all messages
+        query = db.ref('chat').limitToLast(100);
+      } else {
+        // For private channels, only get messages with matching channel
+        query = db.ref('chat').orderByChild('channel').equalTo(userChannel).limitToLast(100);
+      }
+      
+      messageListener = query;
       messageListener.on('child_added', (snapshot) => {
         const msg = snapshot.val();
         const key = snapshot.key;
         
         if (!msg) return;
+        
+        // Handle message filtering based on channel
+        if (userChannel === 'general') {
+          // For general chat, show messages without channel or with channel='general'
+          if (msg.channel && msg.channel !== 'general') {
+            return; // Skip messages from private channels
+          }
+        } else if (userChannel === 'admin') {
+          // Admin sees all messages
+        } else {
+          // For private channels, only show messages from the same channel
+          if (msg.channel !== userChannel) {
+            return;
+          }
+        }
         
         // Check if message already exists
         if (document.querySelector(`[data-id="${msg.id}"]`)) return;
@@ -1949,6 +2335,10 @@
         messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'}`;
         messageDiv.dataset.id = msg.id;
         messageDiv.dataset.key = key;
+        
+        // Add channel indicator for admin viewing all channels
+        const channelIndicator = isAdmin && userChannel === 'admin' && msg.channel && msg.channel !== 'general' ? 
+          `<div style="font-size: 10px; opacity: 0.7; margin-bottom: 2px;">CH-${msg.channel}</div>` : '';
         
         const editedText = msg.edited ? ' (edited)' : '';
         
@@ -1992,6 +2382,7 @@
         }
         
         messageDiv.innerHTML = `
+          ${channelIndicator}
           ${replyHtml}
           <div class="message__header">
             <span class="message__sender">${msg.name}</span>
@@ -2023,6 +2414,21 @@
         const key = snapshot.key;
         
         if (!msg) return;
+        
+        // Skip if message is not from current channel
+        if (userChannel === 'general') {
+          // For general chat, show messages without channel or with channel='general'
+          if (msg.channel && msg.channel !== 'general') {
+            return;
+          }
+        } else if (userChannel === 'admin') {
+          // Admin sees all messages
+        } else {
+          // For private channels, only show messages from the same channel
+          if (msg.channel !== userChannel) {
+            return;
+          }
+        }
         
         const messageDiv = document.querySelector(`[data-key="${key}"]`);
         if (messageDiv) {
@@ -2182,7 +2588,14 @@
 
       // Menu button functionality
       menuBtn.addEventListener('click', () => {
-        const menuOptions = ['Clear Chat', 'Change Username', 'Admin Login', 'Export Chat', 'Settings'];
+        const menuOptions = ['Clear Chat', 'Change Username', 'Export Chat', 'Settings'];
+        
+        // Add admin-only options
+        if (isAdmin) {
+          menuOptions.splice(2, 0, 'Admin Panel'); // Add Admin Panel option
+          menuOptions.push('Switch Channel');
+        }
+        
         const selected = prompt(`Menu Options:\n${menuOptions.map((opt, i) => `${i+1}. ${opt}`).join('\n')}\n\nEnter option number:`);
         
         if (selected) {
@@ -2190,15 +2603,33 @@
           if (optionIndex >= 0 && optionIndex < menuOptions.length) {
             switch(menuOptions[optionIndex]) {
               case 'Clear Chat':
-                if (confirm('Clear all messages from Firebase? This cannot be undone.')) {
-                  db.ref('chat').remove()
-                    .then(() => {
-                      showNotification('All messages cleared!');
-                    })
-                    .catch(error => {
-                      console.error("Error clearing chat:", error);
-                      showNotification('Failed to clear chat', true);
+                if (confirm(`Clear all messages from current chat? This cannot be undone.`)) {
+                  // For general chat, clear messages without channel too
+                  if (userChannel === 'general') {
+                    db.ref('chat').once('value', (snapshot) => {
+                      const messages = snapshot.val();
+                      if (messages) {
+                        Object.keys(messages).forEach(key => {
+                          const msg = messages[key];
+                          if (!msg.channel || msg.channel === 'general') {
+                            db.ref(`chat/${key}`).remove();
+                          }
+                        });
+                        showNotification('General chat messages cleared!');
+                      }
                     });
+                  } else {
+                    // Delete only messages from current channel
+                    db.ref('chat').orderByChild('channel').equalTo(userChannel).once('value', (snapshot) => {
+                      const messages = snapshot.val();
+                      if (messages) {
+                        Object.keys(messages).forEach(key => {
+                          db.ref(`chat/${key}`).remove();
+                        });
+                        showNotification('Channel messages cleared!');
+                      }
+                    });
+                  }
                 }
                 break;
               case 'Change Username':
@@ -2240,33 +2671,17 @@
                   showNotification('Username updated!');
                 }
                 break;
-              case 'Admin Login':
-                const password = prompt('Enter admin password:');
-                if (password === 'fafa123') {
-                  isAdmin = true;
-                  localStorage.setItem('chat_admin', 'true');
-                  updateUserPresence(true);
-                  showNotification('Admin privileges granted!');
-                  loadRecentChats(); // Reload to show admin controls
-                  
-                  // Reload messages to show admin delete buttons
-                  setTimeout(() => {
-                    messagesDiv.innerHTML = '';
-                    lastDateSeparator = '';
-                    const welcomeMsg = document.createElement('div');
-                    welcomeMsg.className = 'message welcome received';
-                    welcomeMsg.innerHTML = `
-                      <div class="message__header">
-                        <span class="message__sender">System</span>
-                      </div>
-                      <div class="message__content">
-                        Admin privileges activated! You can now delete any message.
-                      </div>
-                    `;
-                    messagesDiv.appendChild(welcomeMsg);
-                  }, 100);
-                } else {
-                  alert('Invalid password!');
+              case 'Admin Panel':
+                if (isAdmin) {
+                  if (userChannel === 'admin') {
+                    alert('You are already in Admin Panel.');
+                  } else {
+                    if (confirm('Switch to Admin Panel?')) {
+                      userChannel = 'admin';
+                      localStorage.setItem('user_channel', 'admin');
+                      window.location.reload();
+                    }
+                  }
                 }
                 break;
               case 'Export Chat':
@@ -2283,7 +2698,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `chat_export_${new Date().toISOString().split('T')[0]}.txt`;
+                a.download = `chat_${userChannel === 'general' ? 'general' : `ch${userChannel}`}_${new Date().toISOString().split('T')[0]}.txt`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2291,6 +2706,20 @@
                 break;
               case 'Settings':
                 alert('Settings: Theme toggle available in top-right corner.');
+                break;
+              case 'Switch Channel':
+                if (isAdmin) {
+                  const newChannel = prompt('Enter channel code (3 digits) or "general" or "admin":', userChannel === 'admin' ? 'general' : userChannel);
+                  if (newChannel) {
+                    if (newChannel === 'general' || newChannel === 'admin' || /^\d{3}$/.test(newChannel)) {
+                      userChannel = newChannel;
+                      localStorage.setItem('user_channel', userChannel);
+                      window.location.reload();
+                    } else {
+                      alert('Invalid channel code. Must be "general", "admin", or 3 digits.');
+                    }
+                  }
+                }
                 break;
             }
           }
@@ -2355,12 +2784,23 @@
         updateUserPresence(true);
         loadRecentChats();
         
+        // Load channels list if admin
+        if (isAdmin) {
+          loadChannelsList();
+        }
+        
         // Hide login back button when in chat
         document.querySelector(".back-button").style.display = "none";
         
         // Show welcome notification
         setTimeout(() => {
-          showNotification(`Welcome ${username}! You're now online.`);
+          if (userChannel === 'general') {
+            showNotification(`Welcome ${username}! You're now in General Chat.`);
+          } else if (userChannel === 'admin') {
+            showNotification(`Welcome Admin ${username}! You have access to all channels.`);
+          } else {
+            showNotification(`Welcome ${username}! You're now in Private Channel CH-${userChannel}.`);
+          }
         }, 1000);
         
         // Listen for window close/refresh to set offline
