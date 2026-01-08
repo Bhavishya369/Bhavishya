@@ -1381,21 +1381,26 @@
       border: 1px solid var(--border-color);
     }
     
-    .search-input {
-      flex: 1;
-      border: none;
-      background: transparent;
-      color: var(--text-primary) !important;
-      font-size: 16px;
-      padding: 0 10px;
-      outline: none;
-      width: 100%;
-    }
+    /* Ensure search inputs are readable in both themes */
+.search-input,
+input[type="search"],
+.chat-search input,
+#chat input[type="search"] {
+  background: var(--search-input-bg);
+  color: var(--search-result-text);
+  caret-color: var(--accent-color);
+  border: 1px solid var(--border-color);
+  outline: none;
+}
 
-    .search-input::placeholder {
-      color: var(--text-secondary) !important;
-      opacity: 0.8;
-    }
+
+   /* Placeholder visibility */
+.search-input::placeholder,
+input[type="search"]::placeholder,
+.chat-search input::placeholder {
+  color: var(--search-meta-text);
+  opacity: 1; /* ensure placeholder is shown at full opacity */
+}
     
     .search-clear {
       background: transparent;
