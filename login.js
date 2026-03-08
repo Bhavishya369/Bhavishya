@@ -7,7 +7,7 @@ document.addEventListener("keydown", function (e) {
     (e.ctrlKey && e.key === "U")
   ) {
     e.preventDefault();
-    alert("Inspecting is disabled 🚫");
+    showNotification("Inspecting is disabled 🚫", true);
   }
 });
 
@@ -80,6 +80,19 @@ function checkForAccessCode(data) {
   return false;
 }
 
+// Function to safely escape HTML special characters
+function escapeHTML(text) {
+  if (typeof text !== 'string') return '';
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, char => map[char]);
+}
+
 // Extract channel from Robo ID
 function extractChannel(roboId) {
   if (!roboId) return 'general';
@@ -148,19 +161,51 @@ function showCopyNotification() {
 
 // Copy text to clipboard
 function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    showCopyNotification();
-  }).catch(err => {
-    console.error('Failed to copy: ', err);
-    // Fallback for older browsers
+  // Ensure text is a string
+  if (typeof text !== 'string') {
+    text = String(text);
+  }
+  
+  // Try modern clipboard API first
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      showCopyNotification();
+    }).catch(err => {
+      console.error('Clipboard API failed: ', err);
+      // Fallback for when clipboard API fails
+      fallbackCopyToClipboard(text);
+    });
+  } else {
+    // Fallback for older browsers or non-secure context
+    fallbackCopyToClipboard(text);
+  }
+}
+
+// Fallback copy method for older browsers
+function fallbackCopyToClipboard(text) {
+  try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.opacity = '0';
     document.body.appendChild(textArea);
+    textArea.focus();
     textArea.select();
-    document.execCommand('copy');
+    
+    const successful = document.execCommand('copy');
     document.body.removeChild(textArea);
-    showCopyNotification();
-  });
+    
+    if (successful) {
+      showCopyNotification();
+    } else {
+      console.error('execCommand copy failed');
+      showNotification('Failed to copy message', true);
+    }
+  } catch (err) {
+    console.error('Fallback copy failed: ', err);
+    showNotification('Failed to copy message', true);
+  }
 }
 
 // Show notification
@@ -181,6 +226,47 @@ function showNotification(message, isError = false) {
   setTimeout(() => {
     notification.remove();
   }, 3000);
+}
+
+// Show confirmation dialog (theme-matched)
+function showConfirmation(title, message, onConfirm, onCancel) {
+  const modal = document.getElementById('confirmationModal');
+  const titleEl = document.getElementById('confirmationTitle');
+  const messageEl = document.getElementById('confirmationMessage');
+  const confirmBtn = document.getElementById('confirmationConfirmBtn');
+  const cancelBtn = document.getElementById('confirmationCancelBtn');
+  
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  
+  // Show modal
+  modal.style.display = 'flex';
+  
+  // Handle confirm
+  const handleConfirm = () => {
+    modal.style.display = 'none';
+    confirmBtn.removeEventListener('click', handleConfirm);
+    cancelBtn.removeEventListener('click', handleCancel);
+    if (onConfirm) onConfirm();
+  };
+  
+  // Handle cancel
+  const handleCancel = () => {
+    modal.style.display = 'none';
+    confirmBtn.removeEventListener('click', handleConfirm);
+    cancelBtn.removeEventListener('click', handleCancel);
+    if (onCancel) onCancel();
+  };
+  
+  confirmBtn.addEventListener('click', handleConfirm);
+  cancelBtn.addEventListener('click', handleCancel);
+  
+  // Close on overlay click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      handleCancel();
+    }
+  });
 }
 
 // Check if file is an image
@@ -362,17 +448,8 @@ async function startVoiceRecording() {
     };
     
     mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      await sendVoiceMessage(audioBlob);
-      
-      // Stop all tracks
-      stream.getTracks().forEach(track => track.stop());
-      
-      // Clean up
-      if (audioContext) {
-        audioContext.close();
-        audioContext = null;
-      }
+      // Just store the audio chunks, don't send automatically
+      // User will click send button to send
     };
     
     mediaRecorder.start();
@@ -388,7 +465,6 @@ async function startVoiceRecording() {
     document.getElementById('voiceBtn').classList.add('recording');
     
   } catch (error) {
-    console.error('Error starting recording:', error);
     showNotification('Microphone access denied or not available', true);
   }
 }
@@ -407,16 +483,74 @@ function updateRecordingTime() {
   }
 }
 
-// Stop voice recording
+// Stop voice recording (pause, don't send)
 function stopVoiceRecording() {
   if (mediaRecorder && isRecording) {
     mediaRecorder.stop();
     isRecording = false;
-    
     clearInterval(recordingTimer);
-    document.getElementById('voiceRecording').style.display = 'none';
     document.getElementById('voiceBtn').classList.remove('recording');
+    
+    // Show send button but keep recording UI visible
   }
+}
+
+// Send the recorded voice message
+function sendVoiceRecording() {
+  // If still recording, stop it first
+  if (isRecording && mediaRecorder) {
+    mediaRecorder.stop();
+    isRecording = false;
+    clearInterval(recordingTimer);
+  }
+  
+  // Wait for chunks to be populated, then send
+  const checkAndSend = async () => {
+    let attempts = 0;
+    const maxAttempts = 30; // Wait up to 1.5 seconds
+    
+    // Keep checking until chunks are available or max attempts reached
+    while (audioChunks.length === 0 && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      attempts++;
+    }
+    
+    if (audioChunks.length === 0) {
+      showNotification('No audio recorded', true);
+      return;
+    }
+    
+    await sendRecordedAudio();
+  };
+  
+  checkAndSend();
+}
+
+// Helper function to actually send the recorded audio
+async function sendRecordedAudio() {
+  if (audioChunks.length === 0) {
+    showNotification('No audio recorded', true);
+    return;
+  }
+  
+  const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+  await sendVoiceMessage(audioBlob);
+  
+  // Stop all tracks and clean up
+  if (mediaRecorder && mediaRecorder.stream) {
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+  }
+  
+  // Clean up
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+  
+  // Reset UI
+  document.getElementById('voiceRecording').style.display = 'none';
+  audioChunks = [];
+  recordingStartTime = null;
 }
 
 // Cancel voice recording
@@ -424,14 +558,27 @@ function cancelVoiceRecording() {
   if (mediaRecorder && isRecording) {
     mediaRecorder.stop();
     isRecording = false;
-    
     clearInterval(recordingTimer);
-    document.getElementById('voiceRecording').style.display = 'none';
-    document.getElementById('voiceBtn').classList.remove('recording');
-    
-    // Clean up audio chunks
-    audioChunks = [];
   }
+  
+  // Stop all tracks
+  if (mediaRecorder && mediaRecorder.stream) {
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+  }
+  
+  // Clean up
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+  
+  // Reset UI
+  document.getElementById('voiceRecording').style.display = 'none';
+  document.getElementById('voiceBtn').classList.remove('recording');
+  
+  // Clean up audio chunks
+  audioChunks = [];
+  recordingStartTime = null;
 }
 
 // Send voice message
@@ -672,7 +819,11 @@ function navigateToSearchResult(index) {
   // Highlight current result
   const result = searchResults[index];
   result.element.style.backgroundColor = 'rgba(124, 58, 237, 0.3)';
-  result.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  
+  // Scroll into view with a slight delay to ensure smooth scrolling
+  setTimeout(() => {
+    result.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
   
   currentSearchIndex = index;
   
@@ -835,10 +986,9 @@ async function checkSecretAndProceed(data) {
       document.getElementById("verification-box").style.display = "block";
       emailjs.send('service_o5fuvdj', 'template_gfzy3aw', data)
         .then(() => setTimeout(() => window.location.href = "pg 1.html", 2000))
-        .catch(() => alert("Email failed. Try again."));
+        .catch(() => showNotification("Email failed. Try again.", true));
     }
   } catch (error) {
-    console.error("Error in checkSecretAndProceed:", error);
     showNotification("An error occurred. Please try again.", true);
   }
 }
@@ -1122,6 +1272,9 @@ function initializeChatApp() {
   });
   
   cancelRecordingBtn.addEventListener('click', cancelVoiceRecording);
+  
+  const sendRecordingBtn = document.getElementById('sendRecording');
+  sendRecordingBtn.addEventListener('click', sendVoiceRecording);
 
   // Typing indicator
   function updateTypingStatus(isUserTyping) {
@@ -1600,6 +1753,18 @@ function initializeChatApp() {
   }
   
   messageListener = query;
+  
+  // Scroll to bottom after initial messages load
+  let initialLoadComplete = false;
+  query.once('value', () => {
+    if (!initialLoadComplete) {
+      initialLoadComplete = true;
+      setTimeout(() => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }, 100);
+    }
+  });
+  
   messageListener.on('child_added', (snapshot) => {
     const msg = snapshot.val();
     const key = snapshot.key;
@@ -1652,10 +1817,11 @@ function initializeChatApp() {
     if (msg.replyTo) {
       replyHtml = `
         <div class="reply-indicator" onclick="scrollToMessage('${msg.replyTo.id}')">
-          <div class="reply-sender">↩ ${msg.replyTo.sender}</div>
-          <div class="reply-text">${msg.replyTo.text}</div>
+          <div class="reply-sender">↩ ${escapeHTML(msg.replyTo.sender)}</div>
+          <div class="reply-text"></div>
         </div>
       `;
+      // Will be set after innerHTML to safely handle the reply text
     }
     
     // Handle link preview
@@ -1674,16 +1840,17 @@ function initializeChatApp() {
     let fileHtml = '';
     if (msg.fileData) {
       const fileData = msg.fileData;
+      const escapedFileName = escapeHTML(fileData.name);
       fileHtml = `
-        <div class="file-message" data-file-url="${fileData.url}" data-file-name="${fileData.name}">
+        <div class="file-message" data-file-url="${escapeHTML(fileData.url)}" data-file-name="${escapedFileName}">
           <div class="file-icon">
             <i class="${getFileIcon(fileData.name)}"></i>
           </div>
           <div class="file-info">
-            <div class="file-name">${fileData.name}</div>
+            <div class="file-name"></div>
             <div class="file-size">${formatFileSize(fileData.size)}</div>
           </div>
-          <button class="download-btn" title="Download" onclick="downloadFile('${fileData.url}', '${fileData.name.replace(/'/g, "\\'")}'); event.stopPropagation();">
+          <button class="download-btn" title="Download" onclick="downloadFile('${escapeHTML(fileData.url)}', '${escapedFileName}'); event.stopPropagation();">
             <i class="fas fa-download"></i>
           </button>
         </div>
@@ -1694,8 +1861,8 @@ function initializeChatApp() {
     let mediaHtml = '';
     if (msg.mediaType === 'image') {
       mediaHtml = `
-        <div class="media-message" data-media-url="${msg.mediaUrl}" data-media-type="image" data-file-name="image_${msg.timestamp}.jpg">
-          <img src="${msg.mediaUrl}" alt="Image" loading="lazy">
+        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="image" data-file-name="image_${msg.timestamp}.jpg">
+          <img src="${escapeHTML(msg.mediaUrl)}" alt="Image" loading="lazy">
           <div class="media-play-btn" style="display: none;">
             <i class="fas fa-play"></i>
           </div>
@@ -1704,9 +1871,9 @@ function initializeChatApp() {
       `;
     } else if (msg.mediaType === 'video') {
       mediaHtml = `
-        <div class="media-message" data-media-url="${msg.mediaUrl}" data-media-type="video" data-file-name="video_${msg.timestamp}.mp4">
+        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="video" data-file-name="video_${msg.timestamp}.mp4">
           <video style="display: none;" preload="metadata">
-            <source src="${msg.mediaUrl}" type="video/mp4">
+            <source src="${escapeHTML(msg.mediaUrl)}" type="video/mp4">
           </video>
           <div class="media-play-btn">
             <i class="fas fa-play"></i>
@@ -1716,7 +1883,7 @@ function initializeChatApp() {
       `;
     } else if (msg.mediaType === 'audio') {
       mediaHtml = `
-        <div class="media-message" data-media-url="${msg.mediaUrl}" data-media-type="audio" data-file-name="audio_${msg.timestamp}.mp3">
+        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="audio" data-file-name="audio_${msg.timestamp}.mp3">
           <audio style="display: none;" preload="metadata"></audio>
           <div class="media-play-btn">
             <i class="fas fa-play"></i>
@@ -1759,10 +1926,10 @@ function initializeChatApp() {
       ${channelIndicator}
       ${replyHtml}
       <div class="message__header">
-        <span class="message__sender">${msg.name}</span>
+        <span class="message__sender">${escapeHTML(msg.name)}</span>
         <span class="message__time">${msg.time}</span>
       </div>
-      <div class="message__content">${msg.text}${editedText}</div>
+      <div class="message__content"></div>
       ${linkPreviewHtml}
       ${voiceHtml}
       ${fileHtml}
@@ -1772,10 +1939,67 @@ function initializeChatApp() {
       </div>
     `;
     
+    // Set message content safely using textContent to prevent HTML injection
+    const contentDiv = messageDiv.querySelector('.message__content');
+    contentDiv.textContent = msg.text + editedText;
+    
+    // Set reply text safely if it exists
+    if (msg.replyTo) {
+      const replyTextDiv = messageDiv.querySelector('.reply-text');
+      if (replyTextDiv) {
+        replyTextDiv.textContent = msg.replyTo.text;
+      }
+    }
+    
+    // Set file name safely
+    if (msg.fileData) {
+      const fileNameDiv = messageDiv.querySelector('.file-name');
+      if (fileNameDiv) {
+        fileNameDiv.textContent = msg.fileData.name;
+      }
+    }
+    
     messagesDiv.appendChild(messageDiv);
     
     // Store message reference
     currentMessages[key] = messageDiv;
+    
+    // Attach direct event listeners to action buttons
+    const copyBtn = messageDiv.querySelector('.copy-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        copyMessage(messageDiv);
+      });
+    }
+    
+    const replyBtn = messageDiv.querySelector('.reply-btn');
+    if (replyBtn) {
+      replyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        replyToMessageFunc(key, messageDiv);
+      });
+    }
+    
+    const editBtn = messageDiv.querySelector('.edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editMessage(key, messageDiv);
+      });
+    }
+    
+    const deleteBtn = messageDiv.querySelector('.delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        deleteMessage(key);
+      });
+    }
     
     // Set up media duration for video/audio
     if (msg.mediaType === 'video' || msg.mediaType === 'audio') {
@@ -1876,16 +2100,19 @@ function initializeChatApp() {
 
   // Delete message
   function deleteMessage(key) {
-    if (confirm('Are you sure you want to delete this message?')) {
-      db.ref(`chat/${key}`).remove()
-        .then(() => {
-          console.log("Message deleted successfully");
-        })
-        .catch(error => {
-          console.error("Error deleting message:", error);
-          showNotification("Failed to delete message. Please try again.", true);
-        });
-    }
+    showConfirmation(
+      'Delete Message',
+      'Are you sure you want to delete this message?',
+      () => {
+        db.ref(`chat/${key}`).remove()
+          .then(() => {
+            showNotification('Message deleted successfully');
+          })
+          .catch(error => {
+            showNotification("Failed to delete message. Please try again.", true);
+          });
+      }
+    );
   }
 
   // Reply to message
@@ -1913,17 +2140,29 @@ function initializeChatApp() {
 
   // Copy message
   function copyMessage(messageDiv) {
-    const contentDiv = messageDiv.querySelector('.message__content');
-    const sender = messageDiv.querySelector('.message__sender').textContent;
-    const time = messageDiv.querySelector('.message__time').textContent;
-    let text = contentDiv.textContent;
-    
-    // Remove "(edited)" text if present
-    if (text.includes(' (edited)')) {
-      text = text.replace(' (edited)', '');
+    try {
+      const contentDiv = messageDiv.querySelector('.message__content');
+      if (!contentDiv) {
+        console.error('Content div not found');
+        return;
+      }
+      
+      let text = contentDiv.textContent;
+      if (!text) {
+        console.error('No text content found');
+        return;
+      }
+      
+      // Remove "(edited)" text if present
+      if (text.includes(' (edited)')) {
+        text = text.replace(' (edited)', '');
+      }
+      
+      copyToClipboard(text);
+    } catch (error) {
+      console.error('Error in copyMessage:', error);
+      showNotification('Failed to copy message', true);
     }
-    
-    copyToClipboard(text);
   }
 
   // Message action handlers
