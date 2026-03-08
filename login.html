@@ -217,6 +217,9 @@
             <button class="cancel-recording" id="cancelRecording" title="Cancel Recording">
               <i class="fas fa-times"></i>
             </button>
+            <button class="send-recording" id="sendRecording" title="Send Voice Message">
+              <i class="fas fa-paper-plane"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -456,6 +459,20 @@
       </div>
     </div>
     
+    <!-- Generic Confirmation Modal -->
+    <div class="modal-overlay" id="confirmationModal">
+      <div class="modal">
+        <div class="modal-header" id="confirmationTitle">Confirm Action</div>
+        <div class="modal-body" id="confirmationMessage">
+          Are you sure?
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn secondary" id="confirmationCancelBtn">Cancel</button>
+          <button class="modal-btn primary" id="confirmationConfirmBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+    
     <!-- Upload Progress -->
     <div class="upload-progress" id="uploadProgress">
       <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--accent-color);"></i>
@@ -467,4 +484,3 @@
   </div>
 </body>
 </html>
-
