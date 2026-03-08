@@ -1107,8 +1107,8 @@ function initializeChatApp() {
   
   // Update chat title and welcome message based on channel
   if (userChannel === 'general') {
-    chatTitle.textContent = 'Secret Messenger';
-    welcomeMessage.textContent = 'Welcome to Secret Messenger! Your messages are encrypted and secure.';
+    chatTitle.textContent = 'Messenger';
+    welcomeMessage.textContent = 'Welcome to Bhavishya\'s Secret Messenger! Your messages are encrypted and secure.';
   } else if (userChannel === 'admin') {
     chatTitle.textContent = 'Admin Panel';
     welcomeMessage.textContent = 'Welcome Admin! You have access to all channels.';
