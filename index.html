@@ -59,6 +59,10 @@
     ">
 
     <title>Bhavishya - Chronicles of Exoplanet Exploration | Learn Exoplanets Easily</title>
+    
+    <!-- Preload liquid glass version for seamless Easter egg transition -->
+    <link rel="prefetch" href="indexliquidglassversion.html">
+    
 <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-YXCS39TNPS"></script>
 <script>
@@ -229,6 +233,63 @@
             padding: 10px;
             background-color: rgba(0, 0, 0, 0.444);
         }
+
+        /* Easter egg transition styles */
+        body {
+            animation: fadeIn 0.6s ease-in forwards;
+        }
+
+        body.fade-out {
+            animation: fadeOut 0.6s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.98);
+            }
+        }
+
+        .click-counter-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .click-counter-indicator.active {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
     </style>
 </head>
 <body>
@@ -309,5 +370,100 @@
     <div class="description">
         <strong>Immerse yourself in the fascinating universe of exoplanets <br>Uncover the secrets they hold<br>Step into a universe of endless possibilities!</strong>
     </div>
+
+    <!-- Click counter indicator -->
+    <div class="click-counter-indicator" id="clickIndicator"></div>
+
+    <!-- Easter Egg 4-Click Navigation System -->
+    <script>
+    (function() {
+        'use strict';
+
+        const CONFIG = {
+            clicksNeeded: 4,
+            targetPage: 'indexliquidglassversion.html',
+            resetDelay: 800,
+            fadeOutDuration: 600
+        };
+
+        let clickCounter = 0;
+        let isNavigating = false;
+        let resetTimeout = null;
+        const indicator = document.getElementById('clickIndicator');
+
+        /**
+         * Preload the target page in background to ensure seamless transition
+         */
+        function preloadPage() {
+            const link = document.createElement('link');
+            link.rel = 'prefetch';
+            link.href = CONFIG.targetPage;
+            document.head.appendChild(link);
+        }
+
+        /**
+         * Update and show the click indicator
+         */
+        function updateIndicator() {
+            indicator.textContent = clickCounter;
+            indicator.classList.add('active');
+            
+            // Hide after short delay if no more clicks - requires continuous/rapid clicking
+            clearTimeout(resetTimeout);
+            resetTimeout = setTimeout(() => {
+                if (clickCounter < CONFIG.clicksNeeded) {
+                    indicator.classList.remove('active');
+                }
+            }, CONFIG.resetDelay);
+        }
+
+        /**
+         * Navigate to the target page with fade transition
+         */
+        function navigateToTarget() {
+            isNavigating = true;
+            document.body.classList.add('fade-out');
+            
+            setTimeout(() => {
+                window.location.href = CONFIG.targetPage;
+            }, CONFIG.fadeOutDuration);
+        }
+
+        /**
+         * Reset the counter
+         */
+        function resetCounter() {
+            clickCounter = 0;
+            indicator.classList.remove('active');
+            clearTimeout(resetTimeout);
+        }
+
+        /**
+         * Global click handler - efficient event delegation
+         */
+        document.addEventListener('click', function() {
+            // Prevent multiple rapid navigations
+            if (isNavigating) return;
+
+            clickCounter++;
+            updateIndicator();
+
+            // Check if target reached
+            if (clickCounter === CONFIG.clicksNeeded) {
+                navigateToTarget();
+            }
+
+            // Reset counter after delay if not enough clicks
+            if (resetTimeout) clearTimeout(resetTimeout);
+            resetTimeout = setTimeout(resetCounter, CONFIG.resetDelay);
+        }, true); // Use capture phase for priority
+
+        // Preload on page load
+        window.addEventListener('load', preloadPage);
+
+        // Optional: Reset counter on focus/blur for better UX
+        window.addEventListener('blur', resetCounter);
+    })();
+    </script>
 </body>
 </html>
