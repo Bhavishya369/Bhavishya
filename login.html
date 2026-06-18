@@ -246,6 +246,10 @@
       <span>Message copied to clipboard!</span>
     </div>
     
+    <!-- Hidden file input for profile upload -->
+    <input type="file" id="profileUploadInputMenu" accept="image/*" style="display: none;">
+    
+    
     <!-- Mobile Sidebar Toggle -->
     <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
       <i class="fas fa-users"></i>
@@ -363,6 +367,24 @@
           <i class="fas fa-times"></i>
         </button>
       </div>
+      <div class="menu-item" id="menuNotifications">
+        <i class="fas fa-bell"></i>
+        <span>Notifications</span>
+        <div class="menu-item-switch">
+          <label class="toggle-switch">
+            <input type="checkbox" id="menuNotificationToggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="menu-item" id="menuUploadProfile">
+        <i class="fas fa-camera"></i>
+        <span>Profile Picture</span>
+      </div>
+      <div class="menu-item" id="menuChatBackground">
+        <i class="fas fa-image"></i>
+        <span>Chat Background</span>
+      </div>
       <div class="menu-item" id="menuClearChat">
         <i class="fas fa-trash"></i>
         <span>Clear Chat</span>
@@ -379,10 +401,6 @@
         <i class="fas fa-download"></i>
         <span>Export Chat</span>
       </div>
-      <div class="menu-item" id="menuSettings">
-        <i class="fas fa-cog"></i>
-        <span>Settings</span>
-      </div>
       <div class="menu-item" id="menuSwitchChannel" style="display: none;">
         <i class="fas fa-exchange-alt"></i>
         <span>Switch Channel</span>
@@ -392,6 +410,53 @@
         <span>Logout</span>
       </div>
     </div>
+    
+    <!-- Background Selection Modal -->
+    <div class="modal-overlay" id="backgroundSelectionModal">
+      <div class="modal">
+        <div class="modal-header">Chat Background</div>
+        <div class="modal-body">
+          <div class="background-grid-menu" id="backgroundGridMenu">
+            <div class="bg-option" data-bg="default" title="Default">
+              <div class="bg-preview" style="background: var(--secondary-bg);"></div>
+              <span>Default</span>
+            </div>
+            <div class="bg-option" data-bg="gradient1" title="Gradient Purple">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+              <span>Purple</span>
+            </div>
+            <div class="bg-option" data-bg="gradient2" title="Gradient Blue">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #0093E9 0%, #80D0C1 100%);"></div>
+              <span>Blue</span>
+            </div>
+            <div class="bg-option" data-bg="gradient3" title="Gradient Green">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
+              <span>Green</span>
+            </div>
+            <div class="bg-option" data-bg="gradient4" title="Gradient Orange">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 90%, #2BFF88 100%);"></div>
+              <span>Warm</span>
+            </div>
+            <div class="bg-option" data-bg="gradient5" title="Gradient Dark">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #1e1e2e 0%, #333344 100%);"></div>
+              <span>Dark</span>
+            </div>
+            <div class="bg-option upload-option" id="uploadBgOption" title="Upload Custom Background">
+              <div class="bg-preview upload-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+              </div>
+              <span>Upload</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeBackgroundModal">Close</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Hidden file input for background upload -->
+    <input type="file" id="backgroundUploadInput" accept="image/*" style="display: none;">
     
     <!-- Export Options Menu -->
     <div class="menu-container" id="exportMenuContainer">
@@ -473,6 +538,164 @@
       </div>
     </div>
     
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+      <div class="modal settings-modal">
+        <div class="modal-header">Settings</div>
+        <div class="modal-body settings-body">
+          <!-- Notifications Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Notifications</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Enable Notifications</span>
+                <p class="settings-option-desc">Receive notifications for new messages in general chat</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="notificationToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Profile Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Profile</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Profile Picture</span>
+                <p class="settings-option-desc">Upload a profile picture</p>
+              </div>
+              <button class="settings-btn" id="uploadProfileBtn">
+                <i class="fas fa-camera"></i>
+                <span>Upload</span>
+              </button>
+              <input type="file" id="profileUploadInput" accept="image/*" style="display: none;">
+            </div>
+          </div>
+
+          <!-- Chat Background Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Chat Background</div>
+            <div class="settings-option background-option">
+              <div class="settings-option-label">
+                <span>Choose Background</span>
+                <p class="settings-option-desc">Customize your chat background</p>
+              </div>
+            </div>
+            <div class="background-grid" id="backgroundGrid">
+              <div class="bg-option" data-bg="default" title="Default">
+                <div class="bg-preview" style="background: var(--secondary-bg);"></div>
+                <span>Default</span>
+              </div>
+              <div class="bg-option" data-bg="gradient1" title="Gradient Purple">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                <span>Purple</span>
+              </div>
+              <div class="bg-option" data-bg="gradient2" title="Gradient Blue">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #0093E9 0%, #80D0C1 100%);"></div>
+                <span>Blue</span>
+              </div>
+              <div class="bg-option" data-bg="gradient3" title="Gradient Green">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
+                <span>Green</span>
+              </div>
+              <div class="bg-option" data-bg="gradient4" title="Gradient Orange">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 90%, #2BFF88 100%);"></div>
+                <span>Warm</span>
+              </div>
+              <div class="bg-option" data-bg="gradient5" title="Gradient Dark">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #1e1e2e 0%, #333344 100%);"></div>
+                <span>Dark</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeSettingsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+      <div class="modal settings-modal">
+        <div class="modal-header">Settings</div>
+        <div class="modal-body settings-body">
+          <!-- Notifications Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Notifications</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Enable Notifications</span>
+                <p class="settings-option-desc">Receive notifications for new messages in general chat</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="notificationToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Profile Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Profile</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Profile Picture</span>
+                <p class="settings-option-desc">Upload a profile picture</p>
+              </div>
+              <button class="settings-btn" id="uploadProfileBtn">
+                <i class="fas fa-camera"></i>
+                <span>Upload</span>
+              </button>
+              <input type="file" id="profileUploadInput" accept="image/*" style="display: none;">
+            </div>
+          </div>
+
+          <!-- Chat Background Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Chat Background</div>
+            <div class="settings-option background-option">
+              <div class="settings-option-label">
+                <span>Choose Background</span>
+                <p class="settings-option-desc">Customize your chat background</p>
+              </div>
+            </div>
+            <div class="background-grid" id="backgroundGrid">
+              <div class="bg-option" data-bg="default" title="Default">
+                <div class="bg-preview" style="background: var(--secondary-bg);"></div>
+                <span>Default</span>
+              </div>
+              <div class="bg-option" data-bg="gradient1" title="Gradient Purple">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                <span>Purple</span>
+              </div>
+              <div class="bg-option" data-bg="gradient2" title="Gradient Blue">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #0093E9 0%, #80D0C1 100%);"></div>
+                <span>Blue</span>
+              </div>
+              <div class="bg-option" data-bg="gradient3" title="Gradient Green">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
+                <span>Green</span>
+              </div>
+              <div class="bg-option" data-bg="gradient4" title="Gradient Orange">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 90%, #2BFF88 100%);"></div>
+                <span>Warm</span>
+              </div>
+              <div class="bg-option" data-bg="gradient5" title="Gradient Dark">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #1e1e2e 0%, #333344 100%);"></div>
+                <span>Dark</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeSettingsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Upload Progress -->
     <div class="upload-progress" id="uploadProgress">
       <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--accent-color);"></i>
