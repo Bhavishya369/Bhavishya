@@ -1,4 +1,6 @@
-// Prevent Inspect
+// Allow Developer Tools for debugging
+// Uncomment below to disable developer tools (not recommended)
+/*
 document.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("keydown", function (e) {
   if (
@@ -10,6 +12,7 @@ document.addEventListener("keydown", function (e) {
     showNotification("Inspecting is disabled 🚫", true);
   }
 });
+*/
 
 // Firebase configuration
 const firebaseConfig = {
@@ -69,6 +72,16 @@ let currentSearchIndex = -1;
 // Link preview variables
 let linkPreviewData = null;
 let linkPreviewTimer = null;
+
+// Settings variables
+let notificationsEnabled = false;
+let userProfileImage = null;
+let chatBackground = 'default';
+let notificationPermission = false;
+
+// Navigation history variables
+let navigationHistory = []; // Track navigation history [{ type: 'login' | 'admin' | 'channel', channel?: string }]
+let previousPage = 'login'; // Default to login as the previous page
 
 // Function to check for access code
 function checkForAccessCode(data) {
@@ -959,10 +972,16 @@ async function checkSecretAndProceed(data) {
     
     // Extract channel from Robo ID
     const roboId = data.robo_id || '';
-    userChannel = extractChannel(roboId);
     
     // Set admin status based on Robo ID
     isAdmin = (roboId.toLowerCase() === 'ch-admin');
+    
+    // Extract channel - for admin logins, always set to 'admin'
+    if (isAdmin) {
+      userChannel = 'admin';
+    } else {
+      userChannel = extractChannel(roboId);
+    }
     
     const secretSnap = await db.ref("secretCode").once('value');
     const secretCode = secretSnap.exists() ? secretSnap.val() : "";
@@ -975,9 +994,22 @@ async function checkSecretAndProceed(data) {
       document.querySelector(".login-container").style.display = "none";
       document.getElementById("verification-box").style.display = "none";
       
-      // Set username for chat
-      username = data.username || data.robo_id || `User${Math.floor(Math.random() * 1000)}`;
+      // Set username for chat - trim and normalize
+      username = (data.username || data.robo_id || `User${Math.floor(Math.random() * 1000)}`).trim();
       localStorage.setItem('chat_username', username);
+      
+      // Get or create userId for this username
+      const storedUserId = localStorage.getItem(`chat_userId_${username}`);
+      if (storedUserId) {
+        userId = storedUserId;
+      } else {
+        userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem(`chat_userId_${username}`, userId);
+      }
+      
+      // Store user channel and admin status for session persistence
+      localStorage.setItem('user_channel', userChannel);
+      localStorage.setItem('user_is_admin', isAdmin);
       
       // Show the chat app
       document.getElementById("chat-app").style.display = "flex";
@@ -1098,12 +1130,18 @@ function initializeChatApp() {
   const menuChangeUsername = document.getElementById('menuChangeUsername');
   const menuAdminPanel = document.getElementById('menuAdminPanel');
   const menuExportChat = document.getElementById('menuExportChat');
-  const menuSettings = document.getElementById('menuSettings');
   const menuSwitchChannel = document.getElementById('menuSwitchChannel');
   const menuLogout = document.getElementById('menuLogout');
 
   // Set welcome date
   welcomeDateSpan.textContent = formatDateSeparator(Date.now());
+  
+  // Set previousPage based on current channel (for back button navigation)
+  if (userChannel === 'admin') {
+    previousPage = 'admin';
+  } else {
+    previousPage = 'login';
+  }
   
   // Update chat title and welcome message based on channel
   if (userChannel === 'general') {
@@ -1119,8 +1157,17 @@ function initializeChatApp() {
 
   // Initialize user
   if (!username) {
-    username = prompt("Enter your name:") || `User${Math.floor(Math.random() * 1000)}`;
-    localStorage.setItem('chat_username', username);
+    // Check if username is already stored
+    const storedUsername = localStorage.getItem('chat_username');
+    if (storedUsername) {
+      username = storedUsername.trim();
+    } else {
+      username = (prompt("Enter your name:") || `User${Math.floor(Math.random() * 1000)}`).trim();
+      localStorage.setItem('chat_username', username);
+    }
+  } else {
+    // Normalize existing username
+    username = username.trim();
   }
 
   if (!userId) {
@@ -1134,8 +1181,46 @@ function initializeChatApp() {
     }
   }
 
-  // Set user avatar initial
-  userAvatar.textContent = username.charAt(0).toUpperCase();
+  // Load settings from localStorage
+  notificationsEnabled = localStorage.getItem('notifications_enabled') === 'true';
+  chatBackground = localStorage.getItem('chat_background') || 'default';
+  userProfileImage = localStorage.getItem(`profile_image_${username}`);
+  
+  // Also check for old profile image format without the full path
+  if (!userProfileImage) {
+    userProfileImage = localStorage.getItem(`profile_${username}`);
+  }
+  
+  // Set user avatar with profile image if available
+  if (userProfileImage) {
+    userAvatar.style.backgroundImage = `url(${userProfileImage})`;
+    userAvatar.style.backgroundSize = 'cover';
+    userAvatar.style.backgroundPosition = 'center';
+    userAvatar.textContent = '';
+  } else {
+    userAvatar.textContent = username.charAt(0).toUpperCase();
+  }
+
+  // Apply chat background to both message area and entire chat container
+  const chatDiv = document.getElementById('chat');
+  if (chatBackground === 'custom') {
+    // Load custom background image
+    const customBgUrl = localStorage.getItem('chat_background_custom');
+    if (customBgUrl) {
+      messagesDiv.className = 'chat__messages bg-custom';
+      messagesDiv.style.backgroundImage = `url('${customBgUrl}')`;
+      chatDiv.className = 'bg-custom';
+      chatDiv.style.backgroundImage = `url('${customBgUrl}')`;
+    } else {
+      messagesDiv.className = 'chat__messages';
+      chatDiv.className = '';
+    }
+  } else if (chatBackground && chatBackground !== 'default') {
+    messagesDiv.className = `chat__messages bg-${chatBackground}`;
+    chatDiv.className = `bg-${chatBackground}`;
+  } else {
+    chatDiv.className = 'bg-default';
+  }
 
   // Theme management
   const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -1454,8 +1539,8 @@ function initializeChatApp() {
 
   // Load recent chats from the same channel
   function loadRecentChats() {
-    // For admin, show all recent chats
-    if (isAdmin) {
+    // For admin viewing 'admin' channel, show all recent chats from all channels
+    if (isAdmin && userChannel === 'admin') {
       db.ref('chat').limitToLast(20).once('value', (snapshot) => {
         const messages = snapshot.val() || {};
         recentChatUsers = {};
@@ -1464,6 +1549,29 @@ function initializeChatApp() {
         Object.values(messages).forEach(msg => {
           if (msg && msg.name !== username) {
             recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+          }
+        });
+        
+        populateRecentChatsList();
+      });
+    } else if (isAdmin && userChannel !== 'admin') {
+      // For admin viewing a specific channel, show only that channel's messages
+      db.ref('chat').limitToLast(20).once('value', (snapshot) => {
+        const messages = snapshot.val() || {};
+        recentChatUsers = {};
+        
+        // Get unique users from this specific channel
+        Object.values(messages).forEach(msg => {
+          if (msg && msg.name !== username) {
+            if (userChannel === 'general') {
+              // For general, include messages without channel or with 'general'
+              if (!msg.channel || msg.channel === 'general') {
+                recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel || 'general' };
+              }
+            } else if (msg.channel === userChannel) {
+              // For private channels, only this channel
+              recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+            }
           }
         });
         
@@ -2020,6 +2128,16 @@ function initializeChatApp() {
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
+    // Send notification for new messages in general chat (only if not own message)
+    if (!isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification('Secret Messenger', {
+        body: `${msg.name}: ${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}`,
+        icon: 'https://cdn-icons-png.flaticon.com/128/10238/10238019.png',
+        tag: 'messenger-notification',
+        requireInteraction: false
+      });
+    }
+    
     // Load recent chats when new message arrives
     loadRecentChats();
   });
@@ -2551,6 +2669,10 @@ function initializeChatApp() {
       menuSwitchChannel.style.display = 'none';
     }
     
+    // Update notification toggle state
+    const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+    menuNotificationToggle.checked = notificationsEnabled;
+    
     menuOverlay.style.display = 'block';
     menuContainer.classList.add('show');
   });
@@ -2608,12 +2730,6 @@ function initializeChatApp() {
     exportMenuContainer.classList.add('show');
   });
 
-  menuSettings.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
-    showNotification('Settings: Theme toggle available in top-right corner.');
-  });
-
   menuSwitchChannel.addEventListener('click', () => {
     menuOverlay.style.display = 'none';
     menuContainer.classList.remove('show');
@@ -2625,6 +2741,341 @@ function initializeChatApp() {
     menuOverlay.style.display = 'none';
     menuContainer.classList.remove('show');
     backToLogin();
+  });
+
+  // ===== NEW MENU ITEM HANDLERS =====
+  
+  // Notifications toggle in menu
+  const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+  const menuNotifications = document.getElementById('menuNotifications');
+  
+  menuNotificationToggle.addEventListener('change', (e) => {
+    notificationsEnabled = e.target.checked;
+    localStorage.setItem('notifications_enabled', notificationsEnabled);
+    
+    // Request notification permission if enabling (for general chat only)
+    if (notificationsEnabled && userChannel === 'general') {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            showNotification('Notifications enabled for general chat!');
+          }
+        });
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        showNotification('Notifications enabled for general chat!');
+      }
+    } else {
+      showNotification(notificationsEnabled ? 'Notifications enabled' : 'Notifications disabled');
+    }
+  });
+
+  // Profile picture upload from menu
+  const menuUploadProfile = document.getElementById('menuUploadProfile');
+  const profileUploadInputMenu = document.getElementById('profileUploadInputMenu');
+  
+  menuUploadProfile.addEventListener('click', () => {
+    profileUploadInputMenu.click();
+  });
+
+  profileUploadInputMenu.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification('File size must be less than 5MB', true);
+      return;
+    }
+
+    // Check file type
+    if (!isImageFile(file.name)) {
+      showNotification('Please upload an image file', true);
+      return;
+    }
+
+    try {
+      const result = await uploadToCloudinary(file);
+      userProfileImage = result.secure_url;
+      localStorage.setItem(`profile_image_${username}`, result.secure_url);
+      
+      // Update avatar
+      userAvatar.style.backgroundImage = `url(${result.secure_url})`;
+      userAvatar.style.backgroundSize = 'cover';
+      userAvatar.style.backgroundPosition = 'center';
+      userAvatar.textContent = '';
+      
+      menuOverlay.style.display = 'none';
+      menuContainer.classList.remove('show');
+      showNotification('Profile picture updated!');
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      showNotification('Failed to upload profile image', true);
+    }
+    
+    // Reset input
+    profileUploadInputMenu.value = '';
+  });
+
+  // Chat background selection from menu
+  const menuChatBackground = document.getElementById('menuChatBackground');
+  const backgroundSelectionModal = document.getElementById('backgroundSelectionModal');
+  const closeBackgroundModal = document.getElementById('closeBackgroundModal');
+  const backgroundGridMenu = document.getElementById('backgroundGridMenu');
+  
+  menuChatBackground.addEventListener('click', () => {
+    menuOverlay.style.display = 'none';
+    menuContainer.classList.remove('show');
+    
+    // Update active state for current background
+    document.querySelectorAll('#backgroundGridMenu .bg-option').forEach(option => {
+      option.classList.remove('active');
+      if (chatBackground === 'custom') {
+        if (option.id === 'uploadBgOption') {
+          option.classList.add('active');
+        }
+      } else if (option.dataset.bg === chatBackground) {
+        option.classList.add('active');
+      }
+    });
+    
+    backgroundSelectionModal.style.display = 'flex';
+  });
+
+  closeBackgroundModal.addEventListener('click', () => {
+    backgroundSelectionModal.style.display = 'none';
+  });
+
+  backgroundSelectionModal.addEventListener('click', (e) => {
+    if (e.target === backgroundSelectionModal) {
+      backgroundSelectionModal.style.display = 'none';
+    }
+  });
+
+  // Background selection click handlers
+  document.querySelectorAll('#backgroundGridMenu .bg-option').forEach(option => {
+    if (option.id !== 'uploadBgOption') {
+      option.addEventListener('click', () => {
+        const bgType = option.dataset.bg;
+        chatBackground = bgType;
+        localStorage.setItem('chat_background', bgType);
+        localStorage.removeItem('chat_background_custom');
+        
+        // Update CSS class on messages div
+        const messagesDiv = document.getElementById('messages');
+        const chatDiv = document.getElementById('chat');
+        
+        messagesDiv.className = 'chat__messages';
+        chatDiv.className = '';
+        
+        if (bgType !== 'default') {
+          messagesDiv.classList.add(`bg-${bgType}`);
+          chatDiv.classList.add(`bg-${bgType}`);
+        } else {
+          chatDiv.classList.add('bg-default');
+        }
+        
+        // Update active state
+        document.querySelectorAll('#backgroundGridMenu .bg-option').forEach(opt => {
+          opt.classList.remove('active');
+        });
+        option.classList.add('active');
+        
+        showNotification('Chat background updated!');
+      });
+    }
+  });
+
+  // Custom background upload functionality
+  const uploadBgOption = document.getElementById('uploadBgOption');
+  const backgroundUploadInput = document.getElementById('backgroundUploadInput');
+  
+  if (uploadBgOption && backgroundUploadInput) {
+    uploadBgOption.addEventListener('click', () => {
+      backgroundUploadInput.click();
+    });
+    
+    backgroundUploadInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // Validate file
+      if (file.size > 5 * 1024 * 1024) {
+        showNotification('File size must be less than 5MB', 'error');
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        showNotification('Please select an image file', 'error');
+        return;
+      }
+      
+      // Show loading state
+      uploadBgOption.style.opacity = '0.5';
+      uploadBgOption.style.pointerEvents = 'none';
+      
+      try {
+        // Upload to Cloudinary
+        const response = await uploadToCloudinary(file);
+        const uploadedUrl = response.secure_url;
+        
+        if (uploadedUrl) {
+          // Store the custom background
+          chatBackground = 'custom';
+          localStorage.setItem('chat_background', 'custom');
+          localStorage.setItem('chat_background_custom', uploadedUrl);
+          
+          // Update messages container and chat container with background image
+          const messagesDiv = document.getElementById('messages');
+          const chatDiv = document.getElementById('chat');
+          
+          messagesDiv.className = 'chat__messages bg-custom';
+          messagesDiv.style.backgroundImage = `url('${uploadedUrl}')`;
+          
+          chatDiv.className = 'bg-custom';
+          chatDiv.style.backgroundImage = `url('${uploadedUrl}')`;
+          
+          // Update modal preview
+          const uploadPreview = uploadBgOption.querySelector('.bg-preview');
+          uploadPreview.style.backgroundImage = `url('${uploadedUrl}')`;
+          uploadPreview.style.background = `url('${uploadedUrl}') center/cover`;
+          
+          // Update active state
+          document.querySelectorAll('#backgroundGridMenu .bg-option').forEach(opt => {
+            opt.classList.remove('active');
+          });
+          uploadBgOption.classList.add('active');
+          
+          showNotification('Custom background uploaded!');
+        } else {
+          showNotification('Failed to upload background', 'error');
+        }
+      } catch (error) {
+        console.error('Upload error:', error);
+        showNotification('Error uploading background', 'error');
+      } finally {
+        uploadBgOption.style.opacity = '1';
+        uploadBgOption.style.pointerEvents = 'auto';
+        backgroundUploadInput.value = '';
+      }
+    });
+  }
+
+  // ===== SETTINGS MODAL FUNCTIONALITY =====
+  const settingsModal = document.getElementById('settingsModal');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const notificationToggle = document.getElementById('notificationToggle');
+  const uploadProfileBtn = document.getElementById('uploadProfileBtn');
+  const profileUploadInput = document.getElementById('profileUploadInput');
+  const backgroundGrid = document.getElementById('backgroundGrid');
+
+  // Open settings modal
+  function openSettingsModal() {
+    settingsModal.style.display = 'flex';
+    
+    // Update notification toggle state
+    notificationToggle.checked = notificationsEnabled;
+    
+    // Update background selection
+    document.querySelectorAll('.bg-option').forEach(option => {
+      option.classList.remove('active');
+      if (chatBackground === 'custom') {
+        if (option.id === 'uploadBgOption') {
+          option.classList.add('active');
+        }
+      } else if (option.dataset.bg === chatBackground) {
+        option.classList.add('active');
+      }
+    });
+  }
+
+  // Close settings modal
+  closeSettingsBtn.addEventListener('click', () => {
+    settingsModal.style.display = 'none';
+  });
+
+  // Close settings modal on overlay click
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+      settingsModal.style.display = 'none';
+    }
+  });
+
+  // Notification toggle
+  notificationToggle.addEventListener('change', (e) => {
+    notificationsEnabled = e.target.checked;
+    localStorage.setItem('notifications_enabled', notificationsEnabled);
+    
+    // Request notification permission if enabling (for general chat only)
+    if (notificationsEnabled && userChannel === 'general') {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+    
+    showNotification(notificationsEnabled ? 'Notifications enabled for general chat' : 'Notifications disabled');
+  });
+
+  // Profile upload
+  uploadProfileBtn.addEventListener('click', () => {
+    profileUploadInput.click();
+  });
+
+  profileUploadInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification('File size must be less than 5MB', true);
+      return;
+    }
+
+    // Check file type
+    if (!isImageFile(file.name)) {
+      showNotification('Please upload an image file', true);
+      return;
+    }
+
+    try {
+      const uploadedUrl = await uploadToCloudinary(file);
+      userProfileImage = uploadedUrl;
+      localStorage.setItem(`profile_image_${username}`, uploadedUrl);
+      
+      // Update avatar
+      userAvatar.style.backgroundImage = `url(${uploadedUrl})`;
+      userAvatar.style.backgroundSize = 'cover';
+      userAvatar.style.backgroundPosition = 'center';
+      userAvatar.textContent = '';
+      
+      showNotification('Profile picture updated!');
+    } catch (error) {
+      console.error('Error uploading profile image:', error);
+      showNotification('Failed to upload profile image', true);
+    }
+  });
+
+  // Background selection
+  document.querySelectorAll('.bg-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const bgType = option.dataset.bg;
+      chatBackground = bgType;
+      localStorage.setItem('chat_background', bgType);
+      
+      // Update CSS class
+      const messagesDiv = document.getElementById('messages');
+      messagesDiv.className = 'chat__messages';
+      if (bgType !== 'default') {
+        messagesDiv.classList.add(`bg-${bgType}`);
+      }
+      
+      // Update active state
+      document.querySelectorAll('.bg-option').forEach(opt => {
+        opt.classList.remove('active');
+      });
+      option.classList.add('active');
+      
+      showNotification('Chat background updated!');
+    });
   });
 
   // Export options
@@ -2695,31 +3146,30 @@ function initializeChatApp() {
   confirmUsernameBtn.addEventListener('click', () => {
     const newUsername = newUsernameInput.value.trim();
     if (newUsername && newUsername !== username) {
+      const oldUsername = username;
       const oldUserId = userId;
       
-      // Generate new userId or use existing one for this username
-      const storedUserId = localStorage.getItem(`chat_userId_${newUsername}`);
-      if (storedUserId) {
-        userId = storedUserId;
-      } else {
-        userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem(`chat_userId_${newUsername}`, userId);
-      }
-      
+      // Keep the same userId for the new username
       username = newUsername;
       localStorage.setItem('chat_username', username);
+      localStorage.setItem(`chat_userId_${username}`, userId);
+      
+      // Also store with old username for backward compatibility if needed
+      if (oldUsername !== newUsername) {
+        localStorage.setItem(`chat_userId_${oldUsername}`, userId);
+      }
+      
       userAvatar.textContent = username.charAt(0).toUpperCase();
       
-      // Update presence with new user info
-      db.ref(`status/${oldUserId}`).remove();
+      // Update presence with new user info (keep same userId)
       updateUserPresence(true);
       
-      // Update all messages from old userId to new userId
+      // Update all messages from old username to new username (same userId stays)
       db.ref('chat').orderByChild('userId').equalTo(oldUserId).once('value', (snapshot) => {
         const updates = {};
         snapshot.forEach((childSnap) => {
-          updates[`${childSnap.key}/userId`] = userId;
           updates[`${childSnap.key}/name`] = username;
+          // Keep same userId - no need to update it
         });
         
         if (Object.keys(updates).length > 0) {
@@ -2885,9 +3335,17 @@ function initializeChatApp() {
       messageListener.off();
       messageListener = null;
     }
+    
+    // Always go back to login
     document.getElementById("chat-app").style.display = "none";
     document.querySelector(".login-container").style.display = "block";
-    document.querySelector(".back-button").style.display = "block";
+    document.querySelector(".back-button").style.display = "none";
+    
+    // Clear session when going back to login
+    localStorage.removeItem('chat_username');
+    localStorage.removeItem('user_channel');
+    localStorage.removeItem('user_is_admin');
+    localStorage.removeItem('from_admin');
   }
 
   // Add back button functionality
@@ -2946,6 +3404,53 @@ function initializeChatApp() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  // Check if user is already logged in via localStorage
+  const storedUsername = localStorage.getItem('chat_username');
+  if (storedUsername) {
+    // User is already logged in, restore session
+    username = storedUsername.trim();
+    
+    // Restore userId
+    const storedUserId = localStorage.getItem(`chat_userId_${username}`);
+    if (storedUserId) {
+      userId = storedUserId;
+    }
+    
+    // Restore admin status if available
+    const isAdminStored = localStorage.getItem('user_is_admin');
+    if (isAdminStored) {
+      isAdmin = isAdminStored === 'true';
+    }
+    
+    // Restore channel - respect stored channel for all users (including admins who switched channels)
+    const storedChannel = localStorage.getItem('user_channel');
+    if (storedChannel) {
+      userChannel = storedChannel;
+    } else {
+      // Default: admins default to 'admin', regular users to 'general'
+      userChannel = isAdmin ? 'admin' : 'general';
+    }
+    
+    // Check if coming from admin to track navigation history
+    const fromAdmin = localStorage.getItem('from_admin');
+    if (fromAdmin === 'true') {
+      previousPage = 'admin';
+      localStorage.removeItem('from_admin'); // Clear the flag after use
+    } else {
+      previousPage = 'login';
+    }
+    
+    // Hide login form and show chat
+    document.querySelector(".login-container").style.display = "none";
+    document.getElementById("verification-box").style.display = "none";
+    document.getElementById("chat-app").style.display = "flex";
+    
+    // Initialize chat app
+    initializeChatApp();
+    return; // Exit early, don't show login form
+  }
+  
+  // Normal login flow - only reached if not already logged in
   const form = document.getElementById("login-form");
 
   form.addEventListener("submit", async (e) => {
