@@ -1195,6 +1195,7 @@ async function checkSecretAndProceed(data) {
       
       // Show the chat app
       document.getElementById("chat-app").style.display = "flex";
+      markSessionValid(); // Mark login as valid session
       initializeChatApp();
     } else {
       document.getElementById("verification-box").style.display = "block";
@@ -3579,15 +3580,30 @@ function initializeChatApp() {
     localStorage.removeItem('user_channel');
     localStorage.removeItem('user_is_admin');
     localStorage.removeItem('from_admin');
+    sessionStorage.removeItem('session_valid'); // Clear session validation
+    
+    // Clear form inputs
+    const form = document.getElementById("login-form");
+    if (form) {
+      form.reset();
+      form.dataset.submitting = 'false';
+    }
   }
 
   // Add back button functionality
-  chatBackBtn.addEventListener('click', backToLogin);
+  if (chatBackBtn) {
+    chatBackBtn.addEventListener('click', backToLogin);
+  }
   
   // Back button from login page
-  document.getElementById('backButton').addEventListener('click', () => {
-    window.location.href = 'index.html';
-  });
+  const backButton = document.getElementById('backButton');
+  if (backButton) {
+    backButton.addEventListener('click', () => {
+      // Clear session when going back to homepage
+      sessionStorage.removeItem('session_valid');
+      window.location.href = 'index.html';
+    });
+  }
 
   // Scroll to message function (for reply indicators)
   window.scrollToMessage = function(messageId) {
@@ -3636,10 +3652,33 @@ function initializeChatApp() {
   initApp();
 }
 
+// Session validation - mark session as valid when user logs in
+function markSessionValid() {
+  sessionStorage.setItem('session_valid', 'true');
+}
+
+// Clear session when browser/tab closes
+window.addEventListener('beforeunload', () => {
+  sessionStorage.removeItem('session_valid');
+});
+
+// Also use page visibility API to catch tab switches
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    // Page is hidden/tab switched away
+    sessionStorage.removeItem('session_valid');
+  }
+});
+
 window.addEventListener("DOMContentLoaded", () => {
-  // Check if user is already logged in via localStorage
+  // Check if user is already logged in AND session is still valid
   const storedUsername = localStorage.getItem('chat_username');
-  if (storedUsername) {
+  const isSessionValid = sessionStorage.getItem('session_valid') === 'true';
+  
+  // Only auto-login if BOTH conditions are true:
+  // 1. Username is stored in localStorage (from previous session)
+  // 2. Session is still valid (user didn't close browser/tab)
+  if (storedUsername && isSessionValid) {
     // User is already logged in, restore session
     username = storedUsername.trim();
     
@@ -3680,23 +3719,58 @@ window.addEventListener("DOMContentLoaded", () => {
     
     // Initialize chat app
     initializeChatApp();
+    markSessionValid(); // Mark this restored session as valid
     return; // Exit early, don't show login form
+  }
+  
+  // Clear invalid session data if session is not valid
+  if (storedUsername && !isSessionValid) {
+    localStorage.removeItem('chat_username');
+    localStorage.removeItem('user_channel');
+    localStorage.removeItem('user_is_admin');
+    localStorage.removeItem('from_admin');
   }
   
   // Normal login flow - only reached if not already logged in
   const form = document.getElementById("login-form");
+  
+  // Add form validation and better error handling
+  if (!form) {
+    console.error('Login form not found!');
+    return;
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    
+    // Prevent double submissions
+    if (form.dataset.submitting === 'true') {
+      return;
+    }
+    
+    try {
+      form.dataset.submitting = 'true';
 
-    const data = {
-      username: document.getElementById("username").value,
-      password: document.getElementById("password").value,
-      robo_id: document.getElementById("robo-id").value,
-      neuralink_no: document.getElementById("neuralink-no").value,
-      teleportation_id: document.getElementById("teleportation-id").value
-    };
+      const data = {
+        username: document.getElementById("username").value.trim(),
+        password: document.getElementById("password").value.trim(),
+        robo_id: document.getElementById("robo-id").value.trim(),
+        neuralink_no: document.getElementById("neuralink-no").value.trim(),
+        teleportation_id: document.getElementById("teleportation-id").value.trim()
+      };
+      
+      // Validate all fields are filled
+      if (!data.username || !data.password || !data.robo_id || !data.neuralink_no || !data.teleportation_id) {
+        showNotification('Please fill in all fields', true);
+        form.dataset.submitting = 'false';
+        return;
+      }
 
-    await checkSecretAndProceed(data);
+      await checkSecretAndProceed(data);
+    } catch (error) {
+      console.error('Form submission error:', error);
+      showNotification('An error occurred during login. Please try again.', true);
+      form.dataset.submitting = 'false';
+    }
   });
 });
