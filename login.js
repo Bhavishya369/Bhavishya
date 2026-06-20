@@ -83,6 +83,188 @@ let notificationPermission = false;
 let navigationHistory = []; // Track navigation history [{ type: 'login' | 'admin' | 'channel', channel?: string }]
 let previousPage = 'login'; // Default to login as the previous page
 
+// ========== CROSS-DEVICE SETTINGS SYNCHRONIZATION ==========
+// Save user settings to Firebase for cross-device sync
+async function saveSettingsToFirebase() {
+  if (!username) return;
+  
+  try {
+    const settingsRef = db.ref(`users/${username}/settings`);
+    const settings = {
+      profileImage: userProfileImage || '',
+      chatBackground: chatBackground,
+      chatBackgroundCustom: localStorage.getItem('chat_background_custom') || '',
+      notificationsEnabled: notificationsEnabled,
+      theme: localStorage.getItem('theme') || 'dark',
+      lastUpdated: firebase.database.ServerValue.TIMESTAMP
+    };
+    
+    await settingsRef.set(settings);
+  } catch (error) {
+    console.error('Error saving settings to Firebase:', error);
+  }
+}
+
+// Load user settings from Firebase
+async function loadSettingsFromFirebase() {
+  if (!username) return false;
+  
+  try {
+    const settingsRef = db.ref(`users/${username}/settings`);
+    const snapshot = await settingsRef.once('value');
+    const settings = snapshot.val();
+    
+    if (settings) {
+      // Load profile image
+      if (settings.profileImage) {
+        userProfileImage = settings.profileImage;
+        localStorage.setItem(`profile_image_${username}`, settings.profileImage);
+        const userAvatar = document.getElementById('userAvatar');
+        if (userAvatar) {
+          userAvatar.style.backgroundImage = `url(${settings.profileImage})`;
+          userAvatar.style.backgroundSize = 'cover';
+          userAvatar.style.backgroundPosition = 'center';
+          userAvatar.textContent = '';
+        }
+      }
+      
+      // Load chat background
+      if (settings.chatBackground) {
+        chatBackground = settings.chatBackground;
+        localStorage.setItem('chat_background', settings.chatBackground);
+        
+        if (settings.chatBackground === 'custom' && settings.chatBackgroundCustom) {
+          localStorage.setItem('chat_background_custom', settings.chatBackgroundCustom);
+          applyCustomBackground(settings.chatBackgroundCustom);
+        } else {
+          applyChatBackground(settings.chatBackground);
+        }
+      }
+      
+      // Load notifications setting
+      if (settings.hasOwnProperty('notificationsEnabled')) {
+        notificationsEnabled = settings.notificationsEnabled;
+        localStorage.setItem('notifications_enabled', notificationsEnabled.toString());
+        const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+        if (menuNotificationToggle) {
+          menuNotificationToggle.checked = notificationsEnabled;
+        }
+      }
+      
+      // Load theme
+      if (settings.theme) {
+        localStorage.setItem('theme', settings.theme);
+        document.documentElement.className = `--${settings.theme}-theme`;
+        const themeSwitch = document.getElementById('themeSwitch');
+        if (themeSwitch) {
+          themeSwitch.checked = settings.theme === 'dark';
+        }
+      }
+      
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error loading settings from Firebase:', error);
+    return false;
+  }
+}
+
+// Listen for real-time settings changes from other devices
+function setupSettingsSyncListener() {
+  if (!username) return;
+  
+  try {
+    const settingsRef = db.ref(`users/${username}/settings`);
+    settingsRef.on('value', (snapshot) => {
+      const settings = snapshot.val();
+      if (settings && settings.lastUpdated) {
+        // Only apply if settings are from a different source (not just saved locally)
+        const timeSinceUpdate = Date.now() - settings.lastUpdated;
+        if (timeSinceUpdate > 2000) { // Give 2 second window for local save
+          // Profile Image
+          if (settings.profileImage && settings.profileImage !== userProfileImage) {
+            userProfileImage = settings.profileImage;
+            localStorage.setItem(`profile_image_${username}`, settings.profileImage);
+            const userAvatar = document.getElementById('userAvatar');
+            if (userAvatar) {
+              userAvatar.style.backgroundImage = `url(${settings.profileImage})`;
+              userAvatar.style.backgroundSize = 'cover';
+              userAvatar.style.backgroundPosition = 'center';
+              userAvatar.textContent = '';
+            }
+          }
+          
+          // Chat Background
+          if (settings.chatBackground && settings.chatBackground !== chatBackground) {
+            chatBackground = settings.chatBackground;
+            localStorage.setItem('chat_background', settings.chatBackground);
+            if (settings.chatBackground === 'custom' && settings.chatBackgroundCustom) {
+              localStorage.setItem('chat_background_custom', settings.chatBackgroundCustom);
+              applyCustomBackground(settings.chatBackgroundCustom);
+            } else {
+              applyChatBackground(settings.chatBackground);
+            }
+          }
+          
+          // Notifications
+          if (settings.hasOwnProperty('notificationsEnabled') && settings.notificationsEnabled !== notificationsEnabled) {
+            notificationsEnabled = settings.notificationsEnabled;
+            localStorage.setItem('notifications_enabled', notificationsEnabled.toString());
+            const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+            if (menuNotificationToggle) {
+              menuNotificationToggle.checked = notificationsEnabled;
+            }
+          }
+          
+          // Theme
+          if (settings.theme && settings.theme !== localStorage.getItem('theme')) {
+            localStorage.setItem('theme', settings.theme);
+            document.documentElement.className = `--${settings.theme}-theme`;
+            const themeSwitch = document.getElementById('themeSwitch');
+            if (themeSwitch) {
+              themeSwitch.checked = settings.theme === 'dark';
+            }
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error setting up settings sync listener:', error);
+  }
+}
+
+// Apply chat background styling
+function applyChatBackground(bgType) {
+  const messagesDiv = document.getElementById('messages');
+  const chatDiv = document.getElementById('chat');
+  
+  if (!messagesDiv || !chatDiv) return;
+  
+  messagesDiv.className = 'chat__messages';
+  chatDiv.className = '';
+  
+  if (bgType !== 'default') {
+    messagesDiv.classList.add(`bg-${bgType}`);
+    chatDiv.classList.add(`bg-${bgType}`);
+  } else {
+    chatDiv.classList.add('bg-default');
+  }
+}
+
+// Apply custom background image
+function applyCustomBackground(imageUrl) {
+  const messagesDiv = document.getElementById('messages');
+  const chatDiv = document.getElementById('chat');
+  
+  if (!messagesDiv || !chatDiv) return;
+  
+  messagesDiv.className = 'chat__messages bg-custom';
+  messagesDiv.style.backgroundImage = `url('${imageUrl}')`;
+  chatDiv.className = 'bg-custom';
+  chatDiv.style.backgroundImage = `url('${imageUrl}')`;
+}
+
 // Function to check for access code
 function checkForAccessCode(data) {
   for (let key in data) {
@@ -1025,7 +1207,51 @@ async function checkSecretAndProceed(data) {
   }
 }
 
+// Migrate existing localStorage settings to Firebase (for first-time sync users)
+async function migrateSettingsToFirebase() {
+  if (!username) return;
+  
+  try {
+    const settingsRef = db.ref(`users/${username}/settings`);
+    const snapshot = await settingsRef.once('value');
+    
+    // Only migrate if Firebase is empty
+    if (!snapshot.exists()) {
+      const localProfileImage = localStorage.getItem(`profile_image_${username}`);
+      const localBackground = localStorage.getItem('chat_background') || 'default';
+      const localBackgroundCustom = localStorage.getItem('chat_background_custom') || '';
+      const localNotifications = localStorage.getItem('notifications_enabled') === 'true';
+      const localTheme = localStorage.getItem('theme') || 'dark';
+      
+      // Only save if there's actual data to migrate
+      if (localProfileImage || localBackground !== 'default' || localBackgroundCustom || localNotifications || localTheme !== 'dark') {
+        const settings = {
+          profileImage: localProfileImage || '',
+          chatBackground: localBackground,
+          chatBackgroundCustom: localBackgroundCustom,
+          notificationsEnabled: localNotifications,
+          theme: localTheme,
+          lastUpdated: firebase.database.ServerValue.TIMESTAMP
+        };
+        
+        await settingsRef.set(settings);
+        console.log('Settings migrated to Firebase for username:', username);
+      }
+    }
+  } catch (error) {
+    console.error('Error migrating settings to Firebase:', error);
+  }
+}
+
 function initializeChatApp() {
+  // Load cross-device settings from Firebase and setup sync listener
+  loadSettingsFromFirebase().then((settingsLoaded) => {
+    // If no settings found in Firebase, migrate existing localStorage settings
+    if (!settingsLoaded) {
+      migrateSettingsToFirebase();
+    }
+    setupSettingsSyncListener();
+  });
   // DOM Elements for chat
   const chatInput = document.getElementById('chatInput');
   const sendBtn = document.getElementById('sendBtn');
@@ -1227,10 +1453,11 @@ function initializeChatApp() {
   document.documentElement.className = `--${savedTheme}-theme`;
   themeSwitch.checked = savedTheme === 'dark';
 
-  themeSwitch.addEventListener('change', () => {
+  themeSwitch.addEventListener('change', async () => {
     const newTheme = themeSwitch.checked ? 'dark' : 'light';
     document.documentElement.className = `--${newTheme}-theme`;
     localStorage.setItem('theme', newTheme);
+    await saveSettingsToFirebase();
   });
 
   // Mobile sidebar toggle
@@ -2749,9 +2976,10 @@ function initializeChatApp() {
   const menuNotificationToggle = document.getElementById('menuNotificationToggle');
   const menuNotifications = document.getElementById('menuNotifications');
   
-  menuNotificationToggle.addEventListener('change', (e) => {
+  menuNotificationToggle.addEventListener('change', async (e) => {
     notificationsEnabled = e.target.checked;
     localStorage.setItem('notifications_enabled', notificationsEnabled);
+    await saveSettingsToFirebase();
     
     // Request notification permission if enabling (for general chat only)
     if (notificationsEnabled && userChannel === 'general') {
@@ -2797,6 +3025,7 @@ function initializeChatApp() {
       const result = await uploadToCloudinary(file);
       userProfileImage = result.secure_url;
       localStorage.setItem(`profile_image_${username}`, result.secure_url);
+      await saveSettingsToFirebase();
       
       // Update avatar
       userAvatar.style.backgroundImage = `url(${result.secure_url})`;
@@ -2854,11 +3083,12 @@ function initializeChatApp() {
   // Background selection click handlers
   document.querySelectorAll('#backgroundGridMenu .bg-option').forEach(option => {
     if (option.id !== 'uploadBgOption') {
-      option.addEventListener('click', () => {
+      option.addEventListener('click', async () => {
         const bgType = option.dataset.bg;
         chatBackground = bgType;
         localStorage.setItem('chat_background', bgType);
         localStorage.removeItem('chat_background_custom');
+        await saveSettingsToFirebase();
         
         // Update CSS class on messages div
         const messagesDiv = document.getElementById('messages');
@@ -2923,6 +3153,7 @@ function initializeChatApp() {
           chatBackground = 'custom';
           localStorage.setItem('chat_background', 'custom');
           localStorage.setItem('chat_background_custom', uploadedUrl);
+          await saveSettingsToFirebase();
           
           // Update messages container and chat container with background image
           const messagesDiv = document.getElementById('messages');
@@ -3001,9 +3232,10 @@ function initializeChatApp() {
   });
 
   // Notification toggle
-  notificationToggle.addEventListener('change', (e) => {
+  notificationToggle.addEventListener('change', async (e) => {
     notificationsEnabled = e.target.checked;
     localStorage.setItem('notifications_enabled', notificationsEnabled);
+    await saveSettingsToFirebase();
     
     // Request notification permission if enabling (for general chat only)
     if (notificationsEnabled && userChannel === 'general') {
@@ -3040,6 +3272,7 @@ function initializeChatApp() {
       const uploadedUrl = await uploadToCloudinary(file);
       userProfileImage = uploadedUrl;
       localStorage.setItem(`profile_image_${username}`, uploadedUrl);
+      await saveSettingsToFirebase();
       
       // Update avatar
       userAvatar.style.backgroundImage = `url(${uploadedUrl})`;
