@@ -265,6 +265,35 @@ function applyCustomBackground(imageUrl) {
   chatDiv.style.backgroundImage = `url('${imageUrl}')`;
 }
 
+// Get user profile image from Firebase settings
+async function getUserProfileImage(userName) {
+  try {
+    const settingsRef = db.ref(`users/${userName}/settings`);
+    const snapshot = await settingsRef.once('value');
+    const settings = snapshot.val();
+    return settings && settings.profileImage ? settings.profileImage : null;
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+}
+
+// Create user avatar element with profile image or initial
+function createUserAvatarElement(userName, profileImage = null) {
+  const avatarDiv = document.createElement('div');
+  avatarDiv.className = 'user-avatar';
+  
+  if (profileImage) {
+    avatarDiv.style.backgroundImage = `url(${profileImage})`;
+    avatarDiv.style.backgroundSize = 'cover';
+    avatarDiv.style.backgroundPosition = 'center';
+  } else {
+    avatarDiv.textContent = userName.charAt(0).toUpperCase();
+  }
+  
+  return avatarDiv;
+}
+
 // Function to check for access code
 function checkForAccessCode(data) {
   for (let key in data) {
@@ -1245,18 +1274,11 @@ async function migrateSettingsToFirebase() {
 }
 
 function initializeChatApp() {
-  // Load cross-device settings from Firebase and setup sync listener
-  loadSettingsFromFirebase().then((settingsLoaded) => {
-    // If no settings found in Firebase, migrate existing localStorage settings
-    if (!settingsLoaded) {
-      migrateSettingsToFirebase();
-    }
-    setupSettingsSyncListener();
-  });
-  // DOM Elements for chat
+  // DOM Elements for chat - get references FIRST before resetting
   const chatInput = document.getElementById('chatInput');
   const sendBtn = document.getElementById('sendBtn');
   const messagesDiv = document.getElementById('messages');
+  const chatDiv = document.getElementById('chat');
   const emojiBtn = document.getElementById('emojiBtn');
   const voiceBtn = document.getElementById('voiceBtn');
   const emojiPicker = document.getElementById('emojiPicker');
@@ -1273,6 +1295,37 @@ function initializeChatApp() {
   const attachBtn = document.getElementById('attachBtn');
   const closeEmojiBtn = document.getElementById('closeEmojiBtn');
   const chatBackBtn = document.getElementById('chatBackBtn');
+  
+  // CRITICAL: Completely clear DOM from any previous user's styling
+  // This must happen BEFORE resetting variables to ensure clean state
+  if (messagesDiv && chatDiv) {
+    // Remove ALL background styles and classes
+    messagesDiv.style.backgroundImage = '';
+    messagesDiv.style.backgroundColor = '';
+    messagesDiv.className = 'chat__messages';
+    messagesDiv.removeAttribute('style');
+    
+    chatDiv.style.backgroundImage = '';
+    chatDiv.style.backgroundColor = '';
+    chatDiv.className = '';
+    chatDiv.removeAttribute('style');
+  }
+  
+  // CRITICAL: Reset all settings to defaults for new user login
+  // This prevents settings leakage from previous user
+  userProfileImage = null;
+  chatBackground = 'default';
+  notificationsEnabled = false;
+  
+  // Load cross-device settings from Firebase and setup sync listener
+  // AFTER DOM is cleared, so new settings apply cleanly
+  loadSettingsFromFirebase().then((settingsLoaded) => {
+    // If no settings found in Firebase, migrate existing localStorage settings
+    if (!settingsLoaded) {
+      migrateSettingsToFirebase();
+    }
+    setupSettingsSyncListener();
+  });
   const sidebarToggle = document.getElementById('sidebarToggle');
   const chatSidebar = document.getElementById('chatSidebar');
   const welcomeDateSpan = document.getElementById('welcomeDate');
@@ -1429,10 +1482,10 @@ function initializeChatApp() {
   }
 
   // Apply chat background to both message area and entire chat container
-  const chatDiv = document.getElementById('chat');
+  // Only apply AFTER settings are loaded from Firebase
   if (chatBackground === 'custom') {
-    // Load custom background image
-    const customBgUrl = localStorage.getItem('chat_background_custom');
+    // Load custom background image for current user
+    const customBgUrl = localStorage.getItem(`chat_background_custom_${username}`);
     if (customBgUrl) {
       messagesDiv.className = 'chat__messages bg-custom';
       messagesDiv.style.backgroundImage = `url('${customBgUrl}')`;
@@ -1441,12 +1494,20 @@ function initializeChatApp() {
     } else {
       messagesDiv.className = 'chat__messages';
       chatDiv.className = '';
+      messagesDiv.style.backgroundImage = '';
+      chatDiv.style.backgroundImage = '';
     }
   } else if (chatBackground && chatBackground !== 'default') {
     messagesDiv.className = `chat__messages bg-${chatBackground}`;
     chatDiv.className = `bg-${chatBackground}`;
+    messagesDiv.style.backgroundImage = '';
+    chatDiv.style.backgroundImage = '';
   } else {
-    chatDiv.className = 'bg-default';
+    // Default background - explicitly clear all styling
+    messagesDiv.className = 'chat__messages';
+    chatDiv.className = '';
+    messagesDiv.style.backgroundImage = '';
+    chatDiv.style.backgroundImage = '';
   }
 
   // Theme management
@@ -1689,18 +1750,31 @@ function initializeChatApp() {
     // Add current user to the list
     const currentUserLi = document.createElement('li');
     currentUserLi.className = `user-item ${isAdmin ? 'admin' : ''} current-user`;
-    currentUserLi.innerHTML = `
-      <div class="user-avatar">${username.charAt(0).toUpperCase()}</div>
-      <div class="user-info">
-        <h4>${username} (you)</h4>
-        <p>Online now</p>
-      </div>
-      ${isAdmin ? '<span class="admin-badge">Admin</span>' : ''}
+    
+    // Add profile picture for current user
+    const currentAvatarDiv = createUserAvatarElement(username, userProfileImage);
+    
+    const currentInfoDiv = document.createElement('div');
+    currentInfoDiv.className = 'user-info';
+    currentInfoDiv.innerHTML = `
+      <h4>${username} (you)</h4>
+      <p>Online now</p>
     `;
+    
+    currentUserLi.appendChild(currentAvatarDiv);
+    currentUserLi.appendChild(currentInfoDiv);
+    
+    if (isAdmin) {
+      const adminBadge = document.createElement('span');
+      adminBadge.className = 'admin-badge';
+      adminBadge.textContent = 'Admin';
+      currentUserLi.appendChild(adminBadge);
+    }
+    
     onlineUsersList.appendChild(currentUserLi);
     
     // Add other users from the same channel (or all channels for admin)
-    Object.keys(users).forEach(id => {
+    Object.keys(users).forEach(async (id) => {
       const user = users[id];
       if (user && user.online && id !== userId) {
         // Show user if: admin OR same channel
@@ -1715,22 +1789,38 @@ function initializeChatApp() {
           const li = document.createElement('li');
           li.className = `user-item ${user.isAdmin ? 'admin' : ''}`;
           
+          // Load user profile image
+          const userProfileImg = await getUserProfileImage(user.username);
+          const avatarDiv = createUserAvatarElement(user.username, userProfileImg);
+          
           // Hide channel info from normal users
           const statusText = user.online ? 'Online now' : 'Offline';
           
-          li.innerHTML = `
-            <div class="user-avatar">${user.username.charAt(0).toUpperCase()}</div>
-            <div class="user-info">
-              <h4>${user.username}</h4>
-              <p>${statusText}</p>
-            </div>
-            ${user.isAdmin ? '<span class="admin-badge">Admin</span>' : ''}
-            ${isAdmin && id !== userId ? '<button class="admin-delete-btn" title="Remove User"><i class="fas fa-times"></i></button>' : ''}
+          const infoDiv = document.createElement('div');
+          infoDiv.className = 'user-info';
+          infoDiv.innerHTML = `
+            <h4>${user.username}</h4>
+            <p>${statusText}</p>
           `;
+          
+          li.appendChild(avatarDiv);
+          li.appendChild(infoDiv);
+          
+          if (user.isAdmin) {
+            const adminBadge = document.createElement('span');
+            adminBadge.className = 'admin-badge';
+            adminBadge.textContent = 'Admin';
+            li.appendChild(adminBadge);
+          }
           
           if (isAdmin && id !== userId) {
             li.classList.add('admin-visible');
-            const deleteBtn = li.querySelector('.admin-delete-btn');
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'admin-delete-btn';
+            deleteBtn.title = 'Remove User';
+            deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
+            li.appendChild(deleteBtn);
+            
             deleteBtn.addEventListener('click', (e) => {
               e.stopPropagation();
               if (confirm(`Remove ${user.username} from chat?`)) {
@@ -1775,8 +1865,8 @@ function initializeChatApp() {
         
         // Get unique users from recent messages
         Object.values(messages).forEach(msg => {
-          if (msg && msg.name !== username) {
-            recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+          if (msg) {
+            recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel, timestamp: msg.timestamp };
           }
         });
         
@@ -1790,15 +1880,15 @@ function initializeChatApp() {
         
         // Get unique users from this specific channel
         Object.values(messages).forEach(msg => {
-          if (msg && msg.name !== username) {
+          if (msg) {
             if (userChannel === 'general') {
               // For general, include messages without channel or with 'general'
               if (!msg.channel || msg.channel === 'general') {
-                recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel || 'general' };
+                recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel || 'general', timestamp: msg.timestamp };
               }
             } else if (msg.channel === userChannel) {
               // For private channels, only this channel
-              recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+              recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel, timestamp: msg.timestamp };
             }
           }
         });
@@ -1813,16 +1903,16 @@ function initializeChatApp() {
         
         // Get unique users from recent messages in this channel
         Object.values(messages).forEach(msg => {
-          if (msg && msg.name !== username) {
+          if (msg) {
             // For general chat, include all messages (including those without channel field)
             if (userChannel === 'general') {
               // Include messages without channel or with channel 'general'
               if (!msg.channel || msg.channel === 'general') {
-                recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel || 'general' };
+                recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel || 'general', timestamp: msg.timestamp };
               }
             } else if (msg.channel === userChannel) {
               // For private channels, only include messages from same channel
-              recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel };
+              recentChatUsers[msg.userId] = { name: msg.name, userId: msg.userId, channel: msg.channel, timestamp: msg.timestamp };
             }
           }
         });
@@ -1833,26 +1923,55 @@ function initializeChatApp() {
     
     function populateRecentChatsList() {
       recentChatsList.innerHTML = '';
-      Object.values(recentChatUsers).forEach(user => {
+      
+      // Sort users by timestamp (most recent first)
+      const sortedUsers = Object.values(recentChatUsers).sort((a, b) => {
+        const timeA = a.timestamp || 0;
+        const timeB = b.timestamp || 0;
+        return timeB - timeA; // Descending order (most recent first)
+      });
+      
+      sortedUsers.forEach(async (user) => {
         const li = document.createElement('li');
         li.className = `user-item`;
         
-        // Show channel info only for admin
-        const userInfo = isAdmin && user.channel && user.channel !== 'general' ? 
-          `<p>Channel: ${user.channel}</p>` : `<p>Recent chat</p>`;
+        // Load user profile image
+        const userProfileImg = await getUserProfileImage(user.name);
+        const avatarDiv = createUserAvatarElement(user.name, userProfileImg);
         
-        li.innerHTML = `
-          <div class="user-avatar">${user.name.charAt(0).toUpperCase()}</div>
-          <div class="user-info">
-            <h4>${user.name}</h4>
-            ${userInfo}
-          </div>
-          ${isAdmin ? '<button class="admin-delete-btn" title="Delete User Chat"><i class="fas fa-trash"></i></button>' : ''}
+        // Format last online time
+        let lastOnlineText = 'Recently';
+        if (user.timestamp) {
+          const timeDiff = Date.now() - user.timestamp;
+          const minutes = Math.floor(timeDiff / 60000);
+          const hours = Math.floor(timeDiff / 3600000);
+          const days = Math.floor(timeDiff / 86400000);
+          
+          if (minutes < 1) lastOnlineText = 'Just now';
+          else if (minutes < 60) lastOnlineText = `${minutes}m ago`;
+          else if (hours < 24) lastOnlineText = `${hours}h ago`;
+          else if (days < 7) lastOnlineText = `${days}d ago`;
+          else lastOnlineText = new Date(user.timestamp).toLocaleDateString();
+        }
+        
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'user-info';
+        infoDiv.innerHTML = `
+          <h4>${user.name}</h4>
+          <p>Last online: ${lastOnlineText}</p>
         `;
+        
+        li.appendChild(avatarDiv);
+        li.appendChild(infoDiv);
         
         if (isAdmin) {
           li.classList.add('admin-visible');
-          const deleteBtn = li.querySelector('.admin-delete-btn');
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'admin-delete-btn';
+          deleteBtn.title = 'Delete User Chat';
+          deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+          li.appendChild(deleteBtn);
+          
           deleteBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (confirm(`Delete all messages from ${user.name}?`)) {
@@ -1925,6 +2044,7 @@ function initializeChatApp() {
             if (confirm('Switch to General Chat?')) {
               userChannel = 'general';
               localStorage.setItem('user_channel', 'general');
+              markPageReload();
               window.location.reload();
             }
           }
@@ -1945,6 +2065,7 @@ function initializeChatApp() {
                 if (confirm(`Switch to Channel CH-${channel}?`)) {
                   userChannel = channel;
                   localStorage.setItem('user_channel', channel);
+                  markPageReload();
                   window.location.reload();
                 }
               }
@@ -1966,6 +2087,7 @@ function initializeChatApp() {
               if (confirm('Switch to Admin Panel?')) {
                 userChannel = 'admin';
                 localStorage.setItem('user_channel', 'admin');
+                markPageReload();
                 window.location.reload();
               }
             }
@@ -1983,6 +2105,7 @@ function initializeChatApp() {
       if (confirm(`Join Channel CH-${channelCode}?`)) {
         userChannel = channelCode;
         localStorage.setItem('user_channel', channelCode);
+        markPageReload();
         window.location.reload();
       }
     } else {
@@ -2948,6 +3071,7 @@ function initializeChatApp() {
       if (confirm('Switch to Admin Panel?')) {
         userChannel = 'admin';
         localStorage.setItem('user_channel', 'admin');
+        markPageReload();
         window.location.reload();
       }
     }
@@ -3485,6 +3609,7 @@ function initializeChatApp() {
         userChannel = newChannel;
         localStorage.setItem('user_channel', userChannel);
         switchChannelModal.style.display = 'none';
+        markPageReload();
         window.location.reload();
       } else {
         showNotification('Invalid channel code. Must be "general", "admin", or 3 digits.', true);
@@ -3650,6 +3775,9 @@ function initializeChatApp() {
 
   // Start the app
   initApp();
+  
+  // Clear page reload flag - reload is now complete
+  localStorage.removeItem('page_reload_in_progress');
 }
 
 // Session validation - mark session as valid when user logs in
@@ -3657,16 +3785,28 @@ function markSessionValid() {
   sessionStorage.setItem('session_valid', 'true');
 }
 
+// Mark page as being reloaded (not navigating away)
+function markPageReload() {
+  // Use localStorage instead of sessionStorage since it persists through reload
+  localStorage.setItem('page_reload_in_progress', 'true');
+}
+
 // Clear session when browser/tab closes
 window.addEventListener('beforeunload', () => {
-  sessionStorage.removeItem('session_valid');
+  // Check if this is just a page reload
+  if (localStorage.getItem('page_reload_in_progress') !== 'true') {
+    sessionStorage.removeItem('session_valid');
+  }
+  // Don't clear the flag here - it will be cleared after reload completes
 });
 
-// Also use page visibility API to catch tab switches
+// Use page visibility API to catch tab switches, but NOT during reloads
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    // Page is hidden/tab switched away
-    sessionStorage.removeItem('session_valid');
+    // Don't clear session if a page reload is happening
+    if (localStorage.getItem('page_reload_in_progress') !== 'true') {
+      sessionStorage.removeItem('session_valid');
+    }
   }
 });
 
@@ -3773,4 +3913,7 @@ window.addEventListener("DOMContentLoaded", () => {
       form.dataset.submitting = 'false';
     }
   });
+  
+  // Clear the page reload flag now that page has loaded
+  localStorage.removeItem('page_reload_in_progress');
 });
