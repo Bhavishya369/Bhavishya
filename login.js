@@ -1855,6 +1855,68 @@ function initializeChatApp() {
     }
   });
 
+  function shouldIncludeRecentChatUser(userData) {
+    if (!userData || !userData.userId) return false;
+    if (isAdmin && userChannel === 'admin') return true;
+    if (isAdmin && userChannel !== 'admin') {
+      if (userChannel === 'general') {
+        return !userData.channel || userData.channel === 'general';
+      }
+      return userData.channel === userChannel;
+    }
+    if (userChannel === 'general') {
+      return !userData.channel || userData.channel === 'general';
+    }
+    return userData.channel === userChannel;
+  }
+
+  function getRecentChatVisits() {
+    try {
+      return JSON.parse(localStorage.getItem('recentChatVisits') || '{}');
+    } catch (error) {
+      console.error('Error reading recent chat visits:', error);
+      return {};
+    }
+  }
+
+  function saveRecentChatVisits(visits) {
+    try {
+      localStorage.setItem('recentChatVisits', JSON.stringify(visits));
+    } catch (error) {
+      console.error('Error saving recent chat visits:', error);
+    }
+  }
+
+  function markRecentChatVisited(user) {
+    if (!user || !user.userId) return;
+    const visits = getRecentChatVisits();
+    const channel = user.channel || 'general';
+    visits[user.userId] = {
+      name: user.name,
+      userId: user.userId,
+      channel,
+      timestamp: Date.now()
+    };
+    saveRecentChatVisits(visits);
+    loadRecentChats();
+  }
+
+  function mergeRecentChatVisits() {
+    const visits = getRecentChatVisits();
+    Object.values(visits).forEach((visit) => {
+      if (!visit || !visit.userId || !shouldIncludeRecentChatUser(visit)) return;
+      const existing = recentChatUsers[visit.userId];
+      if (!existing || visit.timestamp > existing.timestamp) {
+        recentChatUsers[visit.userId] = {
+          name: visit.name,
+          userId: visit.userId,
+          channel: visit.channel || 'general',
+          timestamp: visit.timestamp
+        };
+      }
+    });
+  }
+
   // Load recent chats from the same channel
   function loadRecentChats() {
     // For admin viewing 'admin' channel, show all recent chats from all channels
@@ -1870,6 +1932,7 @@ function initializeChatApp() {
           }
         });
         
+        mergeRecentChatVisits();
         populateRecentChatsList();
       });
     } else if (isAdmin && userChannel !== 'admin') {
@@ -1893,6 +1956,7 @@ function initializeChatApp() {
           }
         });
         
+        mergeRecentChatVisits();
         populateRecentChatsList();
       });
     } else {
@@ -1917,6 +1981,7 @@ function initializeChatApp() {
           }
         });
         
+        mergeRecentChatVisits();
         populateRecentChatsList();
       });
     }
@@ -1963,6 +2028,10 @@ function initializeChatApp() {
         
         li.appendChild(avatarDiv);
         li.appendChild(infoDiv);
+        
+        li.addEventListener('click', () => {
+          markRecentChatVisited(user);
+        });
         
         if (isAdmin) {
           li.classList.add('admin-visible');
