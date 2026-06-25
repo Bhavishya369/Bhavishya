@@ -4467,3 +4467,4 @@ window.addEventListener("DOMContentLoaded", () => {
   // Clear the page reload flag now that page has loaded
   localStorage.removeItem('page_reload_in_progress');
 });
+
