@@ -193,21 +193,33 @@
           </div>
           
           <div class="chat__input-area">
-            <div class="input-wrapper">
-              <button class="input-tool" id="voiceBtn" title="Voice Message">
-                <i class="fas fa-microphone"></i>
-              </button>
-              <button class="input-tool" id="emojiBtn" title="Emoji">
-                <i class="far fa-smile"></i>
-              </button>
-              <textarea id="chatInput" placeholder="Type a secret message..." autocomplete="off" rows="1"></textarea>
-              <button class="input-tool" id="attachBtn" title="Attach file">
-                <i class="fas fa-paperclip"></i>
+            <div class="reply-preview" id="replyPreview" style="display: none;">
+              <div class="reply-preview-info">
+                <span class="reply-preview-label">Replying to</span>
+                <strong id="replyPreviewSender"></strong>
+                <span id="replyPreviewText" class="reply-preview-text"></span>
+              </div>
+              <button class="reply-cancel" id="cancelReplyBtn" title="Cancel reply">
+                <i class="fas fa-xmark"></i>
               </button>
             </div>
-            <button id="sendBtn" title="Send message">
-              <i class="fas fa-paper-plane"></i>
-            </button>
+            <div class="chat__input-row">
+              <div class="input-wrapper">
+                <button class="input-tool" id="voiceBtn" title="Voice Message">
+                  <i class="fas fa-microphone"></i>
+                </button>
+                <button class="input-tool" id="emojiBtn" title="Emoji">
+                  <i class="far fa-smile"></i>
+                </button>
+                <textarea id="chatInput" placeholder="Type a secret message..." autocomplete="off" rows="1"></textarea>
+                <button class="input-tool" id="attachBtn" title="Attach file">
+                  <i class="fas fa-paperclip"></i>
+                </button>
+              </div>
+              <button id="sendBtn" title="Send message">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
           </div>
           
           <!-- Voice Recording Indicator -->
@@ -226,7 +238,10 @@
       
       <div class="emoji-picker" id="emojiPicker">
         <div class="emoji-header">
-          <h4>Emoji</h4>
+          <div class="emoji-header-left">
+            <h4 id="emojiPickerTitle">Emoji</h4>
+            <input type="text" id="emojiSearchInput" class="emoji-search-input" placeholder="Search emoji, GIFs, stickers...">
+          </div>
           <button class="input-tool" id="closeEmojiBtn">
             <i class="fas fa-times"></i>
           </button>
@@ -235,7 +250,12 @@
           <!-- Categories will be populated by JS -->
         </div>
         <div class="emoji-grid" id="emojiGrid">
-          <!-- Emojis will be populated by JS -->
+          <!-- Emojis/GIFs/Stickers will be populated by JS -->
+        </div>
+        <div class="emoji-footer" id="emojiFooter">
+          <button class="emoji-tab active" data-category="Emoji">Emoji</button>
+          <button class="emoji-tab" data-category="GIF">GIF</button>
+          <button class="emoji-tab" data-category="Sticker">Sticker</button>
         </div>
       </div>
     </div>
