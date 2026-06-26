@@ -215,6 +215,29 @@
                 <button class="input-tool" id="attachBtn" title="Attach file">
                   <i class="fas fa-paperclip"></i>
                 </button>
+
+                <div class="emoji-picker" id="emojiPicker">
+                  <div class="emoji-header">
+                    <div class="emoji-header-left">
+                      <h4 id="emojiPickerTitle">Emoji</h4>
+                      <input type="text" id="emojiSearchInput" class="emoji-search-input" placeholder="Search emoji, GIFs, stickers...">
+                    </div>
+                    <button class="input-tool" id="closeEmojiBtn">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="emoji-categories" id="emojiCategories">
+                    <!-- Categories will be populated by JS -->
+                  </div>
+                  <div class="emoji-grid" id="emojiGrid">
+                    <!-- Emojis/GIFs/Stickers will be populated by JS -->
+                  </div>
+                  <div class="emoji-footer" id="emojiFooter">
+                    <button class="emoji-tab active" data-category="Emoji">Emoji</button>
+                    <button class="emoji-tab" data-category="GIF">GIF</button>
+                    <button class="emoji-tab" data-category="Sticker">Sticker</button>
+                  </div>
+                </div>
               </div>
               <button id="sendBtn" title="Send message">
                 <i class="fas fa-paper-plane"></i>
@@ -234,31 +257,6 @@
             </button>
           </div>
         </div>
-      </div>
-      
-      <div class="emoji-picker" id="emojiPicker">
-        <div class="emoji-header">
-          <div class="emoji-header-left">
-            <h4 id="emojiPickerTitle">Emoji</h4>
-            <input type="text" id="emojiSearchInput" class="emoji-search-input" placeholder="Search emoji, GIFs, stickers...">
-          </div>
-          <button class="input-tool" id="closeEmojiBtn">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="emoji-categories" id="emojiCategories">
-          <!-- Categories will be populated by JS -->
-        </div>
-        <div class="emoji-grid" id="emojiGrid">
-          <!-- Emojis/GIFs/Stickers will be populated by JS -->
-        </div>
-        <div class="emoji-footer" id="emojiFooter">
-          <button class="emoji-tab active" data-category="Emoji">Emoji</button>
-          <button class="emoji-tab" data-category="GIF">GIF</button>
-          <button class="emoji-tab" data-category="Sticker">Sticker</button>
-        </div>
-      </div>
-    </div>
     
     <!-- Copy Notification -->
     <div class="copy-notification" id="copyNotification">
@@ -313,6 +311,17 @@
       </div>
       <div class="media-viewer-content" id="mediaViewerContent">
         <!-- Media content will be inserted here -->
+      </div>
+    </div>
+
+    <div class="profile-preview" id="profilePreview">
+      <div class="profile-preview-card">
+        <button class="profile-preview-close" id="profilePreviewClose" title="Close profile">&times;</button>
+        <div class="profile-preview-avatar" id="profilePreviewAvatar"></div>
+        <div class="profile-preview-body">
+          <h3 id="profilePreviewName">User</h3>
+          <p id="profilePreviewStatus">Active on Messenger</p>
+        </div>
       </div>
     </div>
     
