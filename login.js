@@ -1861,30 +1861,19 @@ function initializeChatApp() {
           emojiGridEl.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">No results found. Try another search.</div>';
           return;
         }
-        items.forEach(({ url, type }) => {
+        items.forEach(({ url }) => {
           const item = document.createElement('div');
           item.className = 'emoji-item media-item';
-          if (type === 'video' && emojiMode !== 'GIF') {
-            const video = document.createElement('video');
-            video.src = url;
-            video.autoplay = true;
-            video.muted = true;
-            video.loop = true;
-            video.playsInline = true;
-            video.loading = 'lazy';
-            item.appendChild(video);
-          } else {
-            const img = document.createElement('img');
-            img.src = url;
-            img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
-            item.appendChild(img);
-          }
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
+          img.loading = 'lazy';
+          item.appendChild(img);
           item.addEventListener('click', () => {
-            const sendType = type === 'video' ? 'video' : 'image';
             if (emojiMode === 'GIF') {
               sendGifMessage(url, 'image');
             } else {
-              sendStickerMessage(url, sendType);
+              sendStickerMessage(url, 'image');
             }
           });
           emojiGridEl.appendChild(item);
@@ -1940,30 +1929,19 @@ function initializeChatApp() {
     try {
       const { items, next } = await fetchTenorContent(tenorCurrentQuery, emojiMode, tenorNextPos);
       tenorNextPos = next;
-      items.forEach(({ url, type }) => {
+      items.forEach(({ url }) => {
         const item = document.createElement('div');
         item.className = 'emoji-item media-item';
-        if (type === 'video' && emojiMode !== 'GIF') {
-          const video = document.createElement('video');
-          video.src = url;
-          video.autoplay = true;
-          video.muted = true;
-          video.loop = true;
-          video.playsInline = true;
-          video.loading = 'lazy';
-          item.appendChild(video);
-        } else {
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
-          item.appendChild(img);
-        }
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
+        img.loading = 'lazy';
+        item.appendChild(img);
         item.addEventListener('click', () => {
-          const sendType = type === 'video' ? 'video' : 'image';
           if (emojiMode === 'GIF') {
             sendGifMessage(url, 'image');
           } else {
-            sendStickerMessage(url, sendType);
+            sendStickerMessage(url, 'image');
           }
         });
         emojiGridEl.appendChild(item);
@@ -2029,9 +2007,9 @@ function initializeChatApp() {
         media?.tinywebm?.url,
         media?.nanomp4?.url
       ].filter(url => typeof url === 'string' && url.length > 0);
-      const candidateList = isGifMode ? [...imageCandidates, ...videoCandidates] : [...videoCandidates, ...imageCandidates];
+      const candidateList = [...imageCandidates, ...videoCandidates];
       const urlToUse = candidateList.find(url => typeof url === 'string' && url.length > 0);
-      const type = isGifMode ? 'image' : (urlToUse && /\.(mp4|webm)(\?.*)?$/i.test(urlToUse) ? 'video' : 'image');
+      const type = 'image';
 
       if (!urlToUse) return null;
       return { url: urlToUse, type };
@@ -2070,7 +2048,7 @@ function initializeChatApp() {
     });
   }
 
-  function sendStickerMessage(url, type = 'image') {
+  function sendStickerMessage(url) {
     const timestamp = Date.now();
     const message = {
       id: `msg_${timestamp}_${userId}`,
@@ -2080,7 +2058,7 @@ function initializeChatApp() {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp,
       channel: userChannel,
-      mediaType: type === 'video' ? 'video' : 'image',
+      mediaType: 'image',
       mediaUrl: url,
       replyTo: replyToMessage ? {
         id: replyToMessage.id,
