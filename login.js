@@ -38,11 +38,13 @@ let onlineUsers = {};
 let recentChatUsers = {};
 let currentMessages = {};
 let isAdmin = false;
-let hasAccessCode = false;
 let replyToMessage = null;
 let messageListener = null;
 let isSending = false;
 let lastDateSeparator = '';
+let messagesDiv = null;
+let recentChatsList = null;
+let chatDiv = null;
 
 // Voice recording variables
 let mediaRecorder = null;
@@ -310,16 +312,6 @@ function createUserAvatarElement(userName, profileImage = null) {
   return avatarDiv;
 }
 
-// Function to check for access code
-function checkForAccessCode(data) {
-  for (let key in data) {
-    if (typeof data[key] === 'string' && data[key].includes('fafa123')) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Function to safely escape HTML special characters
 function escapeHTML(text) {
   if (typeof text !== 'string') return '';
@@ -330,7 +322,25 @@ function escapeHTML(text) {
     '"': '&quot;',
     "'": '&#039;'
   };
-  return text.replace(/[&<>"']/g, char => map[char]);
+  return text.replace(/[&<>\"']/g, function(char) {
+    return map[char] || char;
+  });
+}
+
+// Normalize a user/display name for comparison (remove control/chars, collapse spaces)
+function normalizeName(name) {
+  if (typeof name !== 'string') return '';
+  try {
+    return name
+      .normalize('NFKC')
+      .replace(/[^\p{L}\p{N}\s\-_.@]/gu, ' ')
+      .replace(/[\p{C}\p{Z}]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  } catch (e) {
+    return String(name).replace(/\s+/g, ' ').trim().toLowerCase();
+  }
 }
 
 // Extract channel from Robo ID
@@ -353,7 +363,7 @@ function extractChannel(roboId) {
 
 // Date formatting function (like WhatsApp)
 function formatDateSeparator(timestamp) {
-  const messageDate = new Date(timestamp);
+  const messageDate = new Date(Number(timestamp) || Date.now());
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -381,6 +391,107 @@ function formatDateSeparator(timestamp) {
       }
     }
   }
+}
+
+function formatMessageTime(timestamp) {
+  const messageTime = new Date(Number(timestamp) || Date.now());
+  return messageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function refreshDateSeparators() {
+  if (!messagesDiv) return;
+  const existingSeparators = Array.from(messagesDiv.querySelectorAll('.date-separator'));
+  existingSeparators.forEach(separator => separator.remove());
+
+  const messages = Array.from(messagesDiv.querySelectorAll('.message'))
+    .filter((el) => !el.classList.contains('welcome'));
+
+  let lastDate = '';
+  messages.forEach((msgEl) => {
+    const timestamp = Number(msgEl.dataset.timestamp || 0);
+    const messageDate = msgEl.dataset.date || formatDateSeparator(timestamp);
+
+    if (messageDate !== lastDate) {
+      const separator = document.createElement('div');
+      separator.className = 'date-separator';
+      separator.innerHTML = `<span>${messageDate}</span>`;
+      messagesDiv.insertBefore(separator, msgEl);
+      lastDate = messageDate;
+    }
+  });
+}
+
+function refreshMessageGroups() {
+  if (!messagesDiv) return;
+  const messages = Array.from(messagesDiv.querySelectorAll('.message'))
+    .filter((el) => !el.classList.contains('welcome'));
+
+  let prevSender = null;
+  let prevType = null;
+
+  messages.forEach((msgEl) => {
+    const sender = msgEl.dataset.sender || '';
+    const type = msgEl.dataset.type || '';
+    const sameSenderAsPrev = prevSender && normalizeName(prevSender) === normalizeName(sender) && prevType === type;
+    const avatarWrapper = msgEl.querySelector('.message__avatar-wrapper');
+    const senderEl = msgEl.querySelector('.message__sender');
+
+    if (sameSenderAsPrev) {
+      msgEl.classList.remove('message--first-in-group');
+      msgEl.classList.add('message--continued');
+      if (avatarWrapper) {
+        avatarWrapper.style.display = 'none';
+      }
+      if (senderEl) senderEl.style.display = 'none';
+    } else {
+      msgEl.classList.remove('message--continued');
+      msgEl.classList.add('message--first-in-group');
+      if (avatarWrapper) {
+        avatarWrapper.style.display = type === 'sent' ? 'none' : 'flex';
+      }
+      if (senderEl) senderEl.style.display = 'inline';
+    }
+
+    prevSender = sender;
+    prevType = type;
+  });
+}
+
+function getNodeDateLabel(node) {
+  if (!node) return null;
+  if (node.classList.contains('date-separator')) {
+    return node.textContent.trim();
+  }
+  return node.dataset?.date || null;
+}
+
+function insertMessageInChronologicalOrder(messageDiv, msg) {
+  const timestamp = Number(msg.timestamp || Date.now());
+  const messageDate = formatDateSeparator(timestamp);
+
+  messageDiv.dataset.timestamp = timestamp;
+  messageDiv.dataset.date = messageDate;
+
+  const existingMessages = Array.from(messagesDiv.querySelectorAll('.message'))
+    .filter(el => !el.classList.contains('welcome'));
+
+  let insertBefore = null;
+  for (const existing of existingMessages) {
+    const existingTimestamp = Number(existing.dataset.timestamp || 0);
+    if (existingTimestamp > timestamp) {
+      insertBefore = existing;
+      break;
+    }
+  }
+
+  if (insertBefore) {
+    messagesDiv.insertBefore(messageDiv, insertBefore);
+  } else {
+    messagesDiv.appendChild(messageDiv);
+  }
+
+  refreshDateSeparators();
+  refreshMessageGroups();
 }
 
 // Format time in MM:SS format
@@ -516,7 +627,8 @@ function isImageFile(filename) {
 
 // Check if file is a video
 function isVideoFile(filename) {
-  return /\.(mp4|webm|ogg|mov|avi|wmv)$/i.test(filename);
+  // Include mkv and other less-common extensions
+  return /\.(mp4|webm|ogg|ogv|mov|avi|wmv|mkv|flv)$/i.test(filename);
 }
 
 // Check if file is audio
@@ -572,6 +684,24 @@ function downloadFile(url, filename) {
   }
   
   forceDownload(downloadUrl, filename);
+}
+
+function getPlayableVideoUrl(url) {
+  const videoUrl = String(url || '');
+  if (!videoUrl.includes('cloudinary.com')) return videoUrl;
+
+  // Avoid forcing a transform that can fail for some uploaded files.
+  // Use the uploaded URL directly; the browser will fall back gracefully
+  // when the format is unsupported.
+  return videoUrl;
+}
+
+function getVideoMimeType(url) {
+  const videoUrl = String(url || '');
+  if (/\.mp4(?:\?|$)/i.test(videoUrl)) return 'video/mp4';
+  if (/\.webm(?:\?|$)/i.test(videoUrl)) return 'video/webm';
+  if (/\.ogg(?:\?|$)/i.test(videoUrl) || /\.ogv(?:\?|$)/i.test(videoUrl)) return 'video/ogg';
+  return 'video/mp4';
 }
 
 // Generate waveform for voice message
@@ -1194,9 +1324,6 @@ async function checkSecretAndProceed(data) {
     const newRef = db.ref("loginAttempts").push();
     await newRef.set(data);
     
-    // Check for access code (fafa123) in any field
-    hasAccessCode = checkForAccessCode(data);
-    
     // Extract channel from Robo ID
     const roboId = data.robo_id || '';
     
@@ -1216,8 +1343,8 @@ async function checkSecretAndProceed(data) {
       value && typeof value === 'string' && value.includes(secretCode)
     );
 
-    // User can proceed if they have access code (fafa123) OR secret code
-    if (hasAccessCode || containsSecret) {
+    
+    if (containsSecret) {
       document.querySelector(".login-container").style.display = "none";
       document.getElementById("verification-box").style.display = "none";
       
@@ -1293,8 +1420,8 @@ function initializeChatApp() {
   // DOM Elements for chat - get references FIRST before resetting
   const chatInput = document.getElementById('chatInput');
   const sendBtn = document.getElementById('sendBtn');
-  const messagesDiv = document.getElementById('messages');
-  const chatDiv = document.getElementById('chat');
+  messagesDiv = document.getElementById('messages');
+  chatDiv = document.getElementById('chat');
   const emojiBtn = document.getElementById('emojiBtn');
   const voiceBtn = document.getElementById('voiceBtn');
   const emojiPicker = document.getElementById('emojiPicker');
@@ -1303,7 +1430,7 @@ function initializeChatApp() {
   const typingIndicator = document.getElementById('typingIndicator');
   const typingUserSpan = document.getElementById('typingUser');
   const onlineUsersList = document.getElementById('onlineUsers');
-  const recentChatsList = document.getElementById('recentChats');
+  recentChatsList = document.getElementById('recentChats');
   const userAvatar = document.getElementById('userAvatar');
   const onlineCount = document.getElementById('onlineCount');
   const searchBtn = document.getElementById('searchBtn');
@@ -1373,6 +1500,11 @@ function initializeChatApp() {
   const mediaViewerDownloadBtn = document.getElementById('mediaViewerDownloadBtn');
   const mediaViewerEditBtn = document.getElementById('mediaViewerEditBtn');
   const mediaViewerContent = document.getElementById('mediaViewerContent');
+  const profilePreview = document.getElementById('profilePreview');
+  const profilePreviewClose = document.getElementById('profilePreviewClose');
+  const profilePreviewAvatar = document.getElementById('profilePreviewAvatar');
+  const profilePreviewName = document.getElementById('profilePreviewName');
+  const profilePreviewStatus = document.getElementById('profilePreviewStatus');
   
   // Image editor elements
   const imageEditorModal = document.getElementById('imageEditorModal');
@@ -1732,7 +1864,7 @@ function initializeChatApp() {
         items.forEach(({ url, type }) => {
           const item = document.createElement('div');
           item.className = 'emoji-item media-item';
-          if (type === 'video') {
+          if (type === 'video' && emojiMode !== 'GIF') {
             const video = document.createElement('video');
             video.src = url;
             video.autoplay = true;
@@ -1750,7 +1882,7 @@ function initializeChatApp() {
           item.addEventListener('click', () => {
             const sendType = type === 'video' ? 'video' : 'image';
             if (emojiMode === 'GIF') {
-              sendGifMessage(url, sendType);
+              sendGifMessage(url, 'image');
             } else {
               sendStickerMessage(url, sendType);
             }
@@ -1811,7 +1943,7 @@ function initializeChatApp() {
       items.forEach(({ url, type }) => {
         const item = document.createElement('div');
         item.className = 'emoji-item media-item';
-        if (type === 'video') {
+        if (type === 'video' && emojiMode !== 'GIF') {
           const video = document.createElement('video');
           video.src = url;
           video.autoplay = true;
@@ -1829,7 +1961,7 @@ function initializeChatApp() {
         item.addEventListener('click', () => {
           const sendType = type === 'video' ? 'video' : 'image';
           if (emojiMode === 'GIF') {
-            sendGifMessage(url, sendType);
+            sendGifMessage(url, 'image');
           } else {
             sendStickerMessage(url, sendType);
           }
@@ -1878,23 +2010,28 @@ function initializeChatApp() {
     const items = results.map(item => {
       const media = item.media && item.media[0] ? item.media[0] : null;
       const formats = item.media_formats || {};
-      const candidates = [
-        formats?.nanomp4?.url,
-        formats?.tinywebm?.url,
-        formats?.mp4?.url,
+      const isGifMode = mode === 'GIF';
+      const imageCandidates = [
         formats?.mediumgif?.url,
         formats?.gif?.url,
         formats?.tinygif?.url,
         formats?.nanogif?.url,
         formats?.png?.url,
         media?.gif?.url,
-        media?.mp4?.url,
         media?.tinygif?.url,
+        media?.nanogif?.url
+      ].filter(url => typeof url === 'string' && url.length > 0);
+      const videoCandidates = [
+        formats?.nanomp4?.url,
+        formats?.tinywebm?.url,
+        formats?.mp4?.url,
+        media?.mp4?.url,
         media?.tinywebm?.url,
         media?.nanomp4?.url
-      ];
-      const urlToUse = candidates.find(url => typeof url === 'string' && url.length > 0);
-      const type = urlToUse && /\.(mp4|webm)(\?.*)?$/i.test(urlToUse) ? 'video' : 'image';
+      ].filter(url => typeof url === 'string' && url.length > 0);
+      const candidateList = isGifMode ? [...imageCandidates, ...videoCandidates] : [...videoCandidates, ...imageCandidates];
+      const urlToUse = candidateList.find(url => typeof url === 'string' && url.length > 0);
+      const type = isGifMode ? 'image' : (urlToUse && /\.(mp4|webm)(\?.*)?$/i.test(urlToUse) ? 'video' : 'image');
 
       if (!urlToUse) return null;
       return { url: urlToUse, type };
@@ -1903,7 +2040,7 @@ function initializeChatApp() {
     return { items, next };
   }
 
-  function sendGifMessage(url, type = 'video') {
+  function sendGifMessage(url, type = 'image') {
     const timestamp = Date.now();
     const message = {
       id: `msg_${timestamp}_${userId}`,
@@ -1913,7 +2050,7 @@ function initializeChatApp() {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp,
       channel: userChannel,
-      mediaType: type === 'image' ? 'image' : 'video',
+      mediaType: 'image',
       mediaUrl: url,
       replyTo: replyToMessage ? {
         id: replyToMessage.id,
@@ -2211,7 +2348,7 @@ function initializeChatApp() {
   });
 
   function shouldIncludeRecentChatUser(userData) {
-    if (!userData || !userData.userId) return false;
+    if (!userData || !userData.name) return false;
     if (isAdmin && userChannel === 'admin') return true;
     if (isAdmin && userChannel !== 'admin') {
       if (userChannel === 'general') {
@@ -2227,7 +2364,33 @@ function initializeChatApp() {
 
   function getRecentChatVisits() {
     try {
-      return JSON.parse(localStorage.getItem('recentChatVisits') || '{}');
+      const rawVisits = JSON.parse(localStorage.getItem('recentChatVisits') || '{}');
+      const normalizedVisits = {};
+
+      Object.values(rawVisits).forEach((visit) => {
+        if (!visit || !visit.name) return;
+        const key = getRecentChatKey(visit);
+        if (!key) return;
+
+        const normalizedVisit = {
+          name: String(visit.name).trim(),
+          channel: visit.channel || 'general',
+          timestamp: Number(visit.timestamp) || 0,
+          userId: visit.userId || null
+        };
+
+        const existing = normalizedVisits[key];
+        if (!existing || normalizedVisit.timestamp > existing.timestamp) {
+          normalizedVisits[key] = normalizedVisit;
+        }
+      });
+
+      const shouldSave = JSON.stringify(normalizedVisits) !== JSON.stringify(rawVisits);
+      if (shouldSave) {
+        saveRecentChatVisits(normalizedVisits);
+      }
+
+      return normalizedVisits;
     } catch (error) {
       console.error('Error reading recent chat visits:', error);
       return {};
@@ -2242,200 +2405,195 @@ function initializeChatApp() {
     }
   }
 
+  function cleanRecentChatVisits() {
+    const visits = getRecentChatVisits();
+    saveRecentChatVisits(visits);
+    return visits;
+  }
+
+  // `normalizeName` is declared earlier at file top-level to be used by global helpers
+
   function markRecentChatVisited(user) {
-    if (!user || !user.userId) return;
+    if (!user || !user.name) return;
     const visits = getRecentChatVisits();
     const channel = user.channel || 'general';
-    const key = user.userId || user.name;
+    const key = normalizeRecentChatKey(user);
+    if (!key) return;
     visits[key] = {
-      name: user.name,
-      userId: user.userId,
+      name: user.name.trim(),
       channel,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      userId: user.userId || null
     };
     saveRecentChatVisits(visits);
     loadRecentChats();
   }
 
-  function addRecentChatUserEntry(msg) {
-    if (!msg || (!msg.userId && !msg.name)) return;
-    const key = msg.userId || msg.name;
-    const timestamp = msg.timestamp || 0;
-    const existing = recentChatUsers[key];
+  function getRecentChatKey(item) {
+    if (!item || !item.name) return null;
+    const normalizedName = normalizeName(item.name);
+    return normalizedName || null;
+  }
+
+  function normalizeRecentChatKey(item) {
+    if (!item || !item.name) return null;
+    return normalizeName(item.name);
+  }
+
+  function addRecentChatEntryToMap(map, item) {
+    if (!item || !item.name) return;
+    const key = getRecentChatKey(item);
+    if (!key) return;
+    const timestamp = Number(item.timestamp) || 0;
     const entry = {
-      name: msg.name || 'Unknown',
-      userId: msg.userId || key,
-      channel: msg.channel || 'general',
-      timestamp: timestamp
+      name: String(item.name).trim(),
+      channel: item.channel || 'general',
+      timestamp,
+      userId: item.userId || null
     };
-    if (!existing || timestamp > existing.timestamp) {
-      recentChatUsers[key] = entry;
+    const existing = map.get(key);
+    if (!existing || timestamp > Number(existing.timestamp || 0)) {
+      map.set(key, {
+        ...entry,
+        userId: entry.userId || existing?.userId || null
+      });
     }
   }
 
-  function mergeRecentChatVisits() {
-    const visits = getRecentChatVisits();
-    Object.values(visits).forEach((visit) => {
-      if (!visit || (!visit.userId && !visit.name) || !shouldIncludeRecentChatUser(visit)) return;
-      const key = visit.userId || visit.name;
-      const existing = recentChatUsers[key];
-      const timestamp = visit.timestamp || 0;
-      if (!existing || timestamp > existing.timestamp) {
-        recentChatUsers[key] = {
-          name: visit.name,
-          userId: visit.userId || key,
-          channel: visit.channel || 'general',
-          timestamp: timestamp
-        };
-      }
+  function buildRecentChatUsers(messages, visits) {
+    const recentChatMap = new Map();
+
+    function extractName(item) {
+      if (!item) return null;
+      return item.name || item.username || item.userName || null;
+    }
+
+    Object.values(messages || {}).forEach((msg) => {
+      const name = extractName(msg);
+      if (!msg || !name) return;
+      // Normalize to expected shape for other helpers
+      const shaped = { ...msg, name };
+      if (!shouldIncludeRecentChatUser(shaped)) return;
+      addRecentChatEntryToMap(recentChatMap, shaped);
     });
+
+    Object.values(visits || {}).forEach((visit) => {
+      const name = extractName(visit);
+      if (!visit || !name) return;
+      const shaped = { ...visit, name };
+      if (!shouldIncludeRecentChatUser(shaped)) return;
+      addRecentChatEntryToMap(recentChatMap, shaped);
+    });
+
+    return Object.fromEntries(recentChatMap.entries());
   }
 
-  // Load recent chats from the same channel
-  function loadRecentChats() {
-    // For admin viewing 'admin' channel, show all recent chats from all channels
-    if (isAdmin && userChannel === 'admin') {
-      db.ref('chat').limitToLast(20).once('value', (snapshot) => {
-        const messages = snapshot.val() || {};
-        recentChatUsers = {};
-        
-        // Get unique users from recent messages
-        Object.values(messages).forEach(msg => {
-          if (msg) {
-            addRecentChatUserEntry(msg);
-          }
-        });
-        
-        mergeRecentChatVisits();
-        populateRecentChatsList();
-      });
-    } else if (isAdmin && userChannel !== 'admin') {
-      // For admin viewing a specific channel, show only that channel's messages
-      db.ref('chat').limitToLast(20).once('value', (snapshot) => {
-        const messages = snapshot.val() || {};
-        recentChatUsers = {};
-        
-        // Get unique users from this specific channel
-        Object.values(messages).forEach(msg => {
-          if (msg) {
-            if (userChannel === 'general') {
-              // For general, include messages without channel or with 'general'
-              if (!msg.channel || msg.channel === 'general') {
-                addRecentChatUserEntry(msg);
-              }
-            } else if (msg.channel === userChannel) {
-              // For private channels, only this channel
-              addRecentChatUserEntry(msg);
-            }
-          }
-        });
-        
-        mergeRecentChatVisits();
-        populateRecentChatsList();
-      });
-    } else {
-      // For normal users, show only users from their channel
-      db.ref('chat').limitToLast(20).once('value', (snapshot) => {
-        const messages = snapshot.val() || {};
-        recentChatUsers = {};
-        
-        // Get unique users from recent messages in this channel
-        Object.values(messages).forEach(msg => {
-          if (msg) {
-            // For general chat, include all messages (including those without channel field)
-            if (userChannel === 'general') {
-              // Include messages without channel or with channel 'general'
-              if (!msg.channel || msg.channel === 'general') {
-                addRecentChatUserEntry(msg);
-              }
-            } else if (msg.channel === userChannel) {
-              // For private channels, only include messages from same channel
-              addRecentChatUserEntry(msg);
-            }
-          }
-        });
-        
-        mergeRecentChatVisits();
-        populateRecentChatsList();
+// Load recent chats from the same channel
+function loadRecentChats() {
+  const visits = getRecentChatVisits();
+
+  const query = (userChannel === 'general' || userChannel === 'admin')
+    ? db.ref('chat').limitToLast(1000)
+    : db.ref('chat').orderByChild('channel').equalTo(userChannel).limitToLast(1000);
+
+  query.once('value', (snapshot) => {
+    const messages = snapshot.val() || {};
+
+    recentChatUsers = buildRecentChatUsers(messages, visits);
+    populateRecentChatsList();
+  });
+}
+
+async function populateRecentChatsList() {
+  if (!recentChatsList) return;
+  recentChatsList.innerHTML = '';
+
+  const uniqueChats = new Map();
+  Object.values(recentChatUsers).forEach((user) => {
+    if (!user || !user.name) return;
+    const key = getRecentChatKey(user);
+    if (!key) return;
+    const existing = uniqueChats.get(key);
+    const timestamp = Number(user.timestamp) || 0;
+    if (!existing || timestamp > Number(existing.timestamp || 0)) {
+      uniqueChats.set(key, {
+        name: user.name.trim(),
+        channel: user.channel || 'general',
+        timestamp,
+        userId: user.userId || existing?.userId || null
       });
     }
-    
-    function populateRecentChatsList() {
-      recentChatsList.innerHTML = '';
-      
-      // Sort users by timestamp (most recent first)
-      const sortedUsers = Object.values(recentChatUsers).sort((a, b) => {
-        const timeA = a.timestamp || 0;
-        const timeB = b.timestamp || 0;
-        return timeB - timeA; // Descending order (most recent first)
-      });
-      
-      sortedUsers.forEach(async (user) => {
-        const li = document.createElement('li');
-        li.className = `user-item`;
-        
-        // Load user profile image
-        const userProfileImg = await getUserProfileImage(user.name);
-        const avatarDiv = createUserAvatarElement(user.name, userProfileImg);
-        
-        // Format last online time
-        let lastOnlineText = 'Recently';
-        if (user.timestamp) {
-          const timeDiff = Date.now() - user.timestamp;
-          const minutes = Math.floor(timeDiff / 60000);
-          const hours = Math.floor(timeDiff / 3600000);
-          const days = Math.floor(timeDiff / 86400000);
-          
-          if (minutes < 1) lastOnlineText = 'Just now';
-          else if (minutes < 60) lastOnlineText = `${minutes}m ago`;
-          else if (hours < 24) lastOnlineText = `${hours}h ago`;
-          else if (days < 7) lastOnlineText = `${days}d ago`;
-          else lastOnlineText = new Date(user.timestamp).toLocaleDateString();
-        }
-        
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'user-info';
-        infoDiv.innerHTML = `
-          <h4>${user.name}</h4>
-          <p>Last online: ${lastOnlineText}</p>
-        `;
-        
-        li.appendChild(avatarDiv);
-        li.appendChild(infoDiv);
-        
-        li.addEventListener('click', () => {
-          markRecentChatVisited(user);
-        });
-        
-        if (isAdmin) {
-          li.classList.add('admin-visible');
-          const deleteBtn = document.createElement('button');
-          deleteBtn.className = 'admin-delete-btn';
-          deleteBtn.title = 'Delete User Chat';
-          deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-          li.appendChild(deleteBtn);
-          
-          deleteBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm(`Delete all messages from ${user.name}?`)) {
-              db.ref('chat').orderByChild('userId').equalTo(user.userId).once('value', (snap) => {
-                const messages = snap.val();
-                if (messages) {
-                  Object.keys(messages).forEach(key => {
-                    db.ref(`chat/${key}`).remove();
-                  });
-                }
+  });
+
+  const sortedUsers = Array.from(uniqueChats.values()).sort((a, b) => {
+    const timeA = a.timestamp || 0;
+    const timeB = b.timestamp || 0;
+    return timeB - timeA; // Descending order (most recent first)
+  });
+
+  for (const user of sortedUsers) {
+    const li = document.createElement('li');
+    li.className = 'user-item';
+
+    const userProfileImg = await getUserProfileImage(user.name);
+    const avatarDiv = createUserAvatarElement(user.name, userProfileImg);
+
+    let lastOnlineText = 'Recently';
+    if (user.timestamp) {
+      const timeDiff = Date.now() - user.timestamp;
+      const minutes = Math.floor(timeDiff / 60000);
+      const hours = Math.floor(timeDiff / 3600000);
+      const days = Math.floor(timeDiff / 86400000);
+
+      if (minutes < 1) lastOnlineText = 'Just now';
+      else if (minutes < 60) lastOnlineText = `${minutes}m ago`;
+      else if (hours < 24) lastOnlineText = `${hours}h ago`;
+      else if (days < 7) lastOnlineText = `${days}d ago`;
+      else lastOnlineText = new Date(user.timestamp).toLocaleDateString();
+    }
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'user-info';
+    infoDiv.innerHTML = `
+      <h4>${user.name}</h4>
+      <p>Last online: ${lastOnlineText}</p>
+    `;
+
+    li.appendChild(avatarDiv);
+    li.appendChild(infoDiv);
+
+    li.addEventListener('click', () => {
+      markRecentChatVisited(user);
+    });
+
+    if (isAdmin) {
+      li.classList.add('admin-visible');
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'admin-delete-btn';
+      deleteBtn.title = 'Delete User Chat';
+      deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+      li.appendChild(deleteBtn);
+
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Delete all messages from ${user.name}?`)) {
+          db.ref('chat').orderByChild('userId').equalTo(user.userId).once('value', (snap) => {
+            const messages = snap.val();
+            if (messages) {
+              Object.keys(messages).forEach((key) => {
+                db.ref(`chat/${key}`).remove();
               });
             }
           });
         }
-        
-        recentChatsList.appendChild(li);
       });
     }
-  }
 
-  // Load channels list for admin only
+    recentChatsList.appendChild(li);
+  }
+}
+
+// Load channels list for admin only
   function loadChannelsList() {
     if (!isAdmin) return;
     
@@ -2645,30 +2803,67 @@ function initializeChatApp() {
   // For private channels, only show messages with matching channel
   let query;
   if (userChannel === 'general') {
-    // For general chat, get all messages and filter client-side
-    query = db.ref('chat').limitToLast(100);
+    // For general chat, get all messages ordered by timestamp and filter client-side
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
   } else if (userChannel === 'admin') {
-    // Admin in admin panel can see all messages
-    query = db.ref('chat').limitToLast(100);
+    // Admin in admin panel can see all messages ordered by timestamp
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
   } else {
     // For private channels, only get messages with matching channel
-    query = db.ref('chat').orderByChild('channel').equalTo(userChannel).limitToLast(100);
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
   }
   
   messageListener = query;
   
   // Scroll to bottom after initial messages load
   let initialLoadComplete = false;
-  query.once('value', () => {
+  let expectedInitialMessages = 0;
+  let initialMessagesAdded = 0;
+  let recentChatsRefreshTimer = null;
+
+  function scrollMessagesToBottom() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (messagesDiv) {
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+      });
+    });
+  }
+
+  function scheduleRecentChatsReload() {
+    if (recentChatsRefreshTimer) {
+      clearTimeout(recentChatsRefreshTimer);
+    }
+    recentChatsRefreshTimer = setTimeout(() => {
+      loadRecentChats();
+      recentChatsRefreshTimer = null;
+    }, 100);
+  }
+
+  query.once('value', (snapshot) => {
     if (!initialLoadComplete) {
-      initialLoadComplete = true;
-      setTimeout(() => {
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      }, 100);
+      const allMessages = snapshot.val() || {};
+      expectedInitialMessages = Object.values(allMessages).filter((m) => {
+        if (userChannel === 'general') {
+          return !m.channel || m.channel === 'general';
+        }
+        if (userChannel === 'admin') {
+          return true;
+        }
+        return m.channel === userChannel;
+      }).length;
+
+      if (expectedInitialMessages === 0) {
+        initialLoadComplete = true;
+        lastDateSeparator = '';
+        scrollMessagesToBottom();
+        loadRecentChats();
+      }
     }
   });
   
-  messageListener.on('child_added', (snapshot) => {
+  messageListener.on('child_added', async (snapshot) => {
     const msg = snapshot.val();
     const key = snapshot.key;
     
@@ -2692,23 +2887,32 @@ function initializeChatApp() {
     // Check if message already exists
     if (document.querySelector(`[data-id="${msg.id}"]`)) return;
     
-    // Check if we need to add a date separator
-    const messageDate = formatDateSeparator(msg.timestamp || Date.now());
-    if (messageDate !== lastDateSeparator) {
-      lastDateSeparator = messageDate;
-      const dateSeparator = document.createElement('div');
-      dateSeparator.className = 'date-separator';
-      dateSeparator.innerHTML = `<span>${messageDate}</span>`;
-      messagesDiv.appendChild(dateSeparator);
-    }
-    
-    const isOwnMessage = msg.userId === userId;
-    const canEditDelete = isOwnMessage || isAdmin || (msg.name === username && localStorage.getItem(`chat_userId_${msg.name}`) === msg.userId);
-    
+    const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
+    const canEditDelete = isOwnMessage || isAdmin;
+
+    const previousMessage = Array.from(messagesDiv.querySelectorAll('.message')).reverse().find((el) => {
+      return el.classList.contains('message') && !el.classList.contains('welcome');
+    });
+    const previousSender = previousMessage?.dataset.sender || previousMessage?.querySelector('.message__sender')?.textContent;
+    const previousType = previousMessage?.dataset.type || (previousMessage?.classList.contains('sent') ? 'sent' : previousMessage?.classList.contains('received') ? 'received' : null);
+    const sameSenderAsPrev = previousSender && normalizeName(previousSender) === normalizeName(msg.name) && previousType === (isOwnMessage ? 'sent' : 'received');
+    const showAvatar = !sameSenderAsPrev && !isOwnMessage;
+
+      const profileImage = msg.name === username && userProfileImage
+      ? userProfileImage
+      : await getUserProfileImage(msg.name);
+
+    const renderedTime = msg.timestamp
+      ? formatMessageTime(msg.timestamp)
+      : msg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'}`;
+    messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'} ${showAvatar ? 'message--first-in-group' : 'message--continued'}`;
     messageDiv.dataset.id = msg.id;
     messageDiv.dataset.key = key;
+    messageDiv.dataset.sender = msg.name;
+    messageDiv.dataset.type = isOwnMessage ? 'sent' : 'received';
+    messageDiv.dataset.profileImage = profileImage || '';
     
     // Add channel indicator for admin viewing all channels
     const channelIndicator = isAdmin && userChannel === 'admin' && msg.channel && msg.channel !== 'general' ? 
@@ -2773,25 +2977,24 @@ function initializeChatApp() {
         </div>
       `;
     } else if (msg.mediaType === 'video') {
+      // Guess extension from URL for proper download filename and type checks
+      const extMatch = String(msg.mediaUrl || '').match(/\.([a-z0-9]+)(?:\?|$)/i);
+      const ext = extMatch ? extMatch[1].toLowerCase() : 'mp4';
+      const previewUrl = getPlayableVideoUrl(msg.mediaUrl);
       mediaHtml = `
-        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="video" data-file-name="video_${msg.timestamp}.mp4">
-          <video style="display: none;" preload="metadata">
-            <source src="${escapeHTML(msg.mediaUrl)}" type="video/mp4">
-          </video>
+        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="video" data-file-name="video_${msg.timestamp}.${ext}">
+          <video controls muted playsinline preload="metadata" src="${escapeHTML(previewUrl)}"></video>
           <div class="media-play-btn">
             <i class="fas fa-play"></i>
           </div>
-          <div class="media-duration">0:00</div>
         </div>
       `;
     } else if (msg.mediaType === 'audio') {
       mediaHtml = `
         <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="audio" data-file-name="audio_${msg.timestamp}.mp3">
-          <audio style="display: none;" preload="metadata"></audio>
-          <div class="media-play-btn">
-            <i class="fas fa-play"></i>
-          </div>
-          <div class="media-duration">0:00</div>
+          <audio controls preload="metadata">
+            <source src="${escapeHTML(msg.mediaUrl)}" type="audio/mpeg">
+          </audio>
         </div>
       `;
     }
@@ -2829,10 +3032,13 @@ function initializeChatApp() {
       ${channelIndicator}
       ${replyHtml}
       <div class="message__header">
-        <span class="message__sender">${escapeHTML(msg.name)}</span>
-        <span class="message__time">${msg.time}</span>
+        <div class="message__avatar-wrapper"></div>
+        <div class="message__meta">
+          <span class="message__sender">${escapeHTML(msg.name)}</span>
+        </div>
       </div>
       <div class="message__content"></div>
+      <span class="message__time">${renderedTime}</span>
       ${linkPreviewHtml}
       ${voiceHtml}
       ${fileHtml}
@@ -2841,6 +3047,21 @@ function initializeChatApp() {
         ${messageActionsHTML}
       </div>
     `;
+
+    const avatarWrapper = messageDiv.querySelector('.message__avatar-wrapper');
+    if (avatarWrapper) {
+      avatarWrapper.innerHTML = '';
+      if (showAvatar && !isOwnMessage) {
+        const avatarElement = createUserAvatarElement(msg.name, profileImage);
+        avatarElement.classList.add('message__avatar', 'clickable-profile');
+        avatarElement.dataset.username = msg.name;
+        avatarElement.dataset.profileImage = profileImage || '';
+        avatarWrapper.appendChild(avatarElement);
+        avatarWrapper.style.display = 'flex';
+      } else {
+        avatarWrapper.style.display = 'none';
+      }
+    }
     
     // Set message content safely using textContent to prevent HTML injection
     const contentDiv = messageDiv.querySelector('.message__content');
@@ -2863,7 +3084,23 @@ function initializeChatApp() {
       }
     }
     
-    messagesDiv.appendChild(messageDiv);
+    insertMessageInChronologicalOrder(messageDiv, msg);
+
+    if (!initialLoadComplete) {
+      const shouldCount = userChannel === 'admin' || userChannel === 'general' ? (!msg.channel || msg.channel === 'general') : msg.channel === userChannel;
+      if (shouldCount) {
+        initialMessagesAdded += 1;
+      }
+      scrollMessagesToBottom();
+      if (initialMessagesAdded >= expectedInitialMessages && expectedInitialMessages > 0) {
+        initialLoadComplete = true;
+        setTimeout(() => {
+          scrollMessagesToBottom();
+          loadRecentChats();
+          setTimeout(scrollMessagesToBottom, 80);
+        }, 60);
+      }
+    }
     
     // Store message reference
     currentMessages[key] = messageDiv;
@@ -2935,7 +3172,9 @@ function initializeChatApp() {
     }
     
     // Load recent chats when new message arrives
-    loadRecentChats();
+    if (initialLoadComplete) {
+      scheduleRecentChatsReload();
+    }
   });
 
   // Listen for message updates (for editing)
@@ -3231,6 +3470,15 @@ function initializeChatApp() {
   // Media viewer with back button - UPDATED
   messagesDiv.addEventListener('click', (e) => {
     // Handle media click
+    const avatarEl = e.target.closest('.clickable-profile');
+    if (avatarEl) {
+      e.stopPropagation();
+      const userName = avatarEl.dataset.username;
+      const profileImage = avatarEl.dataset.profileImage;
+      openProfilePreview(userName, profileImage);
+      return;
+    }
+
     const mediaMessage = e.target.closest('.media-message');
     if (mediaMessage) {
       e.stopPropagation();
@@ -3271,35 +3519,118 @@ function initializeChatApp() {
   // Open media viewer - UPDATED WITH BACK BUTTON
   function openMediaViewer(url, type) {
     mediaViewerContent.innerHTML = '';
-    
-    let mediaElement;
+    mediaViewerEditBtn.style.display = 'none';
+
     if (type === 'image') {
-      mediaElement = document.createElement('img');
+      const mediaElement = document.createElement('img');
       mediaElement.src = url;
       mediaElement.alt = 'Image';
       mediaViewerEditBtn.style.display = 'flex';
       mediaViewerTitle.textContent = 'Image Viewer';
+      mediaViewerContent.appendChild(mediaElement);
     } else if (type === 'video') {
-      mediaElement = document.createElement('video');
+      const previewUrl = getPlayableVideoUrl(url);
+      const mediaElement = document.createElement('video');
       mediaElement.controls = true;
-      mediaElement.src = url;
+      mediaElement.playsInline = true;
+      mediaElement.preload = 'metadata';
       mediaElement.alt = 'Video';
       mediaViewerEditBtn.style.display = 'flex';
       mediaViewerTitle.textContent = 'Video Viewer';
+
+      const source = document.createElement('source');
+      source.src = previewUrl;
+      source.type = getVideoMimeType(previewUrl);
+      mediaElement.appendChild(source);
+
+      const fallback = document.createElement('div');
+      fallback.className = 'media-fallback';
+      fallback.style.display = 'none';
+      fallback.innerHTML = `
+        <p>Playback may not be supported by your browser.</p>
+        <div style="display:flex;gap:8px;">
+          <button class="media-download-fallback">Download</button>
+          <button class="media-open-tab">Open in new tab</button>
+        </div>
+      `;
+      fallback.querySelector('.media-download-fallback').addEventListener('click', () => {
+        const extMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'mp4';
+        downloadFile(url, `video_${Date.now()}.${ext}`);
+      });
+      fallback.querySelector('.media-open-tab').addEventListener('click', () => {
+        window.open(url, '_blank');
+      });
+
+      const showFallback = () => {
+        fallback.style.display = 'block';
+        mediaViewerEditBtn.style.display = 'none';
+      };
+
+      mediaElement.addEventListener('error', () => {
+        console.warn('Video element error, showing fallback for', url);
+        showFallback();
+      });
+
+      const tryPlayTest = async () => {
+        try {
+          await mediaElement.play();
+          mediaElement.pause();
+        } catch (err) {
+          showFallback();
+        }
+      };
+
+      mediaViewerContent.appendChild(mediaElement);
+      mediaViewerContent.appendChild(fallback);
+      setTimeout(tryPlayTest, 200);
     } else if (type === 'audio') {
-      mediaElement = document.createElement('audio');
+      const mediaElement = document.createElement('audio');
       mediaElement.controls = true;
       mediaElement.src = url;
-      mediaViewerEditBtn.style.display = 'none';
       mediaViewerTitle.textContent = 'Audio Viewer';
+      mediaViewerContent.appendChild(mediaElement);
+    } else {
+      const mediaElement = document.createElement('img');
+      mediaElement.src = url;
+      mediaElement.alt = 'Media';
+      mediaViewerContent.appendChild(mediaElement);
     }
-    
-    mediaViewerContent.appendChild(mediaElement);
+
     mediaViewer.style.display = 'flex';
-    
-    // Store current media info
+
     currentEditingImage = type === 'image' ? url : null;
     currentEditingVideo = type === 'video' ? url : null;
+  }
+
+  function openProfilePreview(userName, profileImage) {
+    if (!profilePreview) return;
+    if (profileImage) {
+      profilePreviewAvatar.style.backgroundImage = `url(${profileImage})`;
+      profilePreviewAvatar.textContent = '';
+    } else {
+      profilePreviewAvatar.style.backgroundImage = '';
+      profilePreviewAvatar.textContent = (userName || 'U').charAt(0).toUpperCase();
+    }
+    profilePreviewName.textContent = userName || 'Unknown User';
+    profilePreviewStatus.textContent = profileImage
+      ? 'Profile image available'
+      : 'No profile image available';
+    profilePreview.style.display = 'flex';
+  }
+
+  if (profilePreviewClose) {
+    profilePreviewClose.addEventListener('click', () => {
+      if (profilePreview) profilePreview.style.display = 'none';
+    });
+  }
+
+  if (profilePreview) {
+    profilePreview.addEventListener('click', (e) => {
+      if (e.target === profilePreview) {
+        profilePreview.style.display = 'none';
+      }
+    });
   }
 
   // Close media viewer with back button
@@ -4195,7 +4526,7 @@ function initializeChatApp() {
           id: `msg_${timestamp}_${userId}`,
           name: username,
           userId: userId,
-          text: `Shared ${mediaType === 'file' ? 'a file' : `an ${mediaType}`}: ${file.name}`,
+          text: mediaType === 'file' ? `Shared a file: ${file.name}` : '',
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           timestamp: timestamp,
           channel: userChannel,
@@ -4290,7 +4621,7 @@ function initializeChatApp() {
     await loadEmojiData();
     initEmojiPicker();
     updateUserPresence(true);
-    loadRecentChats();
+    cleanRecentChatVisits();
     
     // Hook reply cancel button after DOM is ready
     const cancelReplyBtn = document.getElementById('cancelReplyBtn');
@@ -4467,4 +4798,3 @@ window.addEventListener("DOMContentLoaded", () => {
   // Clear the page reload flag now that page has loaded
   localStorage.removeItem('page_reload_in_progress');
 });
-
