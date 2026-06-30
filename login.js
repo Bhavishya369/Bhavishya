@@ -29,6 +29,11 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// Supabase configuration
+const supabaseUrl = 'https://aouzfetjvfmvqrnswseq.supabase.co';
+const supabaseKey = 'sb_publishable_p8Bp4oomauG6Sszp5cvY5Q_88wJrPyt';
+const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
 let username = '';
 let userId = '';
 let userChannel = 'general'; // Default channel
@@ -164,8 +169,15 @@ async function loadSettingsFromFirebase() {
         notificationsEnabled = settings.notificationsEnabled;
         localStorage.setItem('notifications_enabled', notificationsEnabled.toString());
         const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+        const notificationToggle = document.getElementById('notificationToggle');
         if (menuNotificationToggle) {
           menuNotificationToggle.checked = notificationsEnabled;
+        }
+        if (notificationToggle) {
+          notificationToggle.checked = notificationsEnabled;
+        }
+        if (notificationsEnabled && 'Notification' in window && Notification.permission === 'default') {
+          requestNotificationPermissionIfNeeded();
         }
       }
       
@@ -579,6 +591,45 @@ function showNotification(message, isError = false) {
   }, 3000);
 }
 
+// Show download link notification with copy button
+function showDownloadLinkNotification(url, filename) {
+  const notification = document.createElement('div');
+  notification.className = 'notification';
+  notification.style.borderLeftColor = 'var(--accent-color)';
+
+  const safeText = filename ? `${filename} — ` : '';
+  notification.innerHTML = `
+    <div class="notification-icon"><i class="fas fa-download"></i></div>
+    <div class="notification-content">
+      <p>Download blocked by browser. <a class="download-link" href="${url}" target="_blank" rel="noopener">Open ${safeText}in new tab</a></p>
+    </div>
+    <div class="notification-actions">
+      <button class="copy-link-btn">Copy link</button>
+    </div>
+  `;
+
+  const container = document.getElementById('chat-app');
+  container.appendChild(notification);
+
+  const copyBtn = notification.querySelector('.copy-link-btn');
+  const linkEl = notification.querySelector('.download-link');
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard?.writeText(url).then(() => {
+      showNotification('Download link copied to clipboard');
+    }).catch(() => {
+      // fallback
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showNotification('Download link copied to clipboard'); } catch (e) { showNotification('Copy failed', true); }
+      document.body.removeChild(ta);
+    });
+  });
+
+  setTimeout(() => notification.remove(), 12000);
+}
+
 // Show confirmation dialog (theme-matched)
 function showConfirmation(title, message, onConfirm, onCancel) {
   const modal = document.getElementById('confirmationModal');
@@ -669,31 +720,230 @@ function forceDownload(url, filename) {
   document.body.removeChild(link);
 }
 
-// NEW: Enhanced download function for Cloudinary URLs
-function downloadFile(url, filename) {
-  // For Cloudinary URLs, add download parameter
-  let downloadUrl = url;
-  if (url.includes('cloudinary.com')) {
-    // Check if it's already a direct download URL
-    if (!url.includes('fl_attachment')) {
-      // Add fl_attachment parameter to force download
-      if (url.includes('/upload/')) {
-        downloadUrl = url.replace('/upload/', '/upload/fl_attachment/');
+function isCloudinaryUrl(url) {
+  return typeof url === 'string' && /res\.cloudinary\.com/.test(url);
+}
+
+function getCloudinaryUploadUrl(url) {
+  const match = String(url || '').match(/^(.+\/(?:image|video|raw)\/upload\/)(.+)$/);
+  return match ? { base: match[1], remainder: match[2] } : null;
+}
+
+function getCloudinaryTransformedUrl(url, transformation) {
+  const parts = getCloudinaryUploadUrl(url);
+  if (!parts) return url;
+  return `${parts.base}${transformation}/${parts.remainder}`;
+}
+
+function getCloudinaryDownloadUrl(url, filename) {
+  if (!isCloudinaryUrl(url)) return url;
+  const parts = getCloudinaryUploadUrl(url);
+  if (!parts) return url;
+
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  const docExts = ['pdf','doc','docx','xls','xlsx','ppt','pptx','txt','csv','zip','rar','7z'];
+
+  // For common document types, prefer the image/video upload path with
+  // `fl_attachment` but without embedding a filename — this avoids 400
+  // errors caused by special characters in the filename. The code will
+  // still try raw and filename variants as fallbacks.
+  if (docExts.includes(ext)) {
+    return getCloudinaryTransformedUrl(url, 'fl_attachment');
+  }
+
+  // For images/videos, include the desired filename in the attachment transform.
+  const safeName = encodeURIComponent(String(filename || '').replace(/\s+/g, '_'));
+  const transform = `fl_attachment:${safeName}`;
+  return getCloudinaryTransformedUrl(url, transform);
+}
+
+// Generate alternative Cloudinary URL variants to work around 400/DNS issues
+function getCloudinaryVariants(url, filename) {
+  const variants = [];
+  if (!isCloudinaryUrl(url)) return [url];
+
+  try {
+    // 1) Prefer the simple transform without a filename (avoid 400s)
+    variants.push(getCloudinaryTransformedUrl(url, 'fl_attachment'));
+
+    // 2) Filename embedded (encoded) variant
+    variants.push(getCloudinaryDownloadUrl(url, filename));
+
+    // 3) Underscored filename (unencoded)
+    const underscored = (filename || '').replace(/\s+/g, '_');
+    if (underscored) variants.push(getCloudinaryTransformedUrl(url, `fl_attachment:${underscored}`));
+
+    // 4) If resource path is under image/video, try raw resource path variants
+    const parts = getCloudinaryUploadUrl(url);
+    if (parts) {
+      const base = parts.base;
+      const remainder = parts.remainder;
+      const rawBase = base.replace(/\/(image|video)\/upload\/$/, '/raw/upload/');
+      if (rawBase !== base) {
+        variants.push(`${rawBase}fl_attachment/${remainder}`);
+        variants.push(`${rawBase}fl_attachment:${encodeURIComponent((filename||'').replace(/\s+/g,'_'))}/${remainder}`);
       }
     }
+  } catch (e) {
+    console.warn('Error building Cloudinary variants', e);
   }
-  
-  forceDownload(downloadUrl, filename);
+
+  // Ensure uniqueness and filter falsy
+  return Array.from(new Set(variants.filter(Boolean)));
+}
+
+function getCloudinaryPlayableUrl(url) {
+  if (!isCloudinaryUrl(url)) return url;
+  if (/\.mkv(?:\?|$)/i.test(url)) {
+    return getCloudinaryTransformedUrl(url, 'f_mp4');
+  }
+  if (/\.mov(?:\?|$)/i.test(url)) {
+    return getCloudinaryTransformedUrl(url, 'f_mp4');
+  }
+  return url;
+}
+
+// Dedicated PDF download flow: tries proxy, then synchronous open, then fetch->blob,
+// and falls back to the general downloadFile() logic.
+function downloadPdf(url, filename) {
+  const originalUrl = url;
+  let downloadUrl = url;
+
+  try {
+    if (isCloudinaryUrl(url)) {
+      downloadUrl = getCloudinaryDownloadUrl(url, filename);
+    }
+  } catch (error) {
+    console.error('Failed to build Cloudinary PDF download URL:', error);
+    downloadUrl = originalUrl;
+  }
+
+  // If a proxy is configured, use it to avoid CORS and authenticated delivery issues.
+  if (typeof window !== 'undefined' && window.CLOUDINARY_DOWNLOAD_PROXY) {
+    try {
+      const proxyUrl = `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(downloadUrl)}&name=${encodeURIComponent(filename || '')}`;
+      window.open(proxyUrl, '_blank');
+      return;
+    } catch (e) {
+      console.warn('Proxy open failed, falling back:', e);
+    }
+  }
+
+  // Force an immediate download by clicking a hidden anchor.
+  try {
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = filename || 'download.pdf';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return;
+  } catch (err) {
+    console.warn('Immediate PDF download failed, showing direct link notification:', err);
+    try { showDownloadLinkNotification(downloadUrl, filename); } catch (e) { console.error(e); }
+  }
+}
+
+function requestNotificationPermissionIfNeeded() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'default') return;
+
+  Notification.requestPermission().then(permission => {
+    if (permission === 'granted') {
+      showNotification('Notifications enabled for general chat!');
+    } else if (permission === 'denied') {
+      showNotification('Notifications blocked. You can change this in browser settings.', true);
+    }
+  }).catch(error => {
+    console.error('Notification permission request failed:', error);
+  });
+}
+
+// Enhanced download function for Cloudinary URLs
+function downloadFile(url, filename) {
+  let downloadUrl = url;
+  const originalUrl = url;
+  try {
+    if (isCloudinaryUrl(url)) {
+      downloadUrl = getCloudinaryDownloadUrl(url, filename);
+    }
+  } catch (error) {
+    console.error('Error constructing Cloudinary download URL:', error);
+    downloadUrl = originalUrl;
+  }
+
+  // Try to open a popup synchronously so subsequent navigations are allowed
+  // (browsers often block navigation triggered inside async promise chains).
+  let popup = null;
+  try {
+    popup = window.open(downloadUrl, '_blank');
+  } catch (e) {
+    popup = null;
+  }
+
+  if (popup) {
+    // If the popup opened, we're done — the browser will handle the download.
+    return;
+  }
+  // Popup couldn't be opened (likely blocked). Show a notification with a direct link.
+  try {
+    showDownloadLinkNotification(downloadUrl, filename);
+  } catch (e) {
+    // ignore notification errors
+  }
+
+  const fetchAndDownload = (fetchUrl) => {
+    return fetch(fetchUrl, { mode: 'cors' })
+      .then(response => {
+        if (!response.ok) throw new Error('Download failed: ' + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        forceDownload(blobUrl, filename);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      });
+  };
+
+  // Try initial download, then iterate through Cloudinary variants, then original URL
+  const tried = new Set();
+  let tryUrls = [downloadUrl].concat(getCloudinaryVariants(url, filename), [originalUrl]);
+
+  // If a local proxy is configured on the page, route all attempts through it.
+  // Set it in the console before clicking, e.g.:
+  // window.CLOUDINARY_DOWNLOAD_PROXY = 'http://localhost:3000/download'
+  if (typeof window !== 'undefined' && window.CLOUDINARY_DOWNLOAD_PROXY) {
+    tryUrls = tryUrls.map(u => {
+      if (!u) return u;
+      return `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(u)}&name=${encodeURIComponent(filename || '')}`;
+    });
+  }
+
+  // sequentially attempt each URL until one succeeds
+  let sequence = Promise.reject();
+  tryUrls.forEach(u => {
+    if (!u || tried.has(u)) return;
+    tried.add(u);
+    sequence = sequence.catch(() => {
+      console.debug('Attempting download URL:', u);
+      return fetchAndDownload(u);
+    });
+  });
+
+  sequence.catch(error => {
+    console.error('All download attempts failed:', error);
+    try { showDownloadLinkNotification(originalUrl, filename); } catch (e) {}
+  });
 }
 
 function getPlayableVideoUrl(url) {
   const videoUrl = String(url || '');
-  if (!videoUrl.includes('cloudinary.com')) return videoUrl;
+  if (!isCloudinaryUrl(videoUrl)) return videoUrl;
 
-  // Avoid forcing a transform that can fail for some uploaded files.
-  // Use the uploaded URL directly; the browser will fall back gracefully
-  // when the format is unsupported.
-  return videoUrl;
+  return getCloudinaryPlayableUrl(videoUrl);
 }
 
 function getVideoMimeType(url) {
@@ -759,6 +1009,15 @@ function uploadToCloudinary(file) {
     formData.append('file', file);
     formData.append('upload_preset', 'chat_upload');
     formData.append('cloud_name', 'dbjmbf92h');
+    const rawExtensions = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar|7z)$/i;
+    const uploadResourceType = file.type.startsWith('image/')
+      ? 'image'
+      : file.type.startsWith('video/') || file.type.startsWith('audio/')
+        ? 'video'
+        : rawExtensions.test(file.name)
+          ? 'raw'
+          : 'raw';
+    formData.append('resource_type', uploadResourceType);
     
     const xhr = new XMLHttpRequest();
     
@@ -2410,17 +2669,32 @@ function initializeChatApp() {
   function getRecentChatKey(item) {
     if (!item || !item.name) return null;
     const normalizedName = normalizeName(item.name);
-    return normalizedName || null;
+    const userId = item.userId ? String(item.userId).trim() : null;
+    return userId ? `id:${userId}` : `name:${normalizedName}`;
   }
 
   function normalizeRecentChatKey(item) {
+    return getRecentChatKey(item);
+  }
+
+  function findRecentChatKey(map, item) {
     if (!item || !item.name) return null;
-    return normalizeName(item.name);
+    const normalizedName = normalizeName(item.name);
+    const userId = item.userId ? String(item.userId).trim() : null;
+    if (userId) return `id:${userId}`;
+
+    for (const [key, value] of map.entries()) {
+      if (value && value.name && normalizeName(value.name) === normalizedName) {
+        return key;
+      }
+    }
+
+    return `name:${normalizedName}`;
   }
 
   function addRecentChatEntryToMap(map, item) {
     if (!item || !item.name) return;
-    const key = getRecentChatKey(item);
+    const key = findRecentChatKey(map, item);
     if (!key) return;
     const timestamp = Number(item.timestamp) || 0;
     const entry = {
@@ -2430,6 +2704,7 @@ function initializeChatApp() {
       userId: item.userId || null
     };
     const existing = map.get(key);
+
     if (!existing || timestamp > Number(existing.timestamp || 0)) {
       map.set(key, {
         ...entry,
@@ -2470,14 +2745,25 @@ function initializeChatApp() {
 function loadRecentChats() {
   const visits = getRecentChatVisits();
 
-  const query = (userChannel === 'general' || userChannel === 'admin')
-    ? db.ref('chat').limitToLast(1000)
-    : db.ref('chat').orderByChild('channel').equalTo(userChannel).limitToLast(1000);
+  const query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
 
   query.once('value', (snapshot) => {
-    const messages = snapshot.val() || {};
+    const allMessages = snapshot.val() || {};
+    const filteredMessages = {};
 
-    recentChatUsers = buildRecentChatUsers(messages, visits);
+    Object.entries(allMessages).forEach(([key, msg]) => {
+      if (!msg) return;
+      if (userChannel === 'general') {
+        if (msg.channel && msg.channel !== 'general') return;
+      } else if (userChannel === 'admin') {
+        // Admin sees everything
+      } else {
+        if (msg.channel !== userChannel) return;
+      }
+      filteredMessages[key] = msg;
+    });
+
+    recentChatUsers = buildRecentChatUsers(filteredMessages, visits);
     populateRecentChatsList();
   });
 }
@@ -2935,7 +3221,7 @@ async function populateRecentChatsList() {
             <div class="file-name"></div>
             <div class="file-size">${formatFileSize(fileData.size)}</div>
           </div>
-          <button class="download-btn" title="Download" onclick="downloadFile('${escapeHTML(fileData.url)}', '${escapedFileName}'); event.stopPropagation();">
+          <button class="download-btn" title="Download" onclick="(function(url, name){ if (/\.pdf$/i.test(name)) { downloadPdf(url, name); } else { downloadFile(url, name); } })('${escapeHTML(fileData.url)}', '${escapedFileName}'); event.stopPropagation();">
             <i class="fas fa-download"></i>
           </button>
         </div>
@@ -3472,6 +3758,7 @@ async function populateRecentChatsList() {
       e.stopPropagation();
       const fileUrl = fileMessage.dataset.fileUrl;
       const fileName = fileMessage.dataset.fileName;
+      const fileType = fileMessage.dataset.fileType || '';
       
       // For image files, open in media viewer
       if (isImageFile(fileName)) {
@@ -3480,8 +3767,12 @@ async function populateRecentChatsList() {
         openMediaViewer(fileUrl, 'video');
       } else if (isAudioFile(fileName)) {
         openMediaViewer(fileUrl, 'audio');
+      } else if (/\.pdf$/i.test(fileName)) {
+        downloadPdf(fileUrl, fileName);
+      } else if (/\.(docx?|xlsx?|pptx?|txt|csv)$/i.test(fileName)) {
+        downloadFile(fileUrl, fileName);
       } else {
-        // For other files, trigger download
+        // For other unsupported files, still download
         downloadFile(fileUrl, fileName);
       }
     }
@@ -3520,6 +3811,22 @@ async function populateRecentChatsList() {
       source.src = previewUrl;
       source.type = getVideoMimeType(previewUrl);
       mediaElement.appendChild(source);
+
+      // If MKV or unsupported format, add an alert and fallback link
+      if (/\.mkv(?:\?|$)/i.test(previewUrl)) {
+        const mkvInfo = document.createElement('div');
+        mkvInfo.className = 'mkv-info';
+        mkvInfo.style.margin = '12px 0';
+        mkvInfo.style.padding = '10px';
+        mkvInfo.style.background = 'rgba(255,255,255,0.08)';
+        mkvInfo.style.borderRadius = '12px';
+        mkvInfo.innerHTML = `
+          <p style="margin:0 0 8px;color:var(--text-secondary);">
+            MKV playback may not be supported by your browser. The player will try to play it, otherwise use the fallback buttons below.
+          </p>
+        `;
+        mediaViewerContent.appendChild(mkvInfo);
+      }
 
       const fallback = document.createElement('div');
       fallback.className = 'media-fallback';
@@ -3958,17 +4265,8 @@ async function populateRecentChatsList() {
     localStorage.setItem('notifications_enabled', notificationsEnabled);
     await saveSettingsToFirebase();
     
-    // Request notification permission if enabling (for general chat only)
     if (notificationsEnabled && userChannel === 'general') {
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            showNotification('Notifications enabled for general chat!');
-          }
-        });
-      } else if ('Notification' in window && Notification.permission === 'granted') {
-        showNotification('Notifications enabled for general chat!');
-      }
+      requestNotificationPermissionIfNeeded();
     } else {
       showNotification(notificationsEnabled ? 'Notifications enabled' : 'Notifications disabled');
     }
@@ -4214,11 +4512,8 @@ async function populateRecentChatsList() {
     localStorage.setItem('notifications_enabled', notificationsEnabled);
     await saveSettingsToFirebase();
     
-    // Request notification permission if enabling (for general chat only)
     if (notificationsEnabled && userChannel === 'general') {
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+      requestNotificationPermissionIfNeeded();
     }
     
     showNotification(notificationsEnabled ? 'Notifications enabled for general chat' : 'Notifications disabled');
@@ -4477,7 +4772,7 @@ async function populateRecentChatsList() {
   attachBtn.addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar';
+    input.accept = '*/*';  // Allow all file types without restrictions
     input.multiple = false;
     
     input.onchange = async (e) => {
@@ -4485,12 +4780,51 @@ async function populateRecentChatsList() {
       if (!file) return;
       
       try {
-        // Upload file to Cloudinary
-        const result = await uploadToCloudinary(file);
+        // Use Supabase storage for PDFs and raw documents
+        const isPdf = /\.pdf$/i.test(file.name);
+        const isRaw = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar)$/i.test(file.name);
+        const timestamp = Date.now();
+        const fileName = `${userId}_${timestamp}_${file.name.replace(/\s+/g, '_')}`;
+
+        let storageUrl = null;
+        let uploadResult = null;
+        let storageType = 'cloudinary';
+
+        if (isPdf || isRaw) {
+          storageType = 'supabase';
+          const { data, error } = await supabaseClient.storage.from('chat-files').upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+          if (error) {
+            console.warn('Supabase upload failed, falling back to Cloudinary:', error);
+            const result = await uploadToCloudinary(file);
+            uploadResult = result;
+            storageUrl = result.secure_url;
+            storageType = 'cloudinary';
+          } else {
+            uploadResult = data;
+            const publicUrlResult = supabaseClient.storage.from('chat-files').getPublicUrl(fileName);
+            const publicData = publicUrlResult?.data || {};
+            const publicError = publicUrlResult?.error;
+            if (publicError) {
+              throw publicError;
+            }
+
+            storageUrl = publicData?.publicUrl || publicData?.publicURL || null;
+            if (!storageUrl) {
+              throw new Error('Unable to retrieve Supabase public URL');
+            }
+          }
+        } else {
+          const result = await uploadToCloudinary(file);
+          uploadResult = result;
+          storageUrl = result.secure_url;
+        }
         
         // Determine media type
         let mediaType = 'file';
-        
         if (isImageFile(file.name)) {
           mediaType = 'image';
         } else if (isVideoFile(file.name)) {
@@ -4498,8 +4832,7 @@ async function populateRecentChatsList() {
         } else if (isAudioFile(file.name)) {
           mediaType = 'audio';
         }
-        
-        const timestamp = Date.now();
+
         const message = {
           id: `msg_${timestamp}_${userId}`,
           name: username,
@@ -4510,13 +4843,16 @@ async function populateRecentChatsList() {
           channel: userChannel,
           ...(mediaType !== 'file' ? {
             mediaType: mediaType,
-            mediaUrl: result.secure_url
+            mediaUrl: storageUrl
           } : {
             fileData: {
               name: file.name,
               size: file.size,
-              url: result.secure_url,
-              type: file.type
+              url: storageUrl,
+              type: file.type,
+              storage: storageType,
+              publicId: uploadResult?.public_id || '',
+              format: uploadResult?.format || ''
             }
           })
         };

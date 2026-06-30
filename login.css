@@ -72,8 +72,8 @@
 
 body {
   font-family: 'Lato', sans-serif;
-  background: url('login background 123.png') no-repeat center center/cover;
-  height: 100vh;
+  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  min-height: 100vh;
   margin: 0;
   display: flex;
   justify-content: center;
@@ -520,17 +520,24 @@ input[type="submit"] {
 
 .message {
   max-width: 85%;
-  padding: 10px 14px;
+  padding: 10px 14px 28px 14px;
   border-radius: 18px;
   position: relative;
   word-wrap: break-word;
   animation: fadeIn 0.3s ease;
   overflow: visible;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .message.received {
   margin-left: 68px;
+  align-self: flex-start;
+}
+
+.message.sent {
+  align-self: flex-end;
 }
 
 .message__header {
@@ -609,9 +616,12 @@ input[type="submit"] {
 .message__time {
   position: absolute;
   right: 10px;
-  bottom: 10px;
+  bottom: 6px;
   font-size: 11px;
   opacity: 0.8;
+  margin-top: 6px;
+  white-space: nowrap;
+  min-width: 40px;
 }
 
 .message {
@@ -673,6 +683,11 @@ input[type="submit"] {
   font-size: 11px;
   opacity: 0.8;
   margin-left: 0;
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  white-space: nowrap;
+  min-width: 40px;
 }
 
 .message__content {
@@ -2524,7 +2539,9 @@ input[type="search"]::placeholder,
   
   .message {
     max-width: 85%;
-    padding: 12px 15px;
+    padding: 12px 15px 28px 15px;
+    display: flex;
+    flex-direction: column;
   }
   
   .emoji-picker {
@@ -2616,8 +2633,10 @@ input[type="search"]::placeholder,
   
   .message {
     max-width: 90%;
-    padding: 10px 12px;
+    padding: 10px 12px 28px 12px;
     border-radius: 15px;
+    display: flex;
+    flex-direction: column;
   }
   
   .message__content {
