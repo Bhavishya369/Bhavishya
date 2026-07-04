@@ -614,18 +614,16 @@ input[type="submit"] {
 }
 
 .message__time {
-  position: absolute;
-  right: 10px;
-  bottom: 6px;
   font-size: 11px;
   opacity: 0.8;
-  margin-top: 6px;
+  margin-top: 8px;
   white-space: nowrap;
   min-width: 40px;
+  align-self: flex-end;
 }
 
 .message {
-  padding-bottom: 28px;
+  padding-bottom: 18px;
 }
 
 @keyframes fadeIn {
@@ -683,11 +681,10 @@ input[type="submit"] {
   font-size: 11px;
   opacity: 0.8;
   margin-left: 0;
-  position: absolute;
-  right: 10px;
-  bottom: 6px;
+  margin-top: 8px;
   white-space: nowrap;
   min-width: 40px;
+  align-self: flex-end;
 }
 
 .message__content {

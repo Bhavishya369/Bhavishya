@@ -435,16 +435,25 @@ function refreshDateSeparators() {
 
 function refreshMessageGroups() {
   if (!messagesDiv) return;
-  const messages = Array.from(messagesDiv.querySelectorAll('.message'))
-    .filter((el) => !el.classList.contains('welcome'));
+  const children = Array.from(messagesDiv.children)
+    .filter(el => el.classList.contains('message') || el.classList.contains('date-separator'));
 
   let prevSender = null;
   let prevType = null;
+  let prevWasMessage = false;
 
-  messages.forEach((msgEl) => {
+  children.forEach((child) => {
+    if (child.classList.contains('date-separator')) {
+      prevSender = null;
+      prevType = null;
+      prevWasMessage = false;
+      return;
+    }
+
+    const msgEl = child;
     const sender = msgEl.dataset.sender || '';
     const type = msgEl.dataset.type || '';
-    const sameSenderAsPrev = prevSender && normalizeName(prevSender) === normalizeName(sender) && prevType === type;
+    const sameSenderAsPrev = prevWasMessage && prevSender && normalizeName(prevSender) === normalizeName(sender) && prevType === type;
     const avatarWrapper = msgEl.querySelector('.message__avatar-wrapper');
     const senderEl = msgEl.querySelector('.message__sender');
 
@@ -466,6 +475,7 @@ function refreshMessageGroups() {
 
     prevSender = sender;
     prevType = type;
+    prevWasMessage = true;
   });
 }
 
@@ -477,7 +487,7 @@ function getNodeDateLabel(node) {
   return node.dataset?.date || null;
 }
 
-function insertMessageInChronologicalOrder(messageDiv, msg) {
+function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey) {
   const timestamp = Number(msg.timestamp || Date.now());
   const messageDate = formatDateSeparator(timestamp);
 
@@ -487,19 +497,38 @@ function insertMessageInChronologicalOrder(messageDiv, msg) {
   const existingMessages = Array.from(messagesDiv.querySelectorAll('.message'))
     .filter(el => !el.classList.contains('welcome'));
 
-  let insertBefore = null;
-  for (const existing of existingMessages) {
-    const existingTimestamp = Number(existing.dataset.timestamp || 0);
-    if (existingTimestamp > timestamp) {
-      insertBefore = existing;
-      break;
+  if (prevChildKey == null) {
+    // If this is the very first message in order, insert before the first message
+    const firstMessage = existingMessages[0];
+    if (firstMessage) {
+      messagesDiv.insertBefore(messageDiv, firstMessage);
+    } else {
+      messagesDiv.appendChild(messageDiv);
     }
-  }
-
-  if (insertBefore) {
-    messagesDiv.insertBefore(messageDiv, insertBefore);
   } else {
-    messagesDiv.appendChild(messageDiv);
+    const previousNode = document.querySelector(`[data-key="${prevChildKey}"]`);
+    if (previousNode && previousNode.parentNode === messagesDiv) {
+      if (previousNode.nextSibling) {
+        messagesDiv.insertBefore(messageDiv, previousNode.nextSibling);
+      } else {
+        messagesDiv.appendChild(messageDiv);
+      }
+    } else {
+      // If previous node is not found, fall back to inserting by timestamp ordering
+      let insertBefore = null;
+      for (const existing of existingMessages) {
+        const existingTimestamp = Number(existing.dataset.timestamp || 0);
+        if (existingTimestamp > timestamp) {
+          insertBefore = existing;
+          break;
+        }
+      }
+      if (insertBefore) {
+        messagesDiv.insertBefore(messageDiv, insertBefore);
+      } else {
+        messagesDiv.appendChild(messageDiv);
+      }
+    }
   }
 
   refreshDateSeparators();
@@ -3067,14 +3096,14 @@ async function populateRecentChatsList() {
   // For private channels, only show messages with matching channel
   let query;
   if (userChannel === 'general') {
-    // For general chat, get all messages ordered by timestamp and filter client-side
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+    // For general chat, preserve Firebase storage order and filter client-side
+    query = db.ref('chat').orderByKey().limitToLast(1000);
   } else if (userChannel === 'admin') {
-    // Admin in admin panel can see all messages ordered by timestamp
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+    // Admin in admin panel can see all messages in Firebase storage order
+    query = db.ref('chat').orderByKey().limitToLast(1000);
   } else {
-    // For private channels, only get messages with matching channel
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+    // For private channels, use Firebase storage order and filter client-side
+    query = db.ref('chat').orderByKey().limitToLast(1000);
   }
   
   messageListener = query;
@@ -3127,7 +3156,7 @@ async function populateRecentChatsList() {
     }
   });
   
-  messageListener.on('child_added', async (snapshot) => {
+  messageListener.on('child_added', async (snapshot, prevChildKey) => {
     const msg = snapshot.val();
     const key = snapshot.key;
     
@@ -3348,7 +3377,7 @@ async function populateRecentChatsList() {
       }
     }
     
-    insertMessageInChronologicalOrder(messageDiv, msg);
+    insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey);
 
     if (!initialLoadComplete) {
       const shouldCount = userChannel === 'admin' || userChannel === 'general' ? (!msg.channel || msg.channel === 'general') : msg.channel === userChannel;
@@ -5005,7 +5034,33 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+function updateLoginBackground() {
+  const body = document.body;
+  const loginBackground = 'login background 123.png';
+  const fallbackGradient = 'linear-gradient(180deg, #0f172a 0%, #111827 100%)';
+
+  if (!body) return;
+
+  if (navigator.onLine) {
+    body.style.background = `url("${loginBackground}"), ${fallbackGradient}`;
+    body.style.backgroundSize = 'cover';
+    body.style.backgroundRepeat = 'no-repeat';
+    body.style.backgroundPosition = 'center center';
+    body.style.backgroundColor = '#0f172a';
+  } else {
+    body.style.background = fallbackGradient;
+    body.style.backgroundSize = '';
+    body.style.backgroundRepeat = '';
+    body.style.backgroundPosition = '';
+    body.style.backgroundColor = '#0f172a';
+  }
+}
+
+window.addEventListener('online', updateLoginBackground);
+window.addEventListener('offline', updateLoginBackground);
+
 window.addEventListener("DOMContentLoaded", () => {
+  updateLoginBackground();
   // Check if user is already logged in AND session is still valid
   const storedUsername = localStorage.getItem('chat_username');
   const isSessionValid = sessionStorage.getItem('session_valid') === 'true';
