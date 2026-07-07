@@ -65,6 +65,9 @@ let dataArray = null;
 let canvas = null;
 let fabricCanvas = null;
 let isDrawing = false;
+let isEraserActive = false;
+let currentBrushColor = '#ff0000';
+let currentBrushSize = 5;
 let currentEditingImage = null;
 let editHistory = [];
 
@@ -876,6 +879,248 @@ function downloadPdf(url, filename) {
   }
 }
 
+// Dedicated image download function - optimized for speed
+function downloadImage(url, filename) {
+  const originalUrl = url;
+  let downloadUrl = url;
+
+  try {
+    if (isCloudinaryUrl(url)) {
+      downloadUrl = getCloudinaryDownloadUrl(url, filename);
+    }
+  } catch (error) {
+    console.error('Failed to build Cloudinary image download URL:', error);
+    downloadUrl = originalUrl;
+  }
+
+  // Try 1: Direct anchor download (fastest, works for same-origin or CORS-enabled)
+  // Build try list early so we can prefer safe Cloudinary variants for anchor
+  const tried = new Set();
+  let tryUrls = [downloadUrl].concat(getCloudinaryVariants(url, filename), [originalUrl]);
+  if (typeof window !== 'undefined' && window.CLOUDINARY_DOWNLOAD_PROXY) {
+    tryUrls = tryUrls.map(u => {
+      if (!u) return u;
+      return `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(u)}&name=${encodeURIComponent(filename || '')}`;
+    });
+  }
+
+  // Try 1: Direct anchor download on the preferred variant (fastest).
+  try {
+    const preferred = tryUrls.find(u => u && !( /res\.cloudinary\.com/.test(u) && /fl_attachment:[^/]+/.test(u) ));
+    // preferred will skip Cloudinary variants that embed a filename (these can cause 400s)
+    if (preferred) {
+      const a = document.createElement('a');
+      a.href = preferred;
+      a.download = filename || 'download.jpg';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+  } catch (err) {
+    console.debug('Anchor download failed (preferred), trying fetch...');
+  }
+
+  // Try 2: Fetch + blob (slower but more reliable)
+  const fetchAndDownload = (fetchUrl) => {
+    return fetch(fetchUrl, { mode: 'cors' })
+      .then(response => {
+        if (!response.ok) throw new Error('Download failed: ' + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        forceDownload(blobUrl, filename);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      });
+  };
+
+  let sequence = Promise.reject();
+  tryUrls.forEach(u => {
+    if (!u || tried.has(u)) return;
+    tried.add(u);
+    sequence = sequence.catch(() => {
+      console.debug('Attempting image download URL:', u);
+      return fetchAndDownload(u);
+    });
+  });
+
+  sequence.catch(error => {
+    console.error('All image download attempts failed:', error);
+    try { showDownloadLinkNotification(originalUrl, filename); } catch (e) {}
+  });
+}
+
+// Dedicated video download function - optimized for speed
+function downloadVideo(url, filename) {
+  const originalUrl = url;
+  let downloadUrl = url;
+
+  try {
+    if (isCloudinaryUrl(url)) {
+      downloadUrl = getCloudinaryDownloadUrl(url, filename);
+    }
+  } catch (error) {
+    console.error('Failed to build Cloudinary video download URL:', error);
+    downloadUrl = originalUrl;
+  }
+
+  // Try 1: Direct anchor download (fastest)
+  // Build try list early so we can prefer safe Cloudinary variants for anchor
+  const tried = new Set();
+  let tryUrls = [downloadUrl].concat(getCloudinaryVariants(url, filename), [originalUrl]);
+  if (typeof window !== 'undefined' && window.CLOUDINARY_DOWNLOAD_PROXY) {
+    tryUrls = tryUrls.map(u => {
+      if (!u) return u;
+      return `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(u)}&name=${encodeURIComponent(filename || '')}`;
+    });
+  }
+
+  // Try 1: Direct anchor download on the preferred variant (fastest).
+  try {
+    const preferred = tryUrls.find(u => u && !( /res\.cloudinary\.com/.test(u) && /fl_attachment:[^/]+/.test(u) ));
+    // preferred will skip Cloudinary variants that embed a filename (these can cause 400s)
+    if (preferred) {
+      const a = document.createElement('a');
+      a.href = preferred;
+      a.download = filename || 'download.mp4';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+  } catch (err) {
+    console.debug('Anchor download failed (preferred), trying fetch...');
+  }
+
+  // Try 2: Fetch + blob (slower but more reliable)
+  const fetchAndDownload = (fetchUrl) => {
+    return fetch(fetchUrl, { mode: 'cors' })
+      .then(response => {
+        if (!response.ok) throw new Error('Download failed: ' + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        forceDownload(blobUrl, filename);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      });
+  };
+
+  let sequence = Promise.reject();
+  tryUrls.forEach(u => {
+    if (!u || tried.has(u)) return;
+    tried.add(u);
+    sequence = sequence.catch(() => {
+      console.debug('Attempting video download URL:', u);
+      return fetchAndDownload(u);
+    });
+  });
+
+  sequence.catch(error => {
+    console.error('All video download attempts failed:', error);
+    try { showDownloadLinkNotification(originalUrl, filename); } catch (e) {}
+  });
+}
+
+// Dedicated audio download function - optimized for speed
+function downloadAudio(url, filename) {
+  const originalUrl = url;
+  let downloadUrl = url;
+
+  try {
+    if (isCloudinaryUrl(url)) {
+      downloadUrl = getCloudinaryDownloadUrl(url, filename);
+    }
+  } catch (error) {
+    console.error('Failed to build Cloudinary audio download URL:', error);
+    downloadUrl = originalUrl;
+  }
+
+  // Try 1: Direct anchor download (fastest)
+  // Build try list early so we can prefer safe Cloudinary variants for anchor
+  const tried = new Set();
+  let tryUrls = [downloadUrl].concat(getCloudinaryVariants(url, filename), [originalUrl]);
+  if (typeof window !== 'undefined' && window.CLOUDINARY_DOWNLOAD_PROXY) {
+    tryUrls = tryUrls.map(u => {
+      if (!u) return u;
+      return `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(u)}&name=${encodeURIComponent(filename || '')}`;
+    });
+  }
+
+  // Try 1: Direct anchor download on the preferred variant (fastest).
+  try {
+    const preferred = tryUrls.find(u => u && !( /res\.cloudinary\.com/.test(u) && /fl_attachment:[^/]+/.test(u) ));
+    // preferred will skip Cloudinary variants that embed a filename (these can cause 400s)
+    if (preferred) {
+      const a = document.createElement('a');
+      a.href = preferred;
+      a.download = filename || 'download.mp3';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    }
+  } catch (err) {
+    console.debug('Anchor download failed (preferred), trying fetch...');
+  }
+
+  // Try 2: Fetch + blob (slower but more reliable)
+  const fetchAndDownload = (fetchUrl) => {
+    return fetch(fetchUrl, { mode: 'cors' })
+      .then(response => {
+        if (!response.ok) throw new Error('Download failed: ' + response.status);
+        return response.blob();
+      })
+      .then(blob => {
+        const blobUrl = window.URL.createObjectURL(blob);
+        forceDownload(blobUrl, filename);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+      });
+  };
+
+  let sequence = Promise.reject();
+  tryUrls.forEach(u => {
+    if (!u || tried.has(u)) return;
+    tried.add(u);
+    sequence = sequence.catch(() => {
+      console.debug('Attempting audio download URL:', u);
+      return fetchAndDownload(u);
+    });
+  });
+
+  sequence.catch(error => {
+    console.error('All audio download attempts failed:', error);
+    try { showDownloadLinkNotification(originalUrl, filename); } catch (e) {}
+  });
+}
+
+// Download profile function - downloads profile picture or profile info
+function downloadProfile(userName, profileImage) {
+  if (profileImage) {
+    // Download profile picture
+    const ext = profileImage.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] || 'jpg';
+    downloadImage(profileImage, `profile_${userName}.${ext}`);
+    showNotification(`Downloading profile picture for ${userName}...`);
+  } else {
+    // Download profile info as JSON if no image
+    const profileData = {
+      username: userName,
+      downloadedAt: new Date().toISOString(),
+      source: 'Chat Application'
+    };
+    const dataStr = JSON.stringify(profileData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const blobUrl = window.URL.createObjectURL(blob);
+    forceDownload(blobUrl, `profile_${userName}.json`);
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+    showNotification(`Downloaded profile info for ${userName}`);
+  }
+}
+
 function requestNotificationPermissionIfNeeded() {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'default') return;
@@ -1280,7 +1525,24 @@ async function sendVoiceMessage(audioBlob) {
 // Initialize image editor with drawing capabilities
 function initImageEditor(imageUrl) {
   canvas = document.getElementById('editorCanvas');
-  fabricCanvas = new fabric.Canvas('editorCanvas');
+  fabricCanvas = new fabric.Canvas('editorCanvas', {
+    enableRetinaScaling: false,
+    preserveObjectStacking: true
+  });
+  
+  const editorContainer = document.querySelector('.editor-canvas-container');
+  const recalcEditorOffset = () => {
+    if (fabricCanvas && typeof fabricCanvas.calcOffset === 'function') {
+      fabricCanvas.calcOffset();
+    }
+  };
+  
+  if (editorContainer) {
+    editorContainer.addEventListener('scroll', recalcEditorOffset);
+    editorContainer.addEventListener('mouseup', recalcEditorOffset);
+    editorContainer.addEventListener('touchend', recalcEditorOffset);
+    window.addEventListener('resize', recalcEditorOffset);
+  }
   
   // Load image
   fabric.Image.fromURL(imageUrl, function(img) {
@@ -1293,15 +1555,37 @@ function initImageEditor(imageUrl) {
       scale = Math.min(maxWidth / img.width, maxHeight / img.height);
     }
     
-    img.scale(scale);
-    fabricCanvas.add(img);
-    fabricCanvas.centerObject(img);
-    fabricCanvas.setDimensions({
-      width: img.width * scale,
-      height: img.height * scale
+    // Calculate target canvas pixel dimensions and set them BEFORE adding objects
+    const targetWidth = Math.max(1, Math.round(img.width * scale));
+    const targetHeight = Math.max(1, Math.round(img.height * scale));
+
+    try {
+      fabricCanvas.setDimensions({ width: targetWidth, height: targetHeight });
+      fabricCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+
+      if (canvas) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        canvas.style.width = targetWidth + 'px';
+        canvas.style.height = targetHeight + 'px';
+        canvas.style.display = 'block';
+      }
+    } catch (e) {
+      console.warn('Failed to set canvas pixel dimensions', e);
+    }
+
+    fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas), {
+      originX: 'left',
+      originY: 'top',
+      left: 0,
+      top: 0,
+      scaleX: scale,
+      scaleY: scale
     });
-    
-    // Save initial state
+
+    fabricCanvas.renderAll();
+    if (fabricCanvas.calcOffset) fabricCanvas.calcOffset();
+
     editHistory = [fabricCanvas.toJSON()];
     currentEditingImage = imageUrl;
     
@@ -1324,6 +1608,7 @@ function initImageEditor(imageUrl) {
 
 // Activate brush tool for drawing
 function activateBrushTool() {
+  isEraserActive = false;
   fabricCanvas.isDrawingMode = true;
   fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
   updateBrush();
@@ -1334,56 +1619,36 @@ function activateBrushTool() {
   document.getElementById('eraserTool').classList.remove('active');
 }
 
-// Update brush settings
-function updateBrush() {
-  if (fabricCanvas.isDrawingMode && fabricCanvas.freeDrawingBrush) {
-    fabricCanvas.freeDrawingBrush.width = parseInt(document.getElementById('brushSize').value);
-    fabricCanvas.freeDrawingBrush.color = document.getElementById('brushColor').value;
-  }
+// Activate eraser mode with a brush-based erase stroke
+function activateEraserTool() {
+  isEraserActive = true;
+  fabricCanvas.isDrawingMode = true;
+  const eraserBrush = new fabric.PencilBrush(fabricCanvas);
+  eraserBrush.globalCompositeOperation = 'destination-out';
+  eraserBrush.width = currentBrushSize;
+  fabricCanvas.freeDrawingBrush = eraserBrush;
+  updateBrush();
+
+  document.getElementById('brushTool').classList.remove('active');
+  document.getElementById('textTool').classList.remove('active');
+  document.getElementById('eraserTool').classList.add('active');
 }
 
-// Initialize video editor with trim functionality
-function initVideoEditor(videoUrl) {
-  const videoPlayer = document.getElementById('videoEditorPlayer');
-  videoPlayer.src = videoUrl;
-  currentEditingVideo = videoUrl;
-  
-  videoPlayer.addEventListener('loadedmetadata', function() {
-    videoDuration = videoPlayer.duration;
-    const trimEnd = document.getElementById('trimEnd');
-    const maxValue = Math.floor(videoDuration);
-    trimEnd.max = maxValue;
-    trimEnd.value = maxValue;
-    document.getElementById('trimEndTime').textContent = formatTime(videoDuration);
-    
-    // Set trim start max to video duration - 1 second
-    document.getElementById('trimStart').max = Math.max(0, maxValue - 1);
-  });
-  
-  // Setup trim controls
-  const trimStart = document.getElementById('trimStart');
-  const trimEnd = document.getElementById('trimEnd');
-  const trimStartTime = document.getElementById('trimStartTime');
-  const trimEndTime = document.getElementById('trimEndTime');
-  const videoPlayerElem = document.getElementById('videoEditorPlayer');
-  
-  trimStart.addEventListener('input', function() {
-    const time = parseInt(this.value);
-    trimStartTime.textContent = formatTime(time);
-    if (time < parseInt(trimEnd.value)) {
-      videoPlayerElem.currentTime = time;
+// Update brush settings
+function updateBrush() {
+  if (!fabricCanvas || !fabricCanvas.freeDrawingBrush) return;
+  currentBrushSize = parseInt(document.getElementById('brushSize').value, 10);
+  fabricCanvas.freeDrawingBrush.width = currentBrushSize;
+
+  if (isEraserActive) {
+    fabricCanvas.freeDrawingBrush.globalCompositeOperation = 'destination-out';
+  } else {
+    currentBrushColor = document.getElementById('brushColor').value;
+    fabricCanvas.freeDrawingBrush.color = currentBrushColor;
+    if (fabricCanvas.freeDrawingBrush.globalCompositeOperation) {
+      fabricCanvas.freeDrawingBrush.globalCompositeOperation = 'source-over';
     }
-  });
-  
-  trimEnd.addEventListener('input', function() {
-    const time = parseInt(this.value);
-    trimEndTime.textContent = formatTime(time);
-    if (time > parseInt(trimStart.value)) {
-      if (videoPlayerElem.currentTime > time) {
-        videoPlayerElem.currentTime = time - 1;
-      }
-    }
-  });
+  }
 }
 
 // Search messages
@@ -1419,10 +1684,6 @@ function searchMessages(query) {
   
   displaySearchResults(query);
   document.getElementById('searchClearBtn').style.display = 'block';
-  
-  if (searchResults.length > 0) {
-    navigateToSearchResult(0);
-  }
 }
 
 // Display search results
@@ -1437,9 +1698,12 @@ function displaySearchResults(query) {
   
   searchResults.forEach((result, index) => {
     const message = result.element;
-    const content = message.querySelector('.message__content').textContent;
-    const sender = message.querySelector('.message__sender').textContent;
-    const time = message.querySelector('.message__time').textContent;
+    const contentEl = message.querySelector('.message__content');
+    const senderEl = message.querySelector('.message__sender');
+    const timeEl = message.querySelector('.message__time');
+    const content = contentEl ? contentEl.textContent : '';
+    const sender = senderEl ? senderEl.textContent : 'Unknown';
+    const time = timeEl ? timeEl.textContent : '';
     
     // Highlight search term
     let highlightedContent = content;
@@ -1493,6 +1757,24 @@ function navigateToSearchResult(index) {
       item.style.backgroundColor = '';
     }
   });
+
+  // Close the search UI so user is taken to the message
+  try {
+    const searchContainerEl = document.getElementById('searchContainer');
+    const searchOverlayEl = document.getElementById('searchOverlay');
+    if (searchContainerEl) searchContainerEl.classList.remove('show');
+    if (searchOverlayEl) {
+      setTimeout(() => { searchOverlayEl.style.display = 'none'; }, 250);
+    }
+  } catch (e) {
+    console.warn('Failed to close search UI', e);
+  }
+
+  // Focus messages container to ensure keyboard/scroll context
+  try {
+    const msgs = document.getElementById('messages');
+    if (msgs) msgs.focus();
+  } catch (e) {}
 }
 
 // Fetch link preview data
@@ -1793,6 +2075,14 @@ function initializeChatApp() {
   const profilePreviewAvatar = document.getElementById('profilePreviewAvatar');
   const profilePreviewName = document.getElementById('profilePreviewName');
   const profilePreviewStatus = document.getElementById('profilePreviewStatus');
+
+  // Wire top user avatar click to open profile preview
+  if (userAvatar) {
+    userAvatar.style.cursor = 'pointer';
+    userAvatar.addEventListener('click', () => {
+      openProfilePreview(username || 'You', userProfileImage || null);
+    });
+  }
   
   // Image editor elements
   const imageEditorModal = document.getElementById('imageEditorModal');
@@ -3870,7 +4160,7 @@ async function populateRecentChatsList() {
       fallback.querySelector('.media-download-fallback').addEventListener('click', () => {
         const extMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
         const ext = extMatch ? extMatch[1].toLowerCase() : 'mp4';
-        downloadFile(url, `video_${Date.now()}.${ext}`);
+        downloadVideo(url, `video_${Date.now()}.${ext}`);
       });
       fallback.querySelector('.media-open-tab').addEventListener('click', () => {
         window.open(url, '_blank');
@@ -3930,6 +4220,13 @@ async function populateRecentChatsList() {
     profilePreviewStatus.textContent = profileImage
       ? 'Profile image available'
       : 'No profile image available';
+    
+    // Store profile data for download button
+    const downloadBtn = document.getElementById('profileDownloadBtn');
+    if (downloadBtn) {
+      downloadBtn.onclick = () => downloadProfile(userName, profileImage);
+    }
+    
     profilePreview.style.display = 'flex';
   }
 
@@ -3966,15 +4263,17 @@ async function populateRecentChatsList() {
       if (mediaType === 'img') {
         extension = 'jpg';
         filename = `image_${timestamp}.${extension}`;
+        downloadImage(url, filename);
       } else if (mediaType === 'video') {
         extension = 'mp4';
         filename = `video_${timestamp}.${extension}`;
+        downloadVideo(url, filename);
       } else if (mediaType === 'audio') {
         extension = 'mp3';
         filename = `audio_${timestamp}.${extension}`;
+        downloadAudio(url, filename);
       }
       
-      downloadFile(url, filename);
       showNotification('Download started!');
     }
   });
@@ -3986,11 +4285,11 @@ async function populateRecentChatsList() {
       mediaViewer.style.display = 'none';
       
       if (mediaElement.tagName === 'IMG') {
-        initImageEditor(mediaElement.src);
         imageEditorModal.style.display = 'flex';
+        requestAnimationFrame(() => initImageEditor(mediaElement.src));
       } else if (mediaElement.tagName === 'VIDEO') {
-        initVideoEditor(mediaElement.src);
         videoEditorModal.style.display = 'flex';
+        requestAnimationFrame(() => initVideoEditor(mediaElement.src));
       }
     }
   });
@@ -4067,14 +4366,7 @@ async function populateRecentChatsList() {
   });
 
   eraserToolBtn.addEventListener('click', () => {
-    fabricCanvas.isDrawingMode = true;
-    fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
-    fabricCanvas.freeDrawingBrush.width = parseInt(brushSizeSlider.value);
-    fabricCanvas.freeDrawingBrush.color = '#ffffff'; // White for eraser
-    
-    brushToolBtn.classList.remove('active');
-    textToolBtn.classList.remove('active');
-    eraserToolBtn.classList.add('active');
+    activateEraserTool();
   });
 
   brushColorPicker.addEventListener('input', (e) => {
@@ -4164,6 +4456,21 @@ async function populateRecentChatsList() {
 
   searchInput.addEventListener('input', () => {
     searchMessages(searchInput.value);
+  });
+  
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (searchResults.length > 0) {
+        if (currentSearchIndex < 0) {
+          navigateToSearchResult(0);
+        } else if (currentSearchIndex < searchResults.length - 1) {
+          navigateToSearchResult(currentSearchIndex + 1);
+        } else {
+          navigateToSearchResult(0);
+        }
+      }
+      e.preventDefault();
+    }
   });
 
   searchClearBtn.addEventListener('click', () => {

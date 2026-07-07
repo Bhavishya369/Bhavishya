@@ -1988,6 +1988,35 @@ input[type="search"]::placeholder,
   line-height: 1.5;
 }
 
+.profile-download-btn {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 10px 24px;
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 8px;
+}
+
+.profile-download-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(124, 58, 237, 0.3);
+}
+
+.profile-download-btn:active {
+  transform: translateY(0);
+}
+
+.profile-download-btn i {
+  margin-right: 6px;
+}
+
 /* Image Editor Modal */
 .image-editor-modal {
   position: fixed;
@@ -2018,11 +2047,10 @@ input[type="search"]::placeholder,
   align-items: center;
   padding: 20px;
   overflow: auto;
-}
-
-#editorCanvas {
-  max-width: 100%;
-  max-height: 100%;
+   min-height: 0;
+  height: auto; /* height is controlled by JS to match internal canvas size */
+  max-width: none;
+  max-height: none;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
   border-radius: 10px;
   background: white;
