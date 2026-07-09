@@ -501,6 +501,41 @@ input[type="submit"] {
   flex-direction: column;
   gap: 10px;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+.scroll-to-bottom-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 86px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-color);
+  color: var(--text-primary);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+  cursor: pointer;
+  z-index: 20;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.scroll-to-bottom-btn.show {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.scroll-to-bottom-btn.hidden {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.scroll-to-bottom-btn i {
+  font-size: 14px;
 }
 
 .date-separator {
@@ -2562,6 +2597,11 @@ input[type="search"]::placeholder,
     display: none;
   }
   
+  .scroll-to-bottom-btn {
+    bottom: 86px;
+    right: 16px;
+  }
+  
   .message {
     max-width: 85%;
     padding: 12px 15px 28px 15px;
@@ -2856,6 +2896,8 @@ input[type="search"]::placeholder,
     display: flex;
     align-items: center;
     justify-content: center;
+    bottom: 144px;
+    right: 20px;
   }
   
   .chat__sidebar.mobile-open {

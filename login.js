@@ -84,9 +84,9 @@ let emojiMode = 'Emoji';
 let activeEmojiGroup = 'Smileys & Emotion';
 let emojiData = [];
 let emojiSearchTimeout = null;
-let tenorCurrentQuery = '';
-let tenorNextPos = null;
-let tenorIsLoading = false;
+let giphyCurrentQuery = '';
+let giphyOffset = 0;
+let giphyIsLoading = false;
 
 // Video edit state
 let selectedVideoFile = null;
@@ -1998,6 +1998,7 @@ function initializeChatApp() {
   const emojiGrid = document.getElementById('emojiGrid');
   const themeSwitch = document.getElementById('themeSwitch');
   const typingIndicator = document.getElementById('typingIndicator');
+  let isAtBottom = true;
   const typingUserSpan = document.getElementById('typingUser');
   const onlineUsersList = document.getElementById('onlineUsers');
   recentChatsList = document.getElementById('recentChats');
@@ -2049,6 +2050,7 @@ function initializeChatApp() {
   const adminChannelControls = document.getElementById('adminChannelControls');
   const joinChannelInput = document.getElementById('joinChannelInput');
   const joinChannelBtn = document.getElementById('joinChannelBtn');
+  const scrollToBottomBtn = document.getElementById('scrollToBottomBtn');
   
   // Voice recording elements
   const voiceRecording = document.getElementById('voiceRecording');
@@ -2248,6 +2250,16 @@ function initializeChatApp() {
     await saveSettingsToFirebase();
   });
 
+  if (messagesDiv && scrollToBottomBtn) {
+    messagesDiv.addEventListener('scroll', updateScrollToBottomButton);
+    scrollToBottomBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      scrollMessagesToBottom();
+    });
+    updateScrollToBottomButton();
+  }
+
   // Mobile sidebar toggle
   let isDraggingSidebarToggle = false;
   let sidebarDragMoved = false;
@@ -2428,12 +2440,12 @@ function initializeChatApp() {
         emojiGridEl.appendChild(emojiItem);
       });
     } else {
-      tenorCurrentQuery = searchTerm;
-      tenorNextPos = null;
+      giphyCurrentQuery = searchTerm;
+      giphyOffset = 0;
       emojiGridEl.innerHTML = '<div class="emoji-loading">Loading...</div>';
       removeEmojiLoadMoreButton();
-      fetchTenorContent(searchTerm, emojiMode).then(({ items, next }) => {
-        tenorNextPos = next;
+      fetchGiphyContent(searchTerm, emojiMode, 0).then(({ items, nextOffset }) => {
+        giphyOffset = nextOffset;
         emojiGridEl.innerHTML = '';
         if (!items.length) {
           emojiGridEl.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">No results found. Try another search.</div>';
@@ -2456,11 +2468,11 @@ function initializeChatApp() {
           });
           emojiGridEl.appendChild(item);
         });
-        if (tenorNextPos) {
+        if (giphyOffset !== null) {
           createEmojiLoadMoreButton();
         }
       }).catch((error) => {
-        console.error('Tenor fetch failed:', error);
+        console.error('Giphy fetch failed:', error);
         emojiGridEl.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Unable to load GIFs or stickers.</div>';
       });
     }
@@ -2483,7 +2495,7 @@ function initializeChatApp() {
       loadMore.id = 'emojiLoadMoreButton';
       loadMore.className = 'emoji-load-more';
       loadMore.textContent = 'Load more';
-      loadMore.addEventListener('click', loadMoreTenorResults);
+      loadMore.addEventListener('click', loadMoreGiphyResults);
       document.getElementById('emojiGrid').after(loadMore);
     }
   }
@@ -2495,9 +2507,9 @@ function initializeChatApp() {
     }
   }
 
-  async function loadMoreTenorResults() {
-    if (!tenorNextPos || tenorIsLoading) return;
-    tenorIsLoading = true;
+  async function loadMoreGiphyResults() {
+    if (giphyOffset === null || giphyIsLoading) return;
+    giphyIsLoading = true;
     const emojiGridEl = document.getElementById('emojiGrid');
     const loadMore = document.getElementById('emojiLoadMoreButton');
     if (loadMore) {
@@ -2505,8 +2517,8 @@ function initializeChatApp() {
     }
 
     try {
-      const { items, next } = await fetchTenorContent(tenorCurrentQuery, emojiMode, tenorNextPos);
-      tenorNextPos = next;
+      const { items, nextOffset } = await fetchGiphyContent(giphyCurrentQuery, emojiMode, giphyOffset);
+      giphyOffset = nextOffset;
       items.forEach(({ url }) => {
         const item = document.createElement('div');
         item.className = 'emoji-item media-item';
@@ -2524,15 +2536,15 @@ function initializeChatApp() {
         });
         emojiGridEl.appendChild(item);
       });
-      if (!tenorNextPos) {
+      if (giphyOffset === null) {
         removeEmojiLoadMoreButton();
       }
     } catch (error) {
-      console.error('Failed to load more Tenor results:', error);
+      console.error('Failed to load more Giphy results:', error);
     } finally {
-      tenorIsLoading = false;
+      giphyIsLoading = false;
       if (loadMore) {
-        loadMore.textContent = tenorNextPos ? 'Load more' : 'No more results';
+        loadMore.textContent = giphyOffset !== null ? 'Load more' : 'No more results';
       }
     }
   }
@@ -2542,58 +2554,49 @@ function initializeChatApp() {
     document.querySelectorAll('.emoji-category').forEach((btn) => {
       btn.classList.toggle('active', btn.title === group);
     });
-    tenorCurrentQuery = '';
-    tenorNextPos = null;
+    giphyCurrentQuery = '';
+    giphyOffset = 0;
     renderEmojiPicker(document.getElementById('emojiSearchInput').value.trim());
   }
 
-  async function fetchTenorContent(query, mode, position = null) {
-    const apiKey = 'LIVDSRZULELA';
-    const searchQuery = query || (mode === 'GIF' ? 'trending' : 'trending stickers');
-    let url = `https://api.tenor.com/v1/search?q=${encodeURIComponent(searchQuery)}&key=${apiKey}&limit=24&media_filter=minimal&contentfilter=high&locale=en_US`;
-    if (position) {
-      url += `&pos=${encodeURIComponent(position)}`;
+  async function fetchGiphyContent(query, mode, offset = 0) {
+    const apiKey = 'vOZ9DUETgO57IEWcNxTNjpDVMrZC4G4I';
+    const isGifMode = mode === 'GIF';
+    const hasQuery = query && query.trim().length > 0;
+    const baseUrl = isGifMode ? 'https://api.giphy.com/v1/gifs' : 'https://api.giphy.com/v1/stickers';
+    const endpoint = hasQuery ? 'search' : 'trending';
+    let url = `${baseUrl}/${endpoint}?api_key=${apiKey}&limit=24&offset=${offset}&rating=pg-13`;
+    if (hasQuery) {
+      url += `&q=${encodeURIComponent(query.trim())}&lang=en`;
     }
 
     const response = await fetch(url);
     if (!response.ok) {
-      throw new Error(`Tenor API error: ${response.status}`);
+      throw new Error(`Giphy API error: ${response.status}`);
     }
     const data = await response.json();
-    const results = Array.isArray(data.results) ? data.results : [];
-    const next = data.next || null;
+    const results = Array.isArray(data.data) ? data.data : [];
+    const pagination = data.pagination || {};
+    const nextOffset = typeof pagination.total_count === 'number' && typeof pagination.count === 'number'
+      ? offset + pagination.count
+      : null;
+    const hasMore = typeof pagination.total_count === 'number'
+      ? nextOffset < pagination.total_count
+      : results.length === 24;
 
     const items = results.map(item => {
-      const media = item.media && item.media[0] ? item.media[0] : null;
-      const formats = item.media_formats || {};
-      const isGifMode = mode === 'GIF';
-      const imageCandidates = [
-        formats?.mediumgif?.url,
-        formats?.gif?.url,
-        formats?.tinygif?.url,
-        formats?.nanogif?.url,
-        formats?.png?.url,
-        media?.gif?.url,
-        media?.tinygif?.url,
-        media?.nanogif?.url
-      ].filter(url => typeof url === 'string' && url.length > 0);
-      const videoCandidates = [
-        formats?.nanomp4?.url,
-        formats?.tinywebm?.url,
-        formats?.mp4?.url,
-        media?.mp4?.url,
-        media?.tinywebm?.url,
-        media?.nanomp4?.url
-      ].filter(url => typeof url === 'string' && url.length > 0);
-      const candidateList = [...imageCandidates, ...videoCandidates];
-      const urlToUse = candidateList.find(url => typeof url === 'string' && url.length > 0);
-      const type = 'image';
-
+      const images = item.images || {};
+      const urlToUse = images.fixed_width?.url
+        || images.fixed_width_downsampled?.url
+        || images.downsized_medium?.url
+        || images.downsized?.url
+        || images.original?.url
+        || images.preview_gif?.url;
       if (!urlToUse) return null;
-      return { url: urlToUse, type };
+      return { url: urlToUse, type: 'image' };
     }).filter(entry => entry && entry.url);
 
-    return { items, next };
+    return { items, nextOffset: hasMore ? nextOffset : null };
   }
 
   function sendGifMessage(url, type = 'image') {
@@ -3410,8 +3413,25 @@ async function populateRecentChatsList() {
         if (messagesDiv) {
           messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
+        if (scrollToBottomBtn) {
+          scrollToBottomBtn.classList.remove('show');
+          scrollToBottomBtn.classList.add('hidden');
+        }
       });
     });
+  }
+
+  function updateScrollToBottomButton() {
+    if (!messagesDiv || !scrollToBottomBtn) return;
+    const nearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight <= 80;
+    isAtBottom = nearBottom;
+    if (!nearBottom) {
+      scrollToBottomBtn.classList.add('show');
+      scrollToBottomBtn.classList.remove('hidden');
+    } else {
+      scrollToBottomBtn.classList.remove('show');
+      scrollToBottomBtn.classList.add('hidden');
+    }
   }
 
   function scheduleRecentChatsReload() {
@@ -3740,9 +3760,10 @@ async function populateRecentChatsList() {
     }
     
     // Scroll to bottom if new message is from current user or if at bottom
-    if (isOwnMessage || messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight < 100) {
+    if (isOwnMessage || isAtBottom) {
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
+    updateScrollToBottomButton();
     
     // Send notification for new messages in general chat (only if not own message)
     if (!isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
