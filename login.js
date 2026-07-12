@@ -28,6 +28,9 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+let messaging = null;
+// Web Push (VAPID) public key from Firebase console
+const VAPID_PUBLIC_KEY = 'BBP0WkAMgKGgVKHzEp-zU4G_tfr6kgo5G6H-fMyil-05h7JRF0PGzjchut41Wo5OG_Dd4umoaVRlEcIwvUSXrh8';
 
 // Supabase configuration
 const supabaseUrl = 'https://aouzfetjvfmvqrnswseq.supabase.co';
@@ -62,14 +65,16 @@ let analyser = null;
 let dataArray = null;
 
 // Image editor variables
-let canvas = null;
-let fabricCanvas = null;
 let isDrawing = false;
 let isEraserActive = false;
-let currentBrushColor = '#ff0000';
+let currentBrushColor = '#4dff00';
 let currentBrushSize = 5;
 let currentEditingImage = null;
+let currentEditingImageFormat = 'png';
 let editHistory = [];
+let cropMode = false;
+let cropStart = null;
+let cropRect = null;
 
 // Video editor variables
 let currentEditingVideo = null;
@@ -99,8 +104,103 @@ let ffmpegLoading = false;
 let linkPreviewData = null;
 let linkPreviewTimer = null;
 
+// Image editor brush functions (HTML5 Canvas)
+function activateBrushTool() {
+  isEraserActive = false;
+  
+  const canvas = document.getElementById('drawingCanvas');
+  const ctx = canvas ? canvas.getContext('2d') : null;
+  
+  if (ctx) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = currentBrushColor;
+    ctx.lineWidth = currentBrushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  
+  const brushBtn = document.getElementById('brushTool');
+  const textBtn = document.getElementById('textTool');
+  const eraserBtn = document.getElementById('eraserTool');
+  const textControls = document.getElementById('textControls');
+  if (brushBtn) brushBtn.classList.add('active');
+  if (textBtn) textBtn.classList.remove('active');
+  if (eraserBtn) eraserBtn.classList.remove('active');
+  if (textControls) textControls.style.display = 'none';
+}
+
+function activateTextTool() {
+  isEraserActive = false;
+  
+  const canvas = document.getElementById('drawingCanvas');
+  const ctx = canvas ? canvas.getContext('2d') : null;
+  
+  if (ctx) {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.lineWidth = currentBrushSize;
+    ctx.strokeStyle = currentBrushColor;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  
+  const brushBtn = document.getElementById('brushTool');
+  const textBtn = document.getElementById('textTool');
+  const eraserBtn = document.getElementById('eraserTool');
+  const textControls = document.getElementById('textControls');
+  if (brushBtn) brushBtn.classList.remove('active');
+  if (textBtn) textBtn.classList.add('active');
+  if (eraserBtn) eraserBtn.classList.remove('active');
+  if (textControls) textControls.style.display = 'flex';
+}
+
+function activateEraserTool() {
+  isEraserActive = true;
+  
+  const canvas = document.getElementById('drawingCanvas');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+    ctx.lineWidth = currentBrushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  
+  const brushBtn = document.getElementById('brushTool');
+  const textBtn = document.getElementById('textTool');
+  const eraserBtn = document.getElementById('eraserTool');
+  const textControls = document.getElementById('textControls');
+  if (brushBtn) brushBtn.classList.remove('active');
+  if (textBtn) textBtn.classList.remove('active');
+  if (eraserBtn) eraserBtn.classList.add('active');
+  if (textControls) textControls.style.display = 'none';
+}
+
+function updateBrush() {
+  currentBrushSize = parseInt(document.getElementById('brushSize')?.value || 5, 10);
+  currentBrushColor = document.getElementById('brushColor')?.value || '#ff0000';
+  
+  const canvas = document.getElementById('drawingCanvas');
+  const ctx = canvas ? canvas.getContext('2d') : null;
+  
+  if (ctx) {
+    ctx.lineWidth = currentBrushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (isEraserActive) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = currentBrushColor;
+    }
+  }
+}
+
 // Settings variables
 let notificationsEnabled = false;
+let betterUiEnabled = false;
+let secretNotificationSent = false;
 let userProfileImage = null;
 let chatBackground = 'default';
 let notificationPermission = false;
@@ -121,6 +221,7 @@ async function saveSettingsToFirebase() {
       chatBackground: chatBackground,
       chatBackgroundCustom: localStorage.getItem('chat_background_custom') || '',
       notificationsEnabled: notificationsEnabled,
+      betterUiEnabled: betterUiEnabled,
       theme: localStorage.getItem('theme') || 'dark',
       lastUpdated: firebase.database.ServerValue.TIMESTAMP
     };
@@ -181,13 +282,36 @@ async function loadSettingsFromFirebase() {
         }
         if (notificationsEnabled && 'Notification' in window && Notification.permission === 'default') {
           requestNotificationPermissionIfNeeded();
+        } else if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+          setupFirebaseMessaging();
+        }
+      }
+
+      // Load Better UI setting
+      if (settings.hasOwnProperty('betterUiEnabled')) {
+        betterUiEnabled = settings.betterUiEnabled;
+        localStorage.setItem('better_ui_enabled', betterUiEnabled.toString());
+        const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
+        if (menuBetterUiToggle) {
+          menuBetterUiToggle.checked = betterUiEnabled;
+        }
+        applyBetterUi(betterUiEnabled);
+      } else {
+        const storedBetterUi = localStorage.getItem('better_ui_enabled');
+        if (storedBetterUi !== null) {
+          betterUiEnabled = storedBetterUi === 'true';
+          applyBetterUi(betterUiEnabled);
         }
       }
       
       // Load theme
       if (settings.theme) {
         localStorage.setItem('theme', settings.theme);
-        document.documentElement.className = `--${settings.theme}-theme`;
+        document.documentElement.classList.remove('--dark-theme', '--light-theme');
+        document.documentElement.classList.add(`--${settings.theme}-theme`);
+        if (betterUiEnabled) {
+          document.documentElement.classList.add('better-ui');
+        }
         const themeSwitch = document.getElementById('themeSwitch');
         if (themeSwitch) {
           themeSwitch.checked = settings.theme === 'dark';
@@ -253,7 +377,11 @@ function setupSettingsSyncListener() {
           // Theme
           if (settings.theme && settings.theme !== localStorage.getItem('theme')) {
             localStorage.setItem('theme', settings.theme);
-            document.documentElement.className = `--${settings.theme}-theme`;
+            document.documentElement.classList.remove('--dark-theme', '--light-theme');
+            document.documentElement.classList.add(`--${settings.theme}-theme`);
+            if (betterUiEnabled) {
+              document.documentElement.classList.add('better-ui');
+            }
             const themeSwitch = document.getElementById('themeSwitch');
             if (themeSwitch) {
               themeSwitch.checked = settings.theme === 'dark';
@@ -536,6 +664,10 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey) {
 
   refreshDateSeparators();
   refreshMessageGroups();
+  
+  // Setup reactions for this message
+  setupReactionOnMessage(messageDiv);
+  loadMessageReactions(messageDiv.dataset.key);
 }
 
 // Format time in MM:SS format
@@ -1128,12 +1260,71 @@ function requestNotificationPermissionIfNeeded() {
   Notification.requestPermission().then(permission => {
     if (permission === 'granted') {
       showNotification('Notifications enabled for general chat!');
+      setupFirebaseMessaging();
     } else if (permission === 'denied') {
       showNotification('Notifications blocked. You can change this in browser settings.', true);
     }
   }).catch(error => {
     console.error('Notification permission request failed:', error);
   });
+}
+
+async function saveFcmTokenToFirebase(token) {
+  if (!username || !token) return;
+  try {
+    await db.ref(`users/${username}/fcmToken`).set(token);
+    localStorage.setItem('fcm_token', token);
+  } catch (error) {
+    console.error('Error saving FCM token to Firebase:', error);
+  }
+}
+
+async function setupFirebaseMessaging() {
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  if (typeof firebase.messaging !== 'function') return;
+
+  try {
+    // Register service worker from site root to ensure scope is correct
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    console.log('Service worker registered:', registration.scope);
+    messaging = firebase.messaging();
+    if (typeof messaging.useServiceWorker === 'function') {
+      messaging.useServiceWorker(registration);
+    }
+
+    messaging.onMessage((payload) => {
+      if (payload?.notification) {
+        new Notification(payload.notification.title || 'Secret Messenger', {
+          body: payload.notification.body || 'update app for a better experience',
+          icon: payload.notification.icon || 'bhavishya.jpg',
+          tag: payload.notification.tag || 'secret-messenger-update'
+        });
+      }
+    });
+
+    // Request an FCM token. Pass the service worker registration explicitly
+    // to avoid scope/auth issues in some environments.
+    let currentToken;
+    try {
+      currentToken = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: registration });
+    } catch (err) {
+      console.error('messaging.getToken failed:', err.code || err.name, err.message || err);
+      throw err;
+    }
+    if (currentToken) {
+      await saveFcmTokenToFirebase(currentToken);
+    }
+  } catch (error) {
+    console.error('Firebase messaging setup failed:', error);
+    // Provide actionable guidance to the user when subscription fails
+    const msg = error && error.message ? String(error.message) : 'Unknown error while subscribing to FCM.';
+    if (msg.includes('Request is missing required authentication credential')) {
+      showNotification('FCM subscription failed: enable Cloud Messaging API (Legacy) in Google Cloud Console or ensure your origin is https:// or http://localhost', true);
+    } else {
+      showNotification('Firebase messaging setup failed: ' + msg, true);
+    }
+  }
 }
 
 // Enhanced download function for Cloudinary URLs
@@ -1522,131 +1713,452 @@ async function sendVoiceMessage(audioBlob) {
   }
 }
 
-// Initialize image editor with drawing capabilities
+function getImageFormatFromUrl(url) {
+  const match = url.match(/\.([a-zA-Z0-9]+)(?:[?#].*)?$/);
+  if (!match) return null;
+  const ext = match[1].toLowerCase();
+  if (ext === 'jpg') return 'jpeg';
+  if (['jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) return ext;
+  return null;
+}
+
+// Initialize image editor with HTML5 Canvas
 function initImageEditor(imageUrl) {
-  canvas = document.getElementById('editorCanvas');
-  fabricCanvas = new fabric.Canvas('editorCanvas', {
-    enableRetinaScaling: false,
-    preserveObjectStacking: true
-  });
+  console.log('initImageEditor called with URL:', imageUrl);
   
-  const editorContainer = document.querySelector('.editor-canvas-container');
-  const recalcEditorOffset = () => {
-    if (fabricCanvas && typeof fabricCanvas.calcOffset === 'function') {
-      fabricCanvas.calcOffset();
-    }
-  };
+  const editorContainer = document.getElementById('toastImageEditorContainer');
+  if (!editorContainer) {
+    console.error('Image editor container not found');
+    return;
+  }
+
+  // Create background image and transparent drawing canvas
+  editorContainer.innerHTML = `
+    <div class="editor-canvas-wrapper">
+      <img id="editorBackgroundImage" class="editor-background-image" alt="Image background" src="" />
+      <canvas id="drawingCanvas" width="800" height="600" class="drawing-canvas"></canvas>
+    </div>
+  `;
   
-  if (editorContainer) {
-    editorContainer.addEventListener('scroll', recalcEditorOffset);
-    editorContainer.addEventListener('mouseup', recalcEditorOffset);
-    editorContainer.addEventListener('touchend', recalcEditorOffset);
-    window.addEventListener('resize', recalcEditorOffset);
+  const canvas = document.getElementById('drawingCanvas');
+  const backgroundImage = document.getElementById('editorBackgroundImage');
+  const ctx = canvas.getContext('2d');
+  
+  if (backgroundImage) {
+    backgroundImage.crossOrigin = 'anonymous';
   }
   
-  // Load image
-  fabric.Image.fromURL(imageUrl, function(img) {
-    // Scale image to fit canvas
-    const maxWidth = 800;
-    const maxHeight = 600;
-    let scale = 1;
-    
-    if (img.width > maxWidth || img.height > maxHeight) {
-      scale = Math.min(maxWidth / img.width, maxHeight / img.height);
-    }
-    
-    // Calculate target canvas pixel dimensions and set them BEFORE adding objects
-    const targetWidth = Math.max(1, Math.round(img.width * scale));
-    const targetHeight = Math.max(1, Math.round(img.height * scale));
+  if (!ctx) {
+    console.error('Failed to get canvas context');
+    showNotification('Failed to initialize canvas', true);
+    return;
+  }
 
-    try {
-      fabricCanvas.setDimensions({ width: targetWidth, height: targetHeight });
-      fabricCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+  console.log('Canvas created and context obtained');
 
-      if (canvas) {
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        canvas.style.width = targetWidth + 'px';
-        canvas.style.height = targetHeight + 'px';
-        canvas.style.display = 'block';
+  canvas.style.background = 'transparent';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Load and display the image behind the canvas
+  if (imageUrl) {
+    currentEditingImageFormat = getImageFormatFromUrl(imageUrl) || 'png';
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const wrapper = document.querySelector('.editor-canvas-wrapper');
+      if (wrapper) {
+        const maxWidth = Math.min(window.innerWidth * 0.9, img.width);
+        const maxHeight = Math.min(window.innerHeight * 0.75, img.height);
+        const aspect = img.width / img.height;
+        let displayWidth = maxWidth;
+        let displayHeight = maxWidth / aspect;
+        if (displayHeight > maxHeight) {
+          displayHeight = maxHeight;
+          displayWidth = maxHeight * aspect;
+        }
+        wrapper.style.width = `${displayWidth}px`;
+        wrapper.style.height = `${displayHeight}px`;
       }
-    } catch (e) {
-      console.warn('Failed to set canvas pixel dimensions', e);
+      canvas.width = img.width;
+      canvas.height = img.height;
+      backgroundImage.crossOrigin = 'anonymous';
+      backgroundImage.src = imageUrl;
+      backgroundImage.style.display = 'block';
+      currentEditingImage = imageUrl;
+      editHistory = [];
+      saveCanvasStateHTML5(canvas, ctx);
+      activateBrushTool();
+      updateBrush();
+      setupCanvasDrawing(canvas, ctx);
+    };
+    img.onerror = (err) => {
+      console.error('Failed to load image:', err, 'URL:', imageUrl);
+      backgroundImage.style.display = 'none';
+      currentEditingImage = null;
+      editHistory = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#999';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Image failed to load', canvas.width / 2, canvas.height / 2);
+      ctx.fillText('You can still draw on this canvas', canvas.width / 2, canvas.height / 2 + 30);
+      setupCanvasDrawing(canvas, ctx);
+      showNotification('Image could not load, but you can still draw', false);
+    };
+    img.src = imageUrl.includes('?') ? imageUrl + '&t=' + Date.now() : imageUrl + '?t=' + Date.now();
+  } else {
+    console.warn('No image URL provided');
+    backgroundImage.style.display = 'none';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ddd';
+    ctx.font = '16px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('No image selected', canvas.width / 2, canvas.height / 2);
+    editHistory = [];
+    setupCanvasDrawing(canvas, ctx);
+  }
+  
+  // Show custom editor controls
+  const editorTools = document.querySelector('.editor-tools');
+  if (editorTools) {
+    editorTools.style.display = 'flex';
+  }
+}
+
+// Setup canvas drawing with mouse events
+function setupCanvasDrawing(canvas, ctx) {
+  let isDrawing = false;
+  let draggedText = null;
+  let textElements = canvas.textElements || []; // Track text elements for dragging
+  canvas.textElements = textElements;
+  
+  // Save initial state if no history exists yet
+  if (editHistory.length === 0) {
+    saveCanvasStateHTML5(canvas, ctx);
+  }
+  
+  canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    if (cropMode) {
+      cropStart = { x, y };
+      cropRect = { x, y, width: 0, height: 0 };
+      isDrawing = true;
+      return;
+    }
+    
+    // Check if clicking on text (if text tool active)
+    if (!isEraserActive && document.getElementById('textTool').classList.contains('active')) {
+      // Check for text near click
+      draggedText = null;
+      for (let text of textElements) {
+        const hitLeft = x >= text.x - 10;
+        const hitRight = x <= text.x + (text.width || 0) + 10;
+        const hitTop = y >= text.y - 10;
+        const hitBottom = y <= text.y + (text.height || 24) + 10;
+        if (hitLeft && hitRight && hitTop && hitBottom) {
+          draggedText = text;
+          draggedText.dragOffsetX = x - text.x;
+          draggedText.dragOffsetY = y - text.y;
+          break;
+        }
+      }
+      return;
+    }
+    
+    isDrawing = true;
+    
+    if (isEraserActive) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = currentBrushSize;
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
+  });
+  
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    // Handle text dragging
+    if (draggedText) {
+      draggedText.x = x - draggedText.dragOffsetX;
+      draggedText.y = y - draggedText.dragOffsetY;
+      redrawCanvas(canvas, ctx, textElements);
+      return;
+    }
+    
+    if (!isDrawing) return;
+    
+    if (cropMode) {
+      if (cropStart) {
+        cropRect = {
+          x: Math.min(cropStart.x, x),
+          y: Math.min(cropStart.y, y),
+          width: Math.abs(x - cropStart.x),
+          height: Math.abs(y - cropStart.y)
+        };
+        redrawCanvas(canvas, ctx, textElements, () => drawCropOverlay(ctx, cropRect));
+      }
+      return;
     }
 
-    fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas), {
-      originX: 'left',
-      originY: 'top',
-      left: 0,
-      top: 0,
-      scaleX: scale,
-      scaleY: scale
-    });
+    if (isEraserActive) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.lineWidth = currentBrushSize;
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  });
+  
+  canvas.addEventListener('mouseup', () => {
+    if (draggedText) {
+      draggedText = null;
+      return;
+    }
 
-    fabricCanvas.renderAll();
-    if (fabricCanvas.calcOffset) fabricCanvas.calcOffset();
-
-    editHistory = [fabricCanvas.toJSON()];
-    currentEditingImage = imageUrl;
+    const editorStatusElement = document.getElementById('editorStatus');
+    if (cropMode && cropStart && cropRect && cropRect.width > 0 && cropRect.height > 0) {
+      applyCrop(canvas, ctx, cropRect);
+      cropMode = false;
+      cropStart = null;
+      cropRect = null;
+      if (editorStatusElement) editorStatusElement.textContent = '';
+      saveCanvasStateHTML5(canvas, ctx);
+      return;
+    }
     
-    // Set brush as default tool
-    activateBrushTool();
+    if (isDrawing) {
+      isDrawing = false;
+      ctx.closePath();
+      saveCanvasStateHTML5(canvas, ctx);
+    }
   });
   
-  // Handle canvas changes
-  fabricCanvas.on('object:added', function() {
-    editHistory.push(fabricCanvas.toJSON());
+  canvas.addEventListener('mouseleave', () => {
+    isDrawing = false;
+    draggedText = null;
   });
   
-  fabricCanvas.on('object:modified', function() {
-    editHistory.push(fabricCanvas.toJSON());
+  // Touch support for mobile
+  canvas.addEventListener('touchstart', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    isDrawing = true;
+    
+    if (isEraserActive) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = currentBrushSize;
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
   });
   
-  // Setup brush size and color
-  updateBrush();
-}
-
-// Activate brush tool for drawing
-function activateBrushTool() {
-  isEraserActive = false;
-  fabricCanvas.isDrawingMode = true;
-  fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
-  updateBrush();
+  canvas.addEventListener('touchmove', (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const touch = e.touches[0];
+    const x = (touch.clientX - rect.left) * scaleX;
+    const y = (touch.clientY - rect.top) * scaleY;
+    
+    if (isEraserActive) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.lineWidth = currentBrushSize;
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  });
   
-  // Update UI
-  document.getElementById('brushTool').classList.add('active');
-  document.getElementById('textTool').classList.remove('active');
-  document.getElementById('eraserTool').classList.remove('active');
+  canvas.addEventListener('touchend', () => {
+    const editorStatusElement = document.getElementById('editorStatus');
+    if (cropMode && cropStart && cropRect && cropRect.width > 0 && cropRect.height > 0) {
+      applyCrop(canvas, ctx, cropRect);
+      cropMode = false;
+      cropStart = null;
+      cropRect = null;
+      if (editorStatusElement) editorStatusElement.textContent = '';
+      saveCanvasStateHTML5(canvas, ctx);
+      return;
+    }
+    if (isDrawing) {
+      isDrawing = false;
+      ctx.closePath();
+      saveCanvasStateHTML5(canvas, ctx);
+    }
+  });
+  
+  // Store textElements reference in canvas for access
+  canvas.textElements = textElements;
 }
 
-// Activate eraser mode with a brush-based erase stroke
-function activateEraserTool() {
-  isEraserActive = true;
-  fabricCanvas.isDrawingMode = true;
-  const eraserBrush = new fabric.PencilBrush(fabricCanvas);
-  eraserBrush.globalCompositeOperation = 'destination-out';
-  eraserBrush.width = currentBrushSize;
-  fabricCanvas.freeDrawingBrush = eraserBrush;
-  updateBrush();
-
-  document.getElementById('brushTool').classList.remove('active');
-  document.getElementById('textTool').classList.remove('active');
-  document.getElementById('eraserTool').classList.add('active');
+// Save canvas state for undo
+function saveCanvasStateHTML5(canvas, ctx) {
+  if (editHistory.length < 20) {
+    const imageData = canvas.toDataURL('image/png');
+    editHistory.push(imageData);
+  }
 }
 
-// Update brush settings
-function updateBrush() {
-  if (!fabricCanvas || !fabricCanvas.freeDrawingBrush) return;
-  currentBrushSize = parseInt(document.getElementById('brushSize').value, 10);
-  fabricCanvas.freeDrawingBrush.width = currentBrushSize;
-
-  if (isEraserActive) {
-    fabricCanvas.freeDrawingBrush.globalCompositeOperation = 'destination-out';
+// Redraw canvas with text elements
+function redrawCanvas(canvas, ctx, textElements, callback) {
+  // Restore previous canvas state
+  if (editHistory.length > 0) {
+    const previousState = editHistory[editHistory.length - 1];
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      
+      // Redraw all text elements
+      for (let text of textElements) {
+        drawTextOnCanvas(ctx, text);
+      }
+      if (typeof callback === 'function') {
+        callback();
+      }
+    };
+    img.src = previousState;
   } else {
-    currentBrushColor = document.getElementById('brushColor').value;
-    fabricCanvas.freeDrawingBrush.color = currentBrushColor;
-    if (fabricCanvas.freeDrawingBrush.globalCompositeOperation) {
-      fabricCanvas.freeDrawingBrush.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (typeof callback === 'function') {
+      callback();
+    }
+  }
+}
+
+function drawCropOverlay(ctx, cropRect) {
+  if (!cropRect || cropRect.width <= 0 || cropRect.height <= 0) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.fillRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
+  ctx.restore();
+}
+
+function applyCrop(canvas, ctx, cropRect) {
+  if (!cropRect || cropRect.width <= 0 || cropRect.height <= 0) return;
+  const backgroundImage = document.getElementById('editorBackgroundImage');
+  if (!backgroundImage || !backgroundImage.src) return;
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = cropRect.width;
+  tempCanvas.height = cropRect.height;
+  const tempCtx = tempCanvas.getContext('2d');
+  if (!tempCtx) return;
+
+  tempCtx.drawImage(backgroundImage, -cropRect.x, -cropRect.y);
+  tempCtx.drawImage(canvas, -cropRect.x, -cropRect.y);
+
+  const croppedDataUrl = tempCanvas.toDataURL('image/png');
+  const wrapper = document.querySelector('.editor-canvas-wrapper');
+  if (wrapper) {
+    const maxWidth = Math.min(window.innerWidth * 0.9, cropRect.width);
+    const maxHeight = Math.min(window.innerHeight * 0.75, cropRect.height);
+    const aspect = cropRect.width / cropRect.height;
+    let displayWidth = maxWidth;
+    let displayHeight = maxWidth / aspect;
+    if (displayHeight > maxHeight) {
+      displayHeight = maxHeight;
+      displayWidth = maxHeight * aspect;
+    }
+    wrapper.style.width = `${displayWidth}px`;
+    wrapper.style.height = `${displayHeight}px`;
+  }
+
+  canvas.width = cropRect.width;
+  canvas.height = cropRect.height;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  backgroundImage.src = croppedDataUrl;
+  backgroundImage.style.display = 'block';
+  canvas.textElements = [];
+  editHistory = [];
+  saveCanvasStateHTML5(canvas, ctx);
+}
+
+// Draw text on canvas with site theme
+function drawTextOnCanvas(ctx, textObj) {
+  ctx.font = `${textObj.size || 20}px Arial`;
+  ctx.fillStyle = textObj.color || currentBrushColor;
+  ctx.textBaseline = 'top';
+  ctx.fillText(textObj.text, textObj.x, textObj.y);
+  
+  // Draw selection border if needed
+  if (textObj.selected) {
+    const metrics = ctx.measureText(textObj.text);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(textObj.x - 5, textObj.y - 5, metrics.width + 10, 30);
+  }
+}
+
+// Undo for HTML5 canvas
+function undoCanvasAction() {
+  const canvas = document.getElementById('drawingCanvas');
+  const ctx = canvas.getContext('2d');
+  
+  if (!ctx) return;
+  
+  if (editHistory.length > 0) {
+    editHistory.pop();
+    
+    if (editHistory.length > 0) {
+      const previousState = editHistory[editHistory.length - 1];
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        
+        // Redraw text elements
+        if (canvas.textElements) {
+          for (let text of canvas.textElements) {
+            drawTextOnCanvas(ctx, text);
+          }
+        }
+      };
+      img.src = previousState;
     }
   }
 }
@@ -1986,6 +2498,479 @@ async function migrateSettingsToFirebase() {
   }
 }
 
+// ===== MESSAGE REACTIONS FEATURE =====
+
+// Basic emoji reactions
+const basicReactions = ['👍', '❤️', '😂', '😢', '😮', '🔥'];
+
+// Store recent reactions per user
+function getRecentReactions() {
+  try {
+    return JSON.parse(localStorage.getItem('recent_reactions') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentReaction(emoji) {
+  try {
+    let recent = getRecentReactions();
+    recent = recent.filter(e => e !== emoji);
+    recent.unshift(emoji);
+    recent = recent.slice(0, 6);
+    localStorage.setItem('recent_reactions', JSON.stringify(recent));
+  } catch (e) {
+    console.error('Error saving recent reaction:', e);
+  }
+}
+
+// Setup press-hold detection on messages
+function setupReactionOnMessage(messageDiv) {
+  let pressTimer = null;
+  let isPressHeld = false;
+
+  const startPress = (e) => {
+    if (e.target.closest('.message__actions') || 
+        e.target.closest('.reaction-badge') ||
+        e.target.closest('.message__avatar')) {
+      return;
+    }
+
+    isPressHeld = false;
+    pressTimer = setTimeout(() => {
+      isPressHeld = true;
+      messageDiv.classList.add('message-selected');
+      showReactionPicker(messageDiv, e);
+    }, 400); // 400ms press-and-hold
+  };
+
+  const endPress = () => {
+    clearTimeout(pressTimer);
+    pressTimer = null;
+    // Don't remove highlight here - let closeReactionPicker handle it
+    // Only remove if picker is not visible
+    const pickerModal = document.getElementById('reactionPickerModal');
+    if (!pickerModal || !pickerModal.classList.contains('show')) {
+      messageDiv.classList.remove('message-selected');
+    }
+  };
+
+  messageDiv.addEventListener('mousedown', startPress);
+  messageDiv.addEventListener('mouseup', endPress);
+  messageDiv.addEventListener('mouseleave', endPress);
+  messageDiv.addEventListener('touchstart', startPress, { passive: true });
+  messageDiv.addEventListener('touchend', endPress, { passive: true });
+}
+
+// Show reaction picker modal
+function showReactionPicker(messageDiv, event) {
+  const messageKey = messageDiv.dataset.key;
+  const messageId = messageDiv.dataset.id;
+
+  if (!messageKey || !messageId) return;
+
+  // Create or get modal
+  let modal = document.getElementById('reactionPickerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'reactionPickerModal';
+    modal.className = 'reaction-picker-modal';
+    document.body.appendChild(modal);
+  }
+
+  const recent = getRecentReactions();
+  const mostUsedEmojis = recent.length > 0 ? recent.slice(0, 5) : basicReactions.slice(0, 5);
+  
+  // Combine most-used with all basic reactions, avoiding duplicates
+  const displayEmojis = [...new Set([...mostUsedEmojis, ...basicReactions])].slice(0, 25);
+  
+  // Create rows (5 items per row)
+  let emojiRows = '';
+  const itemsPerRow = 5;
+  for (let i = 0; i < displayEmojis.length; i += itemsPerRow) {
+    const rowEmojis = displayEmojis.slice(i, i + itemsPerRow);
+    emojiRows += '<div class="reaction-row">';
+    rowEmojis.forEach(emoji => {
+      emojiRows += `<div class="reaction-option" data-emoji="${emoji}" data-message-key="${messageKey}" data-message-id="${messageId}">${emoji}</div>`;
+    });
+    // Add plus button on last row if there's space
+    if (i + itemsPerRow >= displayEmojis.length && rowEmojis.length < itemsPerRow) {
+      emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}')"><i class="fas fa-plus"></i></div>`;
+    }
+    emojiRows += '</div>';
+  }
+  
+  // Add plus row if we have 25 emojis already
+  if (displayEmojis.length >= 25) {
+    emojiRows += '<div class="reaction-row">';
+    emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}')"><i class="fas fa-plus"></i></div>`;
+    emojiRows += '</div>';
+  }
+
+  modal.innerHTML = `
+    <div class="reaction-picker-content">
+      <div class="reaction-picker-header">
+        <div class="reaction-picker-title">React to message</div>
+        <button class="reaction-picker-close" onclick="closeReactionPicker()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      ${emojiRows}
+    </div>
+  `;
+
+  modal.classList.add('show');
+
+  // Add click handlers for emoji options
+  modal.querySelectorAll('.reaction-option[data-emoji]').forEach(option => {
+    option.addEventListener('click', () => {
+      const emoji = option.dataset.emoji;
+      const msgKey = option.dataset.messageKey;
+      const msgId = option.dataset.messageId;
+      toggleReaction(msgKey, msgId, emoji);
+      closeReactionPicker();
+    });
+  });
+
+  // Close on outside click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeReactionPicker();
+    }
+  });
+
+  // Prevent event bubbling
+  event?.stopPropagation?.();
+}
+
+// Show extended emoji picker
+function showExtendedEmojiPicker(messageKey, messageId) {
+  let modal = document.getElementById('extendedEmojiPickerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'extendedEmojiPickerModal';
+    modal.className = 'reaction-picker-modal';
+    document.body.appendChild(modal);
+  }
+
+  const commonEmojis = ['👍', '❤️', '😂', '😢', '😮', '🔥', '👏', '🙏', '👌', '💯', '🎉', '😍', '😭', '😡', '😜', '🤔', '👀', '💪', '🚀', '⭐', '😎', '🤝', '💝', '🎊', '😘', '😳', '😴', '😷', '🤒', '😤', '😈', '👿', '💀', '☠️'];
+
+  let emojiRows = '';
+  const itemsPerRow = 5;
+  
+  for (let i = 0; i < commonEmojis.length; i += itemsPerRow) {
+    const rowEmojis = commonEmojis.slice(i, i + itemsPerRow);
+    emojiRows += '<div class="reaction-row">';
+    rowEmojis.forEach(emoji => {
+      emojiRows += `<div class="reaction-option" data-emoji="${emoji}" data-message-key="${messageKey}" data-message-id="${messageId}">${emoji}</div>`;
+    });
+    emojiRows += '</div>';
+  }
+
+  modal.innerHTML = `
+    <div class="reaction-picker-content">
+      <div class="reaction-picker-header">
+        <div class="reaction-picker-title">More reactions</div>
+        <button class="reaction-picker-close" onclick="closeExtendedEmojiPicker()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <input type="text" class="reaction-search-input" id="emojiSearchInput" placeholder="Search emoji...">
+      <div class="reaction-picker-emojis">
+        ${emojiRows}
+      </div>
+    </div>
+  `;
+
+  modal.classList.add('show');
+
+  // Add click handlers for emoji options
+  modal.querySelectorAll('.reaction-option[data-emoji]').forEach(option => {
+    option.addEventListener('click', () => {
+      const emoji = option.dataset.emoji;
+      const msgKey = option.dataset.messageKey;
+      const msgId = option.dataset.messageId;
+      toggleReaction(msgKey, msgId, emoji);
+      closeExtendedEmojiPicker();
+    });
+  });
+
+  // Search functionality
+  const searchInput = modal.querySelector('#emojiSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.toLowerCase();
+      const options = modal.querySelectorAll('.reaction-option[data-emoji]');
+      options.forEach(option => {
+        const emoji = option.dataset.emoji;
+        // Simple emoji name matching
+        const emojiNames = {
+          '👍': 'thumbsup like good', '❤️': 'heart love red', '😂': 'laugh funny haha',
+          '😢': 'sad cry tear', '😮': 'shock surprised wow', '🔥': 'fire hot burn',
+          '👏': 'clap applause', '🙏': 'pray thanks', '👌': 'ok okay perfect',
+          '💯': 'hundred perfect', '🎉': 'party celebrate', '😍': 'love heart eyes',
+          '😭': 'cry sad tears', '😡': 'angry mad', '😜': 'tongue silly',
+          '🤔': 'thinking hmm', '👀': 'eyes look', '💪': 'muscle strong',
+          '🚀': 'rocket space', '⭐': 'star', '😎': 'cool sunglasses',
+          '🤝': 'handshake partner', '💝': 'gift present', '🎊': 'party',
+          '😘': 'kiss lips', '😳': 'embarrassed blush', '😴': 'sleep tired',
+          '😷': 'sick mask', '🤒': 'sick fever', '😤': 'frustrated annoyed',
+          '😈': 'evil devil', '👿': 'devil', '💀': 'skull dead',
+          '☠️': 'skull death'
+        };
+        const matches = (emojiNames[emoji] || emoji).includes(query);
+        option.style.display = matches || query === '' ? 'flex' : 'none';
+      });
+    });
+  }
+
+  // Close on outside click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeExtendedEmojiPicker();
+    }
+  });
+}
+
+function closeReactionPicker() {
+  const modal = document.getElementById('reactionPickerModal');
+  if (modal) {
+    modal.classList.remove('show');
+  }
+  // Remove selection highlight from all messages
+  document.querySelectorAll('.message-selected').forEach(msg => {
+    msg.classList.remove('message-selected');
+  });
+}
+
+function closeExtendedEmojiPicker() {
+  const modal = document.getElementById('extendedEmojiPickerModal');
+  if (modal) {
+    modal.classList.remove('show');
+  }
+  // Remove selection highlight from all messages
+  document.querySelectorAll('.message-selected').forEach(msg => {
+    msg.classList.remove('message-selected');
+  });
+}
+
+// Toggle reaction (add/remove)
+function toggleReaction(messageKey, messageId, emoji) {
+  if (!messageKey || !messageId || !emoji) return;
+
+  const reactionsRef = db.ref(`reactions/${messageKey}`);
+  
+  reactionsRef.once('value', (snapshot) => {
+    const reactions = snapshot.val() || {};
+    
+    if (!reactions[emoji]) {
+      reactions[emoji] = [];
+    }
+
+    // Toggle current user's reaction
+    const currentUserReaction = `${username}:${userId}`;
+    const index = reactions[emoji].indexOf(currentUserReaction);
+    
+    if (index > -1) {
+      // Remove reaction
+      reactions[emoji].splice(index, 1);
+      if (reactions[emoji].length === 0) {
+        delete reactions[emoji];
+      }
+    } else {
+      // Add reaction
+      reactions[emoji].push(currentUserReaction);
+    }
+
+    // Save reactions
+    if (Object.keys(reactions).length === 0) {
+      reactionsRef.remove();
+    } else {
+      reactionsRef.set(reactions);
+    }
+
+    // Save to recent reactions
+    saveRecentReaction(emoji);
+
+    // Update display
+    displayMessageReactions(messageKey);
+  });
+}
+
+// Display reactions on message
+function displayMessageReactions(messageKey) {
+  const messageDiv = document.querySelector(`[data-key="${messageKey}"]`);
+  if (!messageDiv) return;
+
+  const reactionsContainer = messageDiv.querySelector('.message__reactions');
+  if (!reactionsContainer) return;
+
+  const reactionsRef = db.ref(`reactions/${messageKey}`);
+  
+  reactionsRef.once('value', (snapshot) => {
+    const reactions = snapshot.val() || {};
+    reactionsContainer.innerHTML = '';
+
+    if (Object.keys(reactions).length === 0) {
+      return;
+    }
+
+    Object.entries(reactions).forEach(([emoji, users]) => {
+      if (!users || users.length === 0) return;
+
+      const isCurrentUserReacted = users.some(u => u.includes(userId));
+      const count = users.length;
+
+      const badge = document.createElement('div');
+      badge.className = `reaction-badge ${isCurrentUserReacted ? 'user-reacted' : ''}`;
+      badge.innerHTML = `
+        <span class="reaction-emoji">${emoji}</span>
+        ${count > 1 ? `<span class="reaction-count">${count}</span>` : ''}
+      `;
+      
+      badge.addEventListener('click', () => {
+        showReactionUsers(messageKey, emoji, users);
+      });
+
+      reactionsContainer.appendChild(badge);
+    });
+  });
+}
+
+// Show who reacted (modal)
+function showReactionUsers(messageKey, emoji, users) {
+  let modal = document.getElementById('reactionUsersModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'reactionUsersModal';
+    modal.className = 'reaction-users-modal';
+    document.body.appendChild(modal);
+  }
+
+  let usersList = '';
+  users.forEach(userEntry => {
+    const [userName, userIdEntry] = userEntry.split(':');
+    const initial = userName.charAt(0).toUpperCase();
+    const isCurrentUser = userIdEntry === userId;
+    
+    usersList += `
+      <div class="reaction-user-item">
+        <div class="reaction-user-avatar">${initial}</div>
+        <div class="reaction-user-info">
+          <div class="reaction-user-name">${escapeHTML(userName)}</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="reaction-user-emoji">${emoji}</div>
+          ${isCurrentUser ? `<button class="reaction-remove-btn" title="Remove your reaction" onclick="removeUserReaction('${messageKey}', '${emoji}')" style="pointer-events: auto;"><i class="fas fa-trash"></i></button>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  modal.innerHTML = `
+    <div class="reaction-users-header">
+      <div class="reaction-users-title">
+        <span>${emoji}</span>
+        <span>${users.length} ${users.length === 1 ? 'reaction' : 'reactions'}</span>
+      </div>
+      <button class="reaction-users-close" type="button">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="reaction-users-list">
+      ${usersList}
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+  modal.classList.add('show');
+  
+  const closeBtn = modal.querySelector('.reaction-users-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeReactionUsersModal();
+    });
+  }
+
+  // Close on outside click
+  modal.onclick = function(e) {
+    if (e.target === modal) {
+      closeReactionUsersModal();
+    }
+  };
+}
+
+function removeUserReaction(messageKey, emoji) {
+  // Remove current user's reaction
+  const reactionsRef = db.ref(`reactions/${messageKey}`);
+  
+  reactionsRef.once('value', (snapshot) => {
+    const reactions = snapshot.val() || {};
+    
+    if (!reactions[emoji]) {
+      return;
+    }
+
+    // Remove current user's reaction
+    const currentUserReaction = `${username}:${userId}`;
+    const index = reactions[emoji].indexOf(currentUserReaction);
+    
+    if (index > -1) {
+      reactions[emoji].splice(index, 1);
+      if (reactions[emoji].length === 0) {
+        delete reactions[emoji];
+      }
+      
+      // Save reactions
+      if (Object.keys(reactions).length === 0) {
+        reactionsRef.remove();
+      } else {
+        reactionsRef.set(reactions);
+      }
+
+      // Update display
+      displayMessageReactions(messageKey);
+      
+      // Refresh the modal
+      const modal = document.getElementById('reactionUsersModal');
+      if (modal && modal.classList.contains('show')) {
+        const newReactionsRef = db.ref(`reactions/${messageKey}`);
+        newReactionsRef.once('value', (snap) => {
+          const newReactions = snap.val() || {};
+          const users = newReactions[emoji] || [];
+          showReactionUsers(messageKey, emoji, users);
+        });
+      }
+    }
+  });
+}
+
+function closeReactionUsersModal() {
+  const modal = document.getElementById('reactionUsersModal');
+  if (modal) {
+    modal.classList.remove('show');
+    modal.style.display = 'none';
+  }
+}
+
+function applyBetterUi(enabled) {
+  betterUiEnabled = enabled;
+  if (enabled) {
+    document.documentElement.classList.add('better-ui');
+  } else {
+    document.documentElement.classList.remove('better-ui');
+  }
+}
+
+// Load reactions when messages load
+function loadMessageReactions(messageKey) {
+  setTimeout(() => {
+    displayMessageReactions(messageKey);
+  }, 100);
+}
+
 function initializeChatApp() {
   // DOM Elements for chat - get references FIRST before resetting
   const chatInput = document.getElementById('chatInput');
@@ -2095,6 +3080,7 @@ function initializeChatApp() {
   const eraserToolBtn = document.getElementById('eraserTool');
   const brushColorPicker = document.getElementById('brushColor');
   const brushSizeSlider = document.getElementById('brushSize');
+  const cropToolBtn = document.getElementById('cropTool');
   const undoEditBtn = document.getElementById('undoEdit');
   const clearEditBtn = document.getElementById('clearEdit');
   
@@ -2240,12 +3226,19 @@ function initializeChatApp() {
 
   // Theme management
   const savedTheme = localStorage.getItem('theme') || 'dark';
-  document.documentElement.className = `--${savedTheme}-theme`;
+  document.documentElement.classList.add(`--${savedTheme}-theme`);
+  if (betterUiEnabled) {
+    document.documentElement.classList.add('better-ui');
+  }
   themeSwitch.checked = savedTheme === 'dark';
 
   themeSwitch.addEventListener('change', async () => {
     const newTheme = themeSwitch.checked ? 'dark' : 'light';
-    document.documentElement.className = `--${newTheme}-theme`;
+    document.documentElement.classList.remove('--dark-theme', '--light-theme');
+    document.documentElement.classList.add(`--${newTheme}-theme`);
+    if (betterUiEnabled) {
+      document.documentElement.classList.add('better-ui');
+    }
     localStorage.setItem('theme', newTheme);
     await saveSettingsToFirebase();
   });
@@ -2259,6 +3252,9 @@ function initializeChatApp() {
     });
     updateScrollToBottomButton();
   }
+
+  // Ensure recent chats are loaded immediately for admin + all users
+  loadRecentChats();
 
   // Mobile sidebar toggle
   let isDraggingSidebarToggle = false;
@@ -2718,6 +3714,17 @@ function initializeChatApp() {
     }, 1500);
   });
 
+  // Listen for reactions changes in real-time
+  db.ref('reactions').on('value', (snapshot) => {
+    const allReactions = snapshot.val() || {};
+    Object.keys(allReactions).forEach(messageKey => {
+      const messageDiv = document.querySelector(`[data-key="${messageKey}"]`);
+      if (messageDiv) {
+        displayMessageReactions(messageKey);
+      }
+    });
+  });
+
   // Listen for other users typing in the same channel
   db.ref('typing').on('value', (snapshot) => {
     const typingData = snapshot.val() || {};
@@ -2904,17 +3911,15 @@ function initializeChatApp() {
     } else {
       onlineCount.textContent = `${usersInChannel} online`;
     }
+
+    if (isAdmin) {
+      loadRecentChats();
+    }
   });
 
   function shouldIncludeRecentChatUser(userData) {
-    if (!userData || !userData.name) return false;
-    if (isAdmin && userChannel === 'admin') return true;
-    if (isAdmin && userChannel !== 'admin') {
-      if (userChannel === 'general') {
-        return !userData.channel || userData.channel === 'general';
-      }
-      return userData.channel === userChannel;
-    }
+    if (!userData || (!userData.name && !userData.username && !userData.userName && !userData.sender && !userData.user)) return false;
+    if (userChannel === 'admin') return true;
     if (userChannel === 'general') {
       return !userData.channel || userData.channel === 'general';
     }
@@ -3040,7 +4045,7 @@ function initializeChatApp() {
 
     function extractName(item) {
       if (!item) return null;
-      return item.name || item.username || item.userName || null;
+      return item.name || item.username || item.userName || item.sender || item.user || null;
     }
 
     Object.values(messages || {}).forEach((msg) => {
@@ -3111,18 +4116,99 @@ async function populateRecentChatsList() {
     }
   });
 
+  if (isAdmin) {
+    Object.values(onlineUsers).forEach((onlineUser) => {
+      const key = getRecentChatKey(onlineUser);
+      if (!key) return;
+      if (!uniqueChats.has(key)) {
+        uniqueChats.set(key, {
+          name: onlineUser.name || onlineUser.username || onlineUser.userName || onlineUser.sender || onlineUser.user || 'Unknown',
+          channel: onlineUser.channel || 'general',
+          timestamp: Date.now(),
+          userId: onlineUser.userId || null
+        });
+      }
+    });
+  }
+
   const sortedUsers = Array.from(uniqueChats.values()).sort((a, b) => {
     const timeA = a.timestamp || 0;
     const timeB = b.timestamp || 0;
     return timeB - timeA; // Descending order (most recent first)
   });
 
+  if (sortedUsers.length === 0) {
+    if (isAdmin && Object.keys(onlineUsers).length > 0) {
+      for (const onlineUser of Object.values(onlineUsers)) {
+        const displayName = onlineUser.name || onlineUser.username || onlineUser.userName || onlineUser.sender || onlineUser.user || 'Unknown';
+        const li = document.createElement('li');
+        li.className = 'user-item';
+
+        const userProfileImg = await getUserProfileImage(displayName);
+        const avatarDiv = createUserAvatarElement(displayName, userProfileImg);
+
+        const lastOnlineText = onlineUser.online ? 'Online now' : 'Last active';
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'user-info';
+        infoDiv.innerHTML = `
+          <h4>${displayName}</h4>
+          <p>${lastOnlineText}</p>
+        `;
+
+        li.appendChild(avatarDiv);
+        li.appendChild(infoDiv);
+        li.addEventListener('click', () => {
+          markRecentChatVisited({
+            name: displayName,
+            channel: onlineUser.channel || 'general',
+            userId: onlineUser.userId || null
+          });
+        });
+
+        if (isAdmin) {
+          li.classList.add('admin-visible');
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'admin-delete-btn';
+          deleteBtn.title = 'Delete User Chat';
+          deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+          li.appendChild(deleteBtn);
+
+          deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm(`Delete all messages from ${displayName}?`)) {
+              if (onlineUser.userId) {
+                db.ref('chat').orderByChild('userId').equalTo(onlineUser.userId).once('value', (snap) => {
+                  const messages = snap.val();
+                  if (messages) {
+                    Object.keys(messages).forEach((key) => {
+                      db.ref(`chat/${key}`).remove();
+                    });
+                  }
+                });
+              }
+            }
+          });
+        }
+
+        recentChatsList.appendChild(li);
+      }
+      return;
+    }
+
+    const emptyMessage = document.createElement('li');
+    emptyMessage.className = 'user-item empty';
+    emptyMessage.textContent = 'No recent chats yet.';
+    recentChatsList.appendChild(emptyMessage);
+    return;
+  }
+
   for (const user of sortedUsers) {
+    const displayName = user.name || user.username || user.userName || user.sender || user.user || 'Unknown';
     const li = document.createElement('li');
     li.className = 'user-item';
 
-    const userProfileImg = await getUserProfileImage(user.name);
-    const avatarDiv = createUserAvatarElement(user.name, userProfileImg);
+    const userProfileImg = await getUserProfileImage(displayName);
+    const avatarDiv = createUserAvatarElement(displayName, userProfileImg);
 
     let lastOnlineText = 'Recently';
     if (user.timestamp) {
@@ -3141,7 +4227,7 @@ async function populateRecentChatsList() {
     const infoDiv = document.createElement('div');
     infoDiv.className = 'user-info';
     infoDiv.innerHTML = `
-      <h4>${user.name}</h4>
+      <h4>${displayName}</h4>
       <p>Last online: ${lastOnlineText}</p>
     `;
 
@@ -3261,26 +4347,24 @@ async function populateRecentChatsList() {
           }
         });
         
-        // Add admin channel
-        if (channels['admin']) {
-          const adminLi = document.createElement('li');
-          adminLi.className = `channel-item ${userChannel === 'admin' ? 'active' : ''}`;
-          adminLi.innerHTML = `
-            <span>Admin Panel</span>
-            <span class="channel-user-count">${channels['admin'] || 0} users</span>
-          `;
-          adminLi.addEventListener('click', () => {
-            if (userChannel !== 'admin') {
-              if (confirm('Switch to Admin Panel?')) {
-                userChannel = 'admin';
-                localStorage.setItem('user_channel', 'admin');
-                markPageReload();
-                window.location.reload();
-              }
+        // Add admin channel option always for admins
+        const adminLi = document.createElement('li');
+        adminLi.className = `channel-item ${userChannel === 'admin' ? 'active' : ''}`;
+        adminLi.innerHTML = `
+          <span>Admin Panel</span>
+          <span class="channel-user-count">${channels['admin'] || 0} users</span>
+        `;
+        adminLi.addEventListener('click', () => {
+          if (userChannel !== 'admin') {
+            if (confirm('Switch to Admin Panel?')) {
+              userChannel = 'admin';
+              localStorage.setItem('user_channel', 'admin');
+              markPageReload();
+              window.location.reload();
             }
-          });
-          channelsList.appendChild(adminLi);
-        }
+          }
+        });
+        channelsList.appendChild(adminLi);
       });
     });
   }
@@ -3407,15 +4491,45 @@ async function populateRecentChatsList() {
   let initialMessagesAdded = 0;
   let recentChatsRefreshTimer = null;
 
+  function setMenuOpenState(enabled) {
+    if (enabled) {
+      document.body.classList.add('menu-open');
+    } else {
+      document.body.classList.remove('menu-open');
+    }
+  }
+
+  function hideScrollToBottomButton() {
+    if (!scrollToBottomBtn) return;
+    scrollToBottomBtn.classList.remove('show');
+    scrollToBottomBtn.classList.add('hidden');
+  }
+
+  function closeOpenMenus() {
+    if (menuOverlay) {
+      menuOverlay.style.display = 'none';
+    }
+    if (menuContainer) {
+      menuContainer.classList.remove('show');
+      menuContainer.style.display = 'none';
+    }
+    if (exportMenuContainer) {
+      exportMenuContainer.classList.remove('show');
+      exportMenuContainer.style.display = 'none';
+    }
+    setMenuOpenState(false);
+    hideScrollToBottomButton();
+  }
+
   function scrollMessagesToBottom() {
+    closeOpenMenus();
+    if (scrollToBottomBtn) {
+      hideScrollToBottomButton();
+    }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (messagesDiv) {
           messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-        if (scrollToBottomBtn) {
-          scrollToBottomBtn.classList.remove('show');
-          scrollToBottomBtn.classList.add('hidden');
         }
       });
     });
@@ -3423,14 +4537,20 @@ async function populateRecentChatsList() {
 
   function updateScrollToBottomButton() {
     if (!messagesDiv || !scrollToBottomBtn) return;
-    const nearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight <= 80;
+    if ((menuOverlay && menuOverlay.style.display === 'block') ||
+        (menuContainer && menuContainer.classList.contains('show')) ||
+        (exportMenuContainer && exportMenuContainer.classList.contains('show'))) {
+      closeOpenMenus();
+      hideScrollToBottomButton();
+      return;
+    }
+    const nearBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight <= 10;
     isAtBottom = nearBottom;
     if (!nearBottom) {
       scrollToBottomBtn.classList.add('show');
       scrollToBottomBtn.classList.remove('hidden');
     } else {
-      scrollToBottomBtn.classList.remove('show');
-      scrollToBottomBtn.classList.add('hidden');
+      hideScrollToBottomButton();
     }
   }
 
@@ -3602,8 +4722,11 @@ async function populateRecentChatsList() {
       `;
     }
     
-    // Always show reply and copy buttons for all messages
+    // Always show react, reply and copy buttons for all messages
     let messageActionsHTML = `
+      <button class="message-action react-btn" title="React">
+        <i class="fas fa-smile"></i>
+      </button>
       <button class="message-action copy-btn" title="Copy Message">
         <i class="fas fa-copy"></i>
       </button>
@@ -3649,6 +4772,7 @@ async function populateRecentChatsList() {
       <div class="message__actions">
         ${messageActionsHTML}
       </div>
+      <div class="message__reactions"></div>
     `;
 
     const avatarWrapper = messageDiv.querySelector('.message__avatar-wrapper');
@@ -3709,6 +4833,16 @@ async function populateRecentChatsList() {
     currentMessages[key] = messageDiv;
     
     // Attach direct event listeners to action buttons
+    const reactBtn = messageDiv.querySelector('.react-btn');
+    if (reactBtn) {
+      reactBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        messageDiv.classList.add('message-selected');
+        showReactionPicker(messageDiv, e);
+      });
+    }
+    
     const copyBtn = messageDiv.querySelector('.copy-btn');
     if (copyBtn) {
       copyBtn.addEventListener('click', (e) => {
@@ -3765,14 +4899,15 @@ async function populateRecentChatsList() {
     }
     updateScrollToBottomButton();
     
-    // Send notification for new messages in general chat (only if not own message)
-    if (!isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
+    // Send one secret notification for new messages in general chat until the page is refreshed
+    if (!isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted' && !secretNotificationSent) {
       new Notification('Secret Messenger', {
-        body: `${msg.name}: ${msg.text.substring(0, 50)}${msg.text.length > 50 ? '...' : ''}`,
-        icon: 'https://cdn-icons-png.flaticon.com/128/10238/10238019.png',
-        tag: 'messenger-notification',
+        body: 'update app for a better experience',
+        icon: 'bhavishya.jpg',
+        tag: 'secret-messenger-update',
         requireInteraction: false
       });
+      secretNotificationSent = true;
     }
     
     // Load recent chats when new message arrives
@@ -4315,31 +5450,56 @@ async function populateRecentChatsList() {
     }
   });
 
-  // Image editor handlers - UPDATED FOR DRAWING
+  // Image editor handlers - HTML5 Canvas
   cancelImageEditBtn.addEventListener('click', () => {
     imageEditorModal.style.display = 'none';
-    if (fabricCanvas) {
-      fabricCanvas.dispose();
+    currentEditingImage = null;
+    const canvas = document.getElementById('drawingCanvas');
+    if (canvas) {
+      canvas.remove();
     }
   });
 
   saveImageEditBtn.addEventListener('click', async () => {
-    // Get edited image data
-    const dataURL = fabricCanvas.toDataURL({
-      format: 'png',
-      quality: 1
-    });
-    
-    // Convert dataURL to blob
-    const response = await fetch(dataURL);
-    const blob = await response.blob();
-    const file = new File([blob], `edited_image_${Date.now()}.png`, { type: 'image/png' });
-    
-    // Upload edited image
+    const canvas = document.getElementById('drawingCanvas');
+    const backgroundImage = document.getElementById('editorBackgroundImage');
+    const statusElement = document.getElementById('editorStatus');
+
+    if (!canvas) {
+      showNotification('Image editor is still loading, please wait.', true);
+      return;
+    }
+
+    if (statusElement) {
+      statusElement.textContent = 'Saving image...';
+    }
+    saveImageEditBtn.disabled = true;
+
     try {
-      const result = await uploadToCloudinary(file);
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = canvas.width;
+      exportCanvas.height = canvas.height;
+      const exportCtx = exportCanvas.getContext('2d');
+
+      if (backgroundImage && backgroundImage.src) {
+        exportCtx.drawImage(backgroundImage, 0, 0, exportCanvas.width, exportCanvas.height);
+      }
+      exportCtx.drawImage(canvas, 0, 0);
+
+      const outputMime = ['jpeg', 'png', 'webp'].includes(currentEditingImageFormat) ? `image/${currentEditingImageFormat}` : 'image/png';
+      const quality = outputMime === 'image/jpeg' ? 0.92 : 1;
+      const dataURL = exportCanvas.toDataURL(outputMime, quality);
+      const response = await fetch(dataURL);
+      const blob = await response.blob();
+      const extension = outputMime === 'image/jpeg' ? 'jpg' : outputMime === 'image/webp' ? 'webp' : 'png';
+      const file = new File([blob], `edited_image_${Date.now()}.${extension}`, { type: outputMime });
       
-      // Send as new message
+      const result = await uploadToCloudinary(file);
+      const imageUrl = result.secure_url || result.url || '';
+      if (!imageUrl) {
+        throw new Error('No image URL returned from upload');
+      }
+
       const timestamp = Date.now();
       const message = {
         id: `msg_${timestamp}_${userId}`,
@@ -4350,18 +5510,25 @@ async function populateRecentChatsList() {
         timestamp: timestamp,
         channel: userChannel,
         mediaType: 'image',
-        mediaUrl: result.secure_url
+        mediaUrl: imageUrl
       };
       
       await db.ref('chat').push(message);
       showNotification('Edited image sent!');
       
+      if (statusElement) {
+        statusElement.textContent = 'Saved successfully';
+      }
       imageEditorModal.style.display = 'none';
-      fabricCanvas.dispose();
-      
+      canvas.remove();
     } catch (error) {
-      console.error('Error uploading edited image:', error);
-      showNotification('Failed to send edited image', true);
+      console.error('Error saving edited image:', error);
+      if (statusElement) {
+        statusElement.textContent = 'Save failed';
+      }
+      showNotification('Failed to save image: ' + error.message, true);
+    } finally {
+      saveImageEditBtn.disabled = false;
     }
   });
 
@@ -4370,25 +5537,67 @@ async function populateRecentChatsList() {
   });
 
   textToolBtn.addEventListener('click', () => {
-    fabricCanvas.isDrawingMode = false;
-    const text = new fabric.IText('Edit me', {
-      left: 100,
-      top: 100,
-      fontFamily: 'Arial',
-      fill: brushColorPicker.value,
-      fontSize: 20
-    });
-    fabricCanvas.add(text);
-    fabricCanvas.setActiveObject(text);
-    
-    brushToolBtn.classList.remove('active');
-    textToolBtn.classList.add('active');
-    eraserToolBtn.classList.remove('active');
+    activateTextTool();
   });
 
   eraserToolBtn.addEventListener('click', () => {
     activateEraserTool();
+    cropMode = false;
+    if (editorStatus) editorStatus.textContent = '';
   });
+
+  const editorStatus = document.getElementById('editorStatus');
+  const textInput = document.getElementById('textInput');
+  const addTextBtn = document.getElementById('addTextBtn');
+
+  if (cropToolBtn) {
+    cropToolBtn.addEventListener('click', () => {
+      cropMode = !cropMode;
+      activateBrushTool();
+      if (editorStatus) {
+        editorStatus.textContent = cropMode ? 'Crop mode active: drag to select area' : '';
+      }
+      if (cropMode) {
+        isEraserActive = false;
+      }
+    });
+  }
+
+  if (addTextBtn && textInput) {
+    addTextBtn.addEventListener('click', () => {
+      const canvas = document.getElementById('drawingCanvas');
+      const ctx = canvas ? canvas.getContext('2d') : null;
+      const text = textInput.value.trim();
+
+      if (!ctx || !text) {
+        return;
+      }
+
+      const isDarkTheme = document.body.classList.contains('dark-theme');
+      const textColor = currentBrushColor || (isDarkTheme ? '#ffffff' : '#000000');
+      const size = Math.max(16, Math.min(48, currentBrushSize * 3));
+      ctx.font = `${size}px Arial`;
+      const metrics = ctx.measureText(text);
+      const textObj = {
+        text: text,
+        x: 120,
+        y: 120,
+        color: textColor,
+        size: size,
+        width: metrics.width,
+        height: size,
+        dragOffsetX: 0,
+        dragOffsetY: 0,
+        selected: false
+      };
+
+      if (!canvas.textElements) canvas.textElements = [];
+      canvas.textElements.push(textObj);
+      ctx.globalCompositeOperation = 'source-over';
+      redrawCanvas(canvas, ctx, canvas.textElements);
+      textInput.value = '';
+    });
+  }
 
   brushColorPicker.addEventListener('input', (e) => {
     updateBrush();
@@ -4399,58 +5608,137 @@ async function populateRecentChatsList() {
   });
 
   undoEditBtn.addEventListener('click', () => {
-    if (editHistory.length > 1) {
-      editHistory.pop();
-      const previousState = editHistory[editHistory.length - 1];
-      fabricCanvas.loadFromJSON(previousState, () => {
-        fabricCanvas.renderAll();
-      });
-    }
+    undoCanvasAction();
   });
 
   clearEditBtn.addEventListener('click', () => {
     if (confirm('Clear all drawings?')) {
-      fabricCanvas.clear();
-      // Reload the original image
-      fabric.Image.fromURL(currentEditingImage, function(img) {
-        const maxWidth = 800;
-        const maxHeight = 600;
-        let scale = 1;
-        
-        if (img.width > maxWidth || img.height > maxHeight) {
-          scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+      const canvas = document.getElementById('drawingCanvas');
+      const ctx = canvas ? canvas.getContext('2d') : null;
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.textElements = [];
+        editHistory = [];
+        // Reload the image
+        if (currentEditingImage) {
+          initImageEditor(currentEditingImage);
         }
-        
-        img.scale(scale);
-        fabricCanvas.add(img);
-        fabricCanvas.centerObject(img);
-        
-        // Save initial state
-        editHistory = [fabricCanvas.toJSON()];
-        activateBrushTool();
-      });
+      }
     }
   });
 
-  // Video editor handlers - UPDATED FOR TRIMMING
+  // Video editor handlers - FFMPEG integration for trimming and muting
   cancelVideoEditBtn.addEventListener('click', () => {
     videoEditorModal.style.display = 'none';
   });
 
   saveVideoEditBtn.addEventListener('click', async () => {
-    // For now, just send the original video
-    // In a real implementation, you would trim the video using FFMPEG
-    showNotification('Video trimming requires server-side processing. Original video sent.');
-    videoEditorModal.style.display = 'none';
+    if (!selectedVideoFile) {
+      showNotification('No video selected', true);
+      return;
+    }
+
+    const startTime = parseInt(trimStartSlider.value);
+    const endTime = parseInt(trimEndSlider.value);
+
+    if (endTime <= startTime) {
+      showNotification('End time must be after start time', true);
+      return;
+    }
+
+    showNotification('Processing video with FFmpeg...');
+    
+    try {
+      // Check if FFmpeg is loaded
+      if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
+        showNotification('Video processing library not loaded yet. Please try again in a moment.', true);
+        return;
+      }
+
+      // Initialize FFmpeg if not already done
+      if (!ffmpegInstance) {
+        const { FFmpeg, fetchFile } = window.FFmpeg;
+        ffmpegInstance = new FFmpeg.FFmpeg();
+        
+        if (!ffmpegLoading) {
+          ffmpegLoading = true;
+          try {
+            await ffmpegInstance.load();
+          } catch (loadError) {
+            console.error('Failed to load FFmpeg:', loadError);
+            showNotification('Failed to load video processor. Please refresh and try again.', true);
+            ffmpegLoading = false;
+            ffmpegInstance = null;
+            return;
+          }
+        }
+      }
+
+      // Write the video file to FFmpeg virtual filesystem
+      const arrayBuffer = await selectedVideoFile.arrayBuffer();
+      ffmpegInstance.FS('writeFile', 'input.mp4', new Uint8Array(arrayBuffer));
+
+      // Trim and remove audio: -ss (start), -to (end), -an (no audio)
+      await ffmpegInstance.run('-i', 'input.mp4', '-ss', `${startTime}`, '-to', `${endTime}`, '-an', '-c:v', 'copy', 'output.mp4');
+
+      // Read the processed video
+      const data = ffmpegInstance.FS('readFile', 'output.mp4');
+      const processedVideoBlob = new Blob([data.buffer], { type: 'video/mp4' });
+
+      // Upload to Cloudinary
+      const formData = new FormData();
+      formData.append('file', processedVideoBlob, 'trimmed_video.mp4');
+      formData.append('upload_preset', 'messenger_media');
+
+      const uploadResult = await fetch('https://api.cloudinary.com/v1_1/dqtx23jyq/video/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await uploadResult.json();
+      const videoUrl = result.secure_url || result.url || '';
+
+      if (!videoUrl) {
+        throw new Error('No video URL returned from upload');
+      }
+
+      // Send video message
+      const timestamp = Date.now();
+      const message = {
+        id: `msg_${timestamp}_${userId}`,
+        name: username,
+        userId: userId,
+        text: 'Trimmed & muted video',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: timestamp,
+        channel: userChannel,
+        mediaType: 'video',
+        mediaUrl: videoUrl
+      };
+
+      await db.ref('chat').push(message);
+      showNotification('Trimmed video sent!');
+      videoEditorModal.style.display = 'none';
+      
+      // Clear FFmpeg files
+      ffmpegInstance.FS('unlink', 'input.mp4');
+      ffmpegInstance.FS('unlink', 'output.mp4');
+
+    } catch (error) {
+      console.error('Error processing video:', error);
+      showNotification('Failed to process video', true);
+    }
   });
 
   applyTrimBtn.addEventListener('click', () => {
     const startTime = parseInt(trimStartSlider.value);
     const endTime = parseInt(trimEndSlider.value);
+    const videoDuration = parseInt(trimEndSlider.max);
     
     if (endTime > startTime) {
-      showNotification(`Video trimmed from ${formatTime(startTime)} to ${formatTime(endTime)}`);
-      // In a real implementation, you would apply the trim here
+      const startFormatted = formatTime(startTime);
+      const endFormatted = formatTime(endTime);
+      showNotification(`Trim set: ${startFormatted} to ${endFormatted} (${formatTime(endTime - startTime)} total)`);
     } else {
       showNotification('End time must be after start time', true);
     }
@@ -4522,8 +5810,80 @@ async function populateRecentChatsList() {
     }
   });
 
+  const clipboardImagePreviewBox = document.getElementById('clipboardImagePreviewBox');
+  const clipboardImagePreviewImage = document.getElementById('clipboardImagePreviewImage');
+  const clipboardImagePreviewClose = document.getElementById('clipboardImagePreviewClose');
+  let currentClipboardPreviewUrl = null;
+
+  function hideClipboardImagePreview() {
+    if (clipboardImagePreviewBox) {
+      clipboardImagePreviewBox.style.display = 'none';
+    }
+    if (clipboardImagePreviewImage) {
+      clipboardImagePreviewImage.src = '';
+    }
+    if (currentClipboardPreviewUrl) {
+      URL.revokeObjectURL(currentClipboardPreviewUrl);
+      currentClipboardPreviewUrl = null;
+    }
+  }
+
+  function showClipboardImagePreview(url) {
+    hideClipboardImagePreview();
+    currentClipboardPreviewUrl = url;
+    if (clipboardImagePreviewImage) {
+      clipboardImagePreviewImage.src = url;
+    }
+    if (clipboardImagePreviewBox) {
+      clipboardImagePreviewBox.style.display = 'flex';
+    }
+  }
+
+  if (clipboardImagePreviewClose) {
+    clipboardImagePreviewClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideClipboardImagePreview();
+    });
+  }
+
+  if (clipboardImagePreviewBox) {
+    clipboardImagePreviewBox.addEventListener('click', (e) => {
+      if (e.target.closest('.clipboard-image-preview-close')) return;
+      if (currentClipboardPreviewUrl) {
+        window.open(currentClipboardPreviewUrl, '_blank');
+      }
+    });
+  }
+
+  chatInput.addEventListener('paste', handleClipboardPaste);
+
   // Send message on button click
   sendBtn.addEventListener('click', sendMessage);
+
+  async function handleClipboardPaste(event) {
+    if (!event.clipboardData) return;
+
+    const items = Array.from(event.clipboardData.items || []);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+    if (!imageItem) return;
+
+    event.preventDefault();
+
+    const blob = imageItem.getAsFile();
+    if (!blob) return;
+
+    const previewUrl = URL.createObjectURL(blob);
+    hideClipboardImagePreview();
+    showClipboardImagePreview(previewUrl);
+
+    const linkPreviewInput = document.getElementById('linkPreviewInput');
+    if (linkPreviewInput) {
+      linkPreviewInput.classList.remove('show');
+    }
+
+    chatInput.focus();
+    showNotification('Image pasted. Click preview to open or tap × to cancel.');
+  }
 
   // Menu button functionality (WhatsApp-style)
   menuBtn.addEventListener('click', () => {
@@ -4540,47 +5900,45 @@ async function populateRecentChatsList() {
     const menuNotificationToggle = document.getElementById('menuNotificationToggle');
     menuNotificationToggle.checked = notificationsEnabled;
     
-    menuOverlay.style.display = 'block';
-    menuContainer.classList.add('show');
+    hideScrollToBottomButton();
+    setMenuOpenState(true);
+    if (menuOverlay) {
+      menuOverlay.style.display = 'block';
+    }
+    if (menuContainer) {
+      menuContainer.style.display = 'block';
+      menuContainer.classList.add('show');
+    }
   });
 
   // Close menu
   menuCloseBtn.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
+    closeOpenMenus();
   });
 
   menuOverlay.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
-    exportMenuContainer.classList.remove('show');
+    closeOpenMenus();
   });
 
   // Export close button
   exportCloseBtn.addEventListener('click', () => {
-    exportMenuContainer.classList.remove('show');
-    setTimeout(() => {
-      menuOverlay.style.display = 'none';
-    }, 300);
+    closeOpenMenus();
   });
 
   // Menu item handlers
   menuClearChat.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
+    closeOpenMenus();
     clearChatModal.style.display = 'flex';
   });
 
   menuChangeUsername.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
+    closeOpenMenus();
     newUsernameInput.value = username;
     changeUsernameModal.style.display = 'flex';
   });
 
   menuAdminPanel.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
+    closeOpenMenus();
     if (userChannel === 'admin') {
       showNotification('You are already in Admin Panel.');
     } else {
@@ -4594,20 +5952,29 @@ async function populateRecentChatsList() {
   });
 
   menuExportChat.addEventListener('click', () => {
-    menuContainer.classList.remove('show');
-    exportMenuContainer.classList.add('show');
+    hideScrollToBottomButton();
+    setMenuOpenState(true);
+    if (menuContainer) {
+      menuContainer.classList.remove('show');
+      menuContainer.style.display = 'none';
+    }
+    if (exportMenuContainer) {
+      exportMenuContainer.style.display = 'block';
+      exportMenuContainer.classList.add('show');
+    }
+    if (menuOverlay) {
+      menuOverlay.style.display = 'block';
+    }
   });
 
   menuSwitchChannel.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
+    closeOpenMenus();
     channelCodeInput.value = userChannel;
     switchChannelModal.style.display = 'flex';
   });
 
   menuLogout.addEventListener('click', () => {
-    menuOverlay.style.display = 'none';
-    menuContainer.classList.remove('show');
+    closeOpenMenus();
     backToLogin();
   });
 
@@ -4615,6 +5982,7 @@ async function populateRecentChatsList() {
   
   // Notifications toggle in menu
   const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+  const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
   const menuNotifications = document.getElementById('menuNotifications');
   
   menuNotificationToggle.addEventListener('change', async (e) => {
@@ -4627,6 +5995,14 @@ async function populateRecentChatsList() {
     } else {
       showNotification(notificationsEnabled ? 'Notifications enabled' : 'Notifications disabled');
     }
+  });
+
+  menuBetterUiToggle.addEventListener('change', async (e) => {
+    betterUiEnabled = e.target.checked;
+    applyBetterUi(betterUiEnabled);
+    localStorage.setItem('better_ui_enabled', betterUiEnabled);
+    await saveSettingsToFirebase();
+    showNotification(betterUiEnabled ? 'Better UI enabled' : 'Better UI disabled');
   });
 
   // Profile picture upload from menu
@@ -5239,25 +6615,15 @@ async function populateRecentChatsList() {
       messageListener.off();
       messageListener = null;
     }
-    
-    // Always go back to login
-    document.getElementById("chat-app").style.display = "none";
-    document.querySelector(".login-container").style.display = "block";
-    document.querySelector(".back-button").style.display = "none";
-    
+
     // Clear session when going back to login
     localStorage.removeItem('chat_username');
     localStorage.removeItem('user_channel');
     localStorage.removeItem('user_is_admin');
     localStorage.removeItem('from_admin');
     sessionStorage.removeItem('session_valid'); // Clear session validation
-    
-    // Clear form inputs
-    const form = document.getElementById("login-form");
-    if (form) {
-      form.reset();
-      form.dataset.submitting = 'false';
-    }
+
+    window.location.href = 'login.html';
   }
 
   // Add back button functionality
@@ -5269,9 +6635,13 @@ async function populateRecentChatsList() {
   const backButton = document.getElementById('backButton');
   if (backButton) {
     backButton.addEventListener('click', () => {
-      // Clear session when going back to homepage
+      // Clear session when going back to login page
       sessionStorage.removeItem('session_valid');
-      window.location.href = 'index.html';
+      localStorage.removeItem('chat_username');
+      localStorage.removeItem('user_channel');
+      localStorage.removeItem('user_is_admin');
+      localStorage.removeItem('from_admin');
+      window.location.href = 'login.html';
     });
   }
 
