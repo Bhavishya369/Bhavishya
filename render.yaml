@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: secret-messenger-push
+    env: node
+    plan: free
+    buildCommand: cd push-server && npm install
+    startCommand: cd push-server && npm start
+    envVars:
+      - key: FIREBASE_DATABASE_URL
+        value: https://secret-notes-6c2ca-default-rtdb.firebaseio.com
+      - key: FIREBASE_SERVICE_ACCOUNT_BASE64
+        sync: false
+      - key: ADMIN_API_KEY
+        value: change-me
+      - key: NOTIFICATION_ICON_URL
+        value: https://your-site/bhavishya.jpg
