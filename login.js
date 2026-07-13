@@ -51,6 +51,8 @@ let isAdmin = false;
 // URL of your push server (Render, Heroku, etc.).
 // Use the deployed push server URL or override it by setting window.PUSH_SERVER_URL before login.js loads.
 const PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
+const ONE_SIGNAL_PATH_PREFIX = (window.ONE_SIGNAL_PATH_PREFIX || '').replace(/^\/+|\/+$/g, '');
+const ONE_SIGNAL_SCOPE_OVERRIDE = window.ONE_SIGNAL_SCOPE_OVERRIDE || '';
 let replyToMessage = null;
 let messageListener = null;
 let isSending = false;
@@ -307,7 +309,33 @@ async function initOneSignalSdk() {
           }
         }
 
-        const scope = getOneSignalScope();
+        const scope = ONE_SIGNAL_SCOPE_OVERRIDE || getOneSignalScope();
+        const overridePrefix = ONE_SIGNAL_PATH_PREFIX ? `${ONE_SIGNAL_PATH_PREFIX}/` : '';
+        const candidateWorkerPaths = [
+          overridePrefix ? `${overridePrefix}OneSignalSDKWorker.js` : null,
+          workerPath,
+          `${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`,
+          'OneSignalSDKWorker.js'
+        ].filter(Boolean);
+        const candidateUpdaterPaths = [
+          overridePrefix ? `${overridePrefix}OneSignalSDKUpdaterWorker.js` : null,
+          updaterPath,
+          `${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`,
+          'OneSignalSDKUpdaterWorker.js'
+        ].filter(Boolean);
+
+        for (const candidate of candidateWorkerPaths) {
+          if (await urlExists(candidate)) {
+            workerPath = candidate;
+            break;
+          }
+        }
+        for (const candidate of candidateUpdaterPaths) {
+          if (await urlExists(candidate)) {
+            updaterPath = candidate;
+            break;
+          }
+        }
 
         // Normalize paths: OneSignal examples expect no leading slash for subdirectory paths
         if (typeof workerPath === 'string' && workerPath.startsWith('/')) workerPath = workerPath.slice(1);
