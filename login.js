@@ -372,29 +372,29 @@ async function setupOneSignal() {
   try {
     const OneSignal = await initOneSignalSdk();
 
-    if (OneSignal && typeof OneSignal.on === 'function') {
-      OneSignal.on('subscriptionChange', async function(isSubscribed) {
-        console.log('OneSignal subscriptionChange', isSubscribed);
-        if (isSubscribed) {
-          try {
-            if (typeof OneSignal.getUserId === 'function') {
-              const playerId = await OneSignal.getUserId();
-              if (playerId) saveOneSignalPlayerId(playerId);
-            }
-          } catch (err) {
-            console.error('OneSignal getUserId failed:', err);
-          }
-        }
-      });
-    } else {
-      console.warn('OneSignal SDK initialized but expected event methods are missing');
-    }
+    if (OneSignal?.User?.PushSubscription) {
+  console.log('OneSignal v16 detected');
 
-    const enabled = (OneSignal && typeof OneSignal.isPushNotificationsEnabled === 'function') ? await OneSignal.isPushNotificationsEnabled() : false;
+  OneSignal.User.PushSubscription.addEventListener(
+    'change',
+    (event) => {
+      console.log('Push subscription changed', event);
+
+      const playerId = OneSignal.User.PushSubscription.id;
+      if (playerId) {
+        saveOneSignalPlayerId(playerId);
+      }
+    }
+  );
+}
+
+    const enabled =
+  OneSignal?.User?.PushSubscription?.optedIn || false;
     console.log('OneSignal enabled?', enabled);
     if (enabled) {
       if (typeof OneSignal.getUserId === 'function') {
-        const playerId = await OneSignal.getUserId();
+        const playerId =
+  OneSignal.User?.PushSubscription?.id;
         if (playerId) saveOneSignalPlayerId(playerId);
       }
     }
@@ -409,20 +409,22 @@ async function setupOneSignal() {
 async function subscribeOneSignal() {
   try {
     const OneSignal = await setupOneSignal();
-    const enabled = await OneSignal.isPushNotificationsEnabled();
+    const enabled =
+  OneSignal.User.PushSubscription.optedIn;
     if (!enabled) {
       if (Notification.permission === 'denied') {
         showNotification('Notifications are blocked in your browser settings.', true);
         return;
       }
       try {
-        await OneSignal.showNativePrompt();
+        await OneSignal.Notifications.requestPermission();
       } catch (err) {
         console.warn('OneSignal showNativePrompt failed', err);
       }
-      await OneSignal.setSubscription(true);
+      
     }
-    const playerId = await OneSignal.getUserId();
+    const playerId =
+  OneSignal.User?.PushSubscription?.id;
     if (playerId) saveOneSignalPlayerId(playerId);
   } catch (err) {
     console.error('subscribeOneSignal failed', err);
@@ -432,9 +434,9 @@ async function subscribeOneSignal() {
 async function unsubscribeOneSignal() {
   try {
     const OneSignal = await initOneSignalSdk();
-    if (typeof OneSignal.setSubscription === 'function') {
-      await OneSignal.setSubscription(false);
-    }
+
+    await OneSignal.User.PushSubscription.optOut();
+
   } catch (err) {
     console.warn('unsubscribeOneSignal failed', err);
   }
