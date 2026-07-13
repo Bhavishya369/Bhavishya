@@ -228,14 +228,14 @@ function getOneSignalBasePath() {
   const isFile = lastSegment.includes('.');
 
   if (path === '/' || path.endsWith('/')) {
-    return `${window.location.origin}${path}`;
+    return path;
   }
 
   if (!isFile) {
-    return `${window.location.origin}${path}/`;
+    return `${path}/`;
   }
 
-  return `${window.location.origin}${path.substring(0, path.lastIndexOf('/') + 1)}`;
+  return path.substring(0, path.lastIndexOf('/') + 1);
 }
 
 function getOneSignalWorkerPath() {
@@ -246,10 +246,15 @@ function getOneSignalUpdaterPath() {
   return `${getOneSignalBasePath()}OneSignalSDKUpdaterWorker.js`;
 }
 
-function getOneSignalSiteRoot() {
+function getOneSignalScope() {
   const segments = window.location.pathname.split('/').filter(Boolean);
   if (!segments.length) return '/';
   return `/${segments[0]}/`;
+}
+
+function getOneSignalSiteRootPath() {
+  const scope = getOneSignalScope();
+  return scope === '/' ? '' : scope.slice(1);
 }
 
 async function initOneSignalSdk() {
@@ -272,19 +277,21 @@ async function initOneSignalSdk() {
           return resolve(OneSignal);
         }
 
-        // Determine service worker paths — try page directory first, then GitHub Pages repo root, then plain site root
+        // Determine service worker paths — try page directory first, then repo root path, then plain site root
+        const repoRootPath = `${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`;
+        const repoRootUpdaterPath = `${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`;
         let workerPath = getOneSignalWorkerPath();
         let updaterPath = getOneSignalUpdaterPath();
 
         const candidateWorkerPaths = [
           workerPath,
-          `${window.location.origin}${getOneSignalSiteRoot()}OneSignalSDKWorker.js`,
-          `${window.location.origin}/OneSignalSDKWorker.js`
+          repoRootPath,
+          'OneSignalSDKWorker.js'
         ];
         const candidateUpdaterPaths = [
           updaterPath,
-          `${window.location.origin}${getOneSignalSiteRoot()}OneSignalSDKUpdaterWorker.js`,
-          `${window.location.origin}/OneSignalSDKUpdaterWorker.js`
+          repoRootUpdaterPath,
+          'OneSignalSDKUpdaterWorker.js'
         ];
 
         for (const candidate of candidateWorkerPaths) {
@@ -300,12 +307,16 @@ async function initOneSignalSdk() {
           }
         }
 
-        console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath);
+        const scope = getOneSignalScope();
+        console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
         await OneSignal.init({
           appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
           allowLocalhostAsSecureOrigin: true,
           serviceWorkerPath: workerPath,
-          serviceWorkerUpdaterPath: updaterPath
+          serviceWorkerUpdaterPath: updaterPath,
+          serviceWorkerParam: {
+            scope
+          }
         });
 
         window.__oneSignalInitialized = true;
