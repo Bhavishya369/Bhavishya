@@ -51,6 +51,16 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+  <!-- OneSignal Web SDK -->
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: '453e37ab-e655-4aee-a716-1234072cf2a8'
+      });
+    });
+  </script>
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
@@ -62,6 +72,14 @@
 </head>
 
 <body>
+  <!-- OneSignal debug widget (hidden by default) -->
+  <div id="onesignal-debug" style="position:fixed;right:10px;bottom:10px;background:rgba(0,0,0,0.75);color:#fff;padding:8px;border-radius:6px;font-size:12px;z-index:9999;">
+    <div style="margin-bottom:6px;font-weight:600;">OneSignal Debug</div>
+    <div id="onesignal-status" style="margin-bottom:6px;">SDK: unknown</div>
+    <button id="onesignal-refresh" style="margin-right:6px;">Refresh</button>
+    <button id="onesignal-prompt">Show Prompt</button>
+    <div id="onesignal-player" style="margin-top:6px;word-break:break-all;max-width:220px"></div>
+  </div>
   <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" id="backButton">
 
   <div class="login-container">

@@ -197,6 +197,105 @@ function updateBrush() {
   }
 }
 
+// OneSignal integration: initialize SDK and send player id to server
+function setupOneSignal() {
+  // Ensure OneSignal queue exists so calls are processed when SDK loads.
+  window.OneSignal = window.OneSignal || [];
+
+  // Queue the initialization; if SDK already loaded it will run immediately.
+  OneSignalDeferred.push(async function(OneSignal) {
+    try {
+      console.log('OneSignal: running deferred init');
+      await OneSignal.init({
+        appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
+        allowLocalhostAsSecureOrigin: true,
+        serviceWorkerPath: 'OneSignalSDKWorker.js',
+        serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js'
+      });
+
+      // When subscription state changes, capture the player id
+      OneSignal.on('subscriptionChange', async function(isSubscribed) {
+        console.log('OneSignal subscriptionChange', isSubscribed);
+        if (isSubscribed) {
+          try {
+            const playerId = await OneSignal.getUserId();
+            if (playerId) saveOneSignalPlayerId(playerId);
+          } catch (err) {
+            console.error('OneSignal getUserId failed:', err);
+          }
+        }
+      });
+
+      const enabled = await OneSignal.isPushNotificationsEnabled();
+      console.log('OneSignal enabled?', enabled);
+      if (!enabled && Notification.permission === 'default') {
+        try {
+          console.log('OneSignal: showing native prompt');
+          await OneSignal.showNativePrompt();
+        } catch (err) {
+          console.warn('OneSignal showNativePrompt failed', err);
+        }
+      }
+
+      try {
+        const playerId = await OneSignal.getUserId();
+        console.log('OneSignal playerId after init:', playerId);
+        if (playerId) saveOneSignalPlayerId(playerId);
+      } catch (err) {
+        console.warn('OneSignal getUserId failed after init:', err);
+      }
+    } catch (e) {
+      console.warn('OneSignal init error', e);
+    }
+  });
+}
+
+async function saveOneSignalPlayerId(playerId) {
+  if (!playerId) return;
+  if (!username) {
+    // If user not identified yet, store locally and attempt to send later
+    localStorage.setItem('onesignal_player_id_pending', playerId);
+    return;
+  }
+  try {
+    await fetch('/save-onesignal-id', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ADMIN_API_KEY || ''
+      },
+      body: JSON.stringify({ username: username, playerId })
+    });
+  } catch (err) {
+    console.error('Failed to save OneSignal player id:', err);
+  }
+}
+
+// Debug widget handlers
+function updateOneSignalDebug() {
+  const statusEl = document.getElementById('onesignal-status');
+  const playerEl = document.getElementById('onesignal-player');
+  if (!statusEl || !playerEl) return;
+  statusEl.textContent = typeof window.OneSignal === 'undefined' ? 'SDK: not loaded' : 'SDK: loaded';
+  if (typeof window.OneSignal !== 'undefined') {
+    OneSignal.getUserId().then(id => {
+      playerEl.textContent = id ? `Player: ${id}` : 'Player: (none)';
+    }).catch(e => { playerEl.textContent = 'Player: (error)'; });
+  } else {
+    playerEl.textContent = 'Player: (SDK not loaded)';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('onesignal-refresh');
+  const promptBtn = document.getElementById('onesignal-prompt');
+  if (btn) btn.addEventListener('click', updateOneSignalDebug);
+  if (promptBtn) promptBtn.addEventListener('click', () => { try { OneSignal.showNativePrompt(); } catch (e) { alert('OneSignal not ready'); } });
+  // Initial update after a short delay to allow SDK to load
+  setTimeout(updateOneSignalDebug, 1000);
+  setTimeout(updateOneSignalDebug, 3000);
+});
+
 // Settings variables
 let notificationsEnabled = false;
 let betterUiEnabled = false;
@@ -283,7 +382,8 @@ async function loadSettingsFromFirebase() {
         if (notificationsEnabled && 'Notification' in window && Notification.permission === 'default') {
           requestNotificationPermissionIfNeeded();
         } else if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
-          setupFirebaseMessaging();
+          // Use OneSignal instead of Firebase Messaging for notifications.
+          try { setupOneSignal(); } catch (e) { console.warn('OneSignal init failed', e); }
         }
       }
 
@@ -1260,7 +1360,9 @@ function requestNotificationPermissionIfNeeded() {
   Notification.requestPermission().then(permission => {
     if (permission === 'granted') {
       showNotification('Notifications enabled for general chat!');
-      setupFirebaseMessaging();
+      // Firebase Cloud Messaging is not used on GitHub Pages.
+      // OneSignal handles notification subscription instead.
+      try { setupOneSignal(); } catch (e) { console.warn('OneSignal init failed', e); }
     } else if (permission === 'denied') {
       showNotification('Notifications blocked. You can change this in browser settings.', true);
     }
@@ -2433,6 +2535,15 @@ async function checkSecretAndProceed(data) {
       // Set username for chat - trim and normalize
       username = (data.username || data.robo_id || `User${Math.floor(Math.random() * 1000)}`).trim();
       localStorage.setItem('chat_username', username);
+
+      // If a OneSignal player id was captured earlier before login, send it now
+      try {
+        const pending = localStorage.getItem('onesignal_player_id_pending');
+        if (pending) {
+          saveOneSignalPlayerId(pending);
+          localStorage.removeItem('onesignal_player_id_pending');
+        }
+      } catch (e) {}
       
       // Get or create userId for this username
       const storedUserId = localStorage.getItem(`chat_userId_${username}`);
@@ -3750,13 +3861,14 @@ function initializeChatApp() {
     const userStatusRef = db.ref(`status/${userId}`);
     
     if (isOnline) {
-      // Set user as online
-      userRef.set({ 
+      // Mark user online and preserve existing user data.
+      userRef.update({ 
         username: username, 
         lastSeen: null, 
         online: true,
         isAdmin: isAdmin,
-        channel: userChannel
+        channel: userChannel,
+        notifyWhenOffline: false
       });
       
       userStatusRef.set({ 
@@ -3767,13 +3879,18 @@ function initializeChatApp() {
         channel: userChannel
       });
       
-      // Setup disconnect handler
+      // Setup disconnect handler to mark the user offline and enable one notification on next new message.
       userStatusRef.onDisconnect().set({ 
         username: username, 
         online: false, 
         lastActive: Date.now(),
         isAdmin: isAdmin,
         channel: userChannel
+      });
+      userRef.onDisconnect().update({
+        online: false,
+        lastSeen: Date.now(),
+        notifyWhenOffline: true
       });
     } else {
       userStatusRef.set({ 
@@ -3782,6 +3899,11 @@ function initializeChatApp() {
         lastActive: Date.now(),
         isAdmin: isAdmin,
         channel: userChannel
+      });
+      userRef.update({
+        online: false,
+        lastSeen: Date.now(),
+        notifyWhenOffline: true
       });
     }
   }
