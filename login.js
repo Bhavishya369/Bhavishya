@@ -308,6 +308,11 @@ async function initOneSignalSdk() {
         }
 
         const scope = getOneSignalScope();
+
+        // Normalize paths: OneSignal examples expect no leading slash for subdirectory paths
+        if (typeof workerPath === 'string' && workerPath.startsWith('/')) workerPath = workerPath.slice(1);
+        if (typeof updaterPath === 'string' && updaterPath.startsWith('/')) updaterPath = updaterPath.slice(1);
+
         console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
         await OneSignal.init({
           appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
@@ -318,6 +323,16 @@ async function initOneSignalSdk() {
             scope
           }
         });
+
+        // Debug: try to log the OneSignal user id if already available
+        try {
+          if (typeof OneSignal.getUserId === 'function') {
+            const debugId = await OneSignal.getUserId();
+            if (debugId) console.log('OneSignal User ID (post-init):', debugId);
+          }
+        } catch (e) {
+          // ignore
+        }
 
         window.__oneSignalInitialized = true;
         resolve(OneSignal);
