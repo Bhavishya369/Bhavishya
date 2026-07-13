@@ -285,29 +285,9 @@ async function initOneSignalSdk() {
         let workerPath = getOneSignalWorkerPath();
         let updaterPath = getOneSignalUpdaterPath();
 
-        const candidateWorkerPaths = [
-          workerPath,
-          repoRootPath,
-          'OneSignalSDKWorker.js'
-        ];
-        const candidateUpdaterPaths = [
-          updaterPath,
-          repoRootUpdaterPath,
-          'OneSignalSDKUpdaterWorker.js'
-        ];
 
-        for (const candidate of candidateWorkerPaths) {
-          if (await urlExists(candidate)) {
-            workerPath = candidate;
-            break;
-          }
-        }
-        for (const candidate of candidateUpdaterPaths) {
-          if (await urlExists(candidate)) {
-            updaterPath = candidate;
-            break;
-          }
-        }
+
+        
 
         const scope = ONE_SIGNAL_SCOPE_OVERRIDE || getOneSignalScope();
         const overridePrefix = ONE_SIGNAL_PATH_PREFIX ? `${ONE_SIGNAL_PATH_PREFIX}/` : '';
