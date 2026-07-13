@@ -197,59 +197,6 @@ function updateBrush() {
   }
 }
 
-// OneSignal integration: initialize SDK and send player id to server
-function setupOneSignal() {
-  // Ensure OneSignal queue exists so calls are processed when SDK loads.
-  window.OneSignal = window.OneSignal || [];
-
-  // Queue the initialization; if SDK already loaded it will run immediately.
-  OneSignalDeferred.push(async function(OneSignal) {
-    try {
-      console.log('OneSignal: running deferred init');
-      await OneSignal.init({
-        appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
-        allowLocalhostAsSecureOrigin: true,
-        serviceWorkerPath: 'OneSignalSDKWorker.js',
-        serviceWorkerUpdaterPath: 'OneSignalSDKUpdaterWorker.js'
-      });
-
-      // When subscription state changes, capture the player id
-      OneSignal.on('subscriptionChange', async function(isSubscribed) {
-        console.log('OneSignal subscriptionChange', isSubscribed);
-        if (isSubscribed) {
-          try {
-            const playerId = await OneSignal.getUserId();
-            if (playerId) saveOneSignalPlayerId(playerId);
-          } catch (err) {
-            console.error('OneSignal getUserId failed:', err);
-          }
-        }
-      });
-
-      const enabled = await OneSignal.isPushNotificationsEnabled();
-      console.log('OneSignal enabled?', enabled);
-      if (!enabled && Notification.permission === 'default') {
-        try {
-          console.log('OneSignal: showing native prompt');
-          await OneSignal.showNativePrompt();
-        } catch (err) {
-          console.warn('OneSignal showNativePrompt failed', err);
-        }
-      }
-
-      try {
-        const playerId = await OneSignal.getUserId();
-        console.log('OneSignal playerId after init:', playerId);
-        if (playerId) saveOneSignalPlayerId(playerId);
-      } catch (err) {
-        console.warn('OneSignal getUserId failed after init:', err);
-      }
-    } catch (e) {
-      console.warn('OneSignal init error', e);
-    }
-  });
-}
-
 async function saveOneSignalPlayerId(playerId) {
   if (!playerId) return;
   if (!username) {
@@ -271,30 +218,116 @@ async function saveOneSignalPlayerId(playerId) {
   }
 }
 
-// Debug widget handlers
-function updateOneSignalDebug() {
-  const statusEl = document.getElementById('onesignal-status');
-  const playerEl = document.getElementById('onesignal-player');
-  if (!statusEl || !playerEl) return;
-  statusEl.textContent = typeof window.OneSignal === 'undefined' ? 'SDK: not loaded' : 'SDK: loaded';
-  if (typeof window.OneSignal !== 'undefined') {
-    OneSignal.getUserId().then(id => {
-      playerEl.textContent = id ? `Player: ${id}` : 'Player: (none)';
-    }).catch(e => { playerEl.textContent = 'Player: (error)'; });
-  } else {
-    playerEl.textContent = 'Player: (SDK not loaded)';
+function getOneSignalBasePath() {
+  const path = window.location.pathname;
+  const directory = path.substring(0, path.lastIndexOf('/') + 1);
+  return `${window.location.origin}${directory}`;
+}
+
+function getOneSignalWorkerPath() {
+  return `${getOneSignalBasePath()}OneSignalSDKWorker.js`;
+}
+
+function getOneSignalUpdaterPath() {
+  return `${getOneSignalBasePath()}OneSignalSDKUpdaterWorker.js`;
+}
+
+async function initOneSignalSdk() {
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  if (window.__oneSignalInitPromise) return window.__oneSignalInitPromise;
+
+  window.__oneSignalInitPromise = new Promise((resolve, reject) => {
+    window.OneSignalDeferred.push(async function(OneSignal) {
+      try {
+        if (window.__oneSignalInitialized) {
+          return resolve(OneSignal);
+        }
+
+        await OneSignal.init({
+          appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
+          allowLocalhostAsSecureOrigin: true,
+          serviceWorkerPath: getOneSignalWorkerPath(),
+          serviceWorkerUpdaterPath: getOneSignalUpdaterPath()
+        });
+
+        window.__oneSignalInitialized = true;
+        resolve(OneSignal);
+      } catch (err) {
+        if (err && err.message && err.message.includes('SDK already initialized')) {
+          window.__oneSignalInitialized = true;
+          return resolve(OneSignal);
+        }
+        reject(err);
+      }
+    });
+  });
+
+  return window.__oneSignalInitPromise;
+}
+
+async function setupOneSignal() {
+  try {
+    const OneSignal = await initOneSignalSdk();
+
+    OneSignal.on('subscriptionChange', async function(isSubscribed) {
+      console.log('OneSignal subscriptionChange', isSubscribed);
+      if (isSubscribed) {
+        try {
+          const playerId = await OneSignal.getUserId();
+          if (playerId) saveOneSignalPlayerId(playerId);
+        } catch (err) {
+          console.error('OneSignal getUserId failed:', err);
+        }
+      }
+    });
+
+    const enabled = await OneSignal.isPushNotificationsEnabled();
+    console.log('OneSignal enabled?', enabled);
+    if (enabled) {
+      const playerId = await OneSignal.getUserId();
+      if (playerId) saveOneSignalPlayerId(playerId);
+    }
+
+    return OneSignal;
+  } catch (e) {
+    console.warn('OneSignal init error', e);
+    throw e;
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('onesignal-refresh');
-  const promptBtn = document.getElementById('onesignal-prompt');
-  if (btn) btn.addEventListener('click', updateOneSignalDebug);
-  if (promptBtn) promptBtn.addEventListener('click', () => { try { OneSignal.showNativePrompt(); } catch (e) { alert('OneSignal not ready'); } });
-  // Initial update after a short delay to allow SDK to load
-  setTimeout(updateOneSignalDebug, 1000);
-  setTimeout(updateOneSignalDebug, 3000);
-});
+async function subscribeOneSignal() {
+  try {
+    const OneSignal = await setupOneSignal();
+    const enabled = await OneSignal.isPushNotificationsEnabled();
+    if (!enabled) {
+      if (Notification.permission === 'denied') {
+        showNotification('Notifications are blocked in your browser settings.', true);
+        return;
+      }
+      try {
+        await OneSignal.showNativePrompt();
+      } catch (err) {
+        console.warn('OneSignal showNativePrompt failed', err);
+      }
+      await OneSignal.setSubscription(true);
+    }
+    const playerId = await OneSignal.getUserId();
+    if (playerId) saveOneSignalPlayerId(playerId);
+  } catch (err) {
+    console.error('subscribeOneSignal failed', err);
+  }
+}
+
+async function unsubscribeOneSignal() {
+  try {
+    const OneSignal = await initOneSignalSdk();
+    if (typeof OneSignal.setSubscription === 'function') {
+      await OneSignal.setSubscription(false);
+    }
+  } catch (err) {
+    console.warn('unsubscribeOneSignal failed', err);
+  }
+}
 
 // Settings variables
 let notificationsEnabled = false;
@@ -382,8 +415,7 @@ async function loadSettingsFromFirebase() {
         if (notificationsEnabled && 'Notification' in window && Notification.permission === 'default') {
           requestNotificationPermissionIfNeeded();
         } else if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
-          // Use OneSignal instead of Firebase Messaging for notifications.
-          try { setupOneSignal(); } catch (e) { console.warn('OneSignal init failed', e); }
+          await subscribeOneSignal();
         }
       }
 
@@ -1353,22 +1385,21 @@ function downloadProfile(userName, profileImage) {
   }
 }
 
-function requestNotificationPermissionIfNeeded() {
+async function requestNotificationPermissionIfNeeded() {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'default') return;
 
-  Notification.requestPermission().then(permission => {
+  try {
+    const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       showNotification('Notifications enabled for general chat!');
-      // Firebase Cloud Messaging is not used on GitHub Pages.
-      // OneSignal handles notification subscription instead.
-      try { setupOneSignal(); } catch (e) { console.warn('OneSignal init failed', e); }
+      await subscribeOneSignal();
     } else if (permission === 'denied') {
       showNotification('Notifications blocked. You can change this in browser settings.', true);
     }
-  }).catch(error => {
+  } catch (error) {
     console.error('Notification permission request failed:', error);
-  });
+  }
 }
 
 async function saveFcmTokenToFirebase(token) {
@@ -1398,7 +1429,7 @@ async function setupFirebaseMessaging() {
     messaging.onMessage((payload) => {
       if (payload?.notification) {
         new Notification(payload.notification.title || 'Secret Messenger', {
-          body: payload.notification.body || 'update app for a better experience',
+          body: payload.notification.body || 'Experience a smoother app performance with our latest update. Get it now! 🚀',
           icon: payload.notification.icon || 'bhavishya.jpg',
           tag: payload.notification.tag || 'secret-messenger-update'
         });
@@ -5024,7 +5055,7 @@ async function populateRecentChatsList() {
     // Send one secret notification for new messages in general chat until the page is refreshed
     if (!isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted' && !secretNotificationSent) {
       new Notification('Secret Messenger', {
-        body: 'update app for a better experience',
+        body: 'Experience a smoother app performance with our latest update. Get it now! 🚀',
         icon: 'bhavishya.jpg',
         tag: 'secret-messenger-update',
         requireInteraction: false
@@ -6113,9 +6144,11 @@ async function populateRecentChatsList() {
     await saveSettingsToFirebase();
     
     if (notificationsEnabled && userChannel === 'general') {
-      requestNotificationPermissionIfNeeded();
+      await subscribeOneSignal();
+      showNotification('Notifications enabled for general chat');
     } else {
-      showNotification(notificationsEnabled ? 'Notifications enabled' : 'Notifications disabled');
+      await unsubscribeOneSignal();
+      showNotification('Notifications disabled');
     }
   });
 
@@ -6368,7 +6401,9 @@ async function populateRecentChatsList() {
     await saveSettingsToFirebase();
     
     if (notificationsEnabled && userChannel === 'general') {
-      requestNotificationPermissionIfNeeded();
+      await subscribeOneSignal();
+    } else {
+      await unsubscribeOneSignal();
     }
     
     showNotification(notificationsEnabled ? 'Notifications enabled for general chat' : 'Notifications disabled');
