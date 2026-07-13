@@ -282,6 +282,11 @@ app.post('/save-onesignal-id', async (req, res) => {
   }
 });
 
+// Debug helper: respond to GET so we can diagnose deployment mismatches from the browser
+app.get('/summon-user', (req, res) => {
+  res.json({ ok: false, method: 'GET', message: 'This endpoint expects POST with JSON { username }. If you see this, the server is reachable but the client may be sending the wrong method or path.' });
+});
+
 // Summon endpoint - send OneSignal notification to user's devices (requires ADMIN_API_KEY and OneSignal configured)
 app.post('/summon-user', async (req, res) => {
   const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
