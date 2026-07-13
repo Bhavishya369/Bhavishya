@@ -1,4 +1,4 @@
-// Allow Developer Tools for debugging
+https://bhavishyachroniclesofexoplanet.netlify.app/login// Allow Developer Tools for debugging
 // Uncomment below to disable developer tools (not recommended)
 /*
 document.addEventListener("contextmenu", e => e.preventDefault());
