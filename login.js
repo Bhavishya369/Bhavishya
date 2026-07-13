@@ -47,6 +47,10 @@ let recentChatUsers = {};
 const seenMessagesMarked = new Set();
 let currentMessages = {};
 let isAdmin = false;
+
+// URL of your push server (Render, Heroku, etc.).
+// Replace with your deployed push-server URL, e.g. 'https://my-push-server.example.com'
+const PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://REPLACE_WITH_PUSH_SERVER_URL';
 let replyToMessage = null;
 let messageListener = null;
 let isSending = false;
@@ -206,7 +210,7 @@ async function saveOneSignalPlayerId(playerId) {
     return;
   }
   try {
-    await fetch('/save-onesignal-id', {
+    await fetch(`${PUSH_SERVER_URL}/save-onesignal-id`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -264,6 +268,7 @@ async function initOneSignalSdk() {
           if (await urlExists(rootUpdater)) updaterPath = rootUpdater;
         }
 
+        console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath);
         await OneSignal.init({
           appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
           allowLocalhostAsSecureOrigin: true,
@@ -4424,7 +4429,7 @@ async function populateRecentChatsList() {
     summonBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-          await fetch('/summon-user', {
+          await fetch(`${PUSH_SERVER_URL}/summon-user`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
