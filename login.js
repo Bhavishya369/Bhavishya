@@ -49,8 +49,8 @@ let currentMessages = {};
 let isAdmin = false;
 
 // URL of your push server (Render, Heroku, etc.).
-// Replace with your deployed push-server URL, e.g. 'https://my-push-server.example.com'
-const PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://REPLACE_WITH_PUSH_SERVER_URL';
+// Use the deployed push server URL or override it by setting window.PUSH_SERVER_URL before login.js loads.
+const PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
 let replyToMessage = null;
 let messageListener = null;
 let isSending = false;
@@ -224,8 +224,18 @@ async function saveOneSignalPlayerId(playerId) {
 
 function getOneSignalBasePath() {
   const path = window.location.pathname;
-  const directory = path.substring(0, path.lastIndexOf('/') + 1);
-  return `${window.location.origin}${directory}`;
+  const lastSegment = path.substring(path.lastIndexOf('/') + 1);
+  const isFile = lastSegment.includes('.');
+
+  if (path === '/' || path.endsWith('/')) {
+    return `${window.location.origin}${path}`;
+  }
+
+  if (!isFile) {
+    return `${window.location.origin}${path}/`;
+  }
+
+  return `${window.location.origin}${path.substring(0, path.lastIndexOf('/') + 1)}`;
 }
 
 function getOneSignalWorkerPath() {
@@ -234,6 +244,12 @@ function getOneSignalWorkerPath() {
 
 function getOneSignalUpdaterPath() {
   return `${getOneSignalBasePath()}OneSignalSDKUpdaterWorker.js`;
+}
+
+function getOneSignalSiteRoot() {
+  const segments = window.location.pathname.split('/').filter(Boolean);
+  if (!segments.length) return '/';
+  return `/${segments[0]}/`;
 }
 
 async function initOneSignalSdk() {
@@ -256,16 +272,32 @@ async function initOneSignalSdk() {
           return resolve(OneSignal);
         }
 
-        // Determine service worker paths — try page directory first, fall back to site root
+        // Determine service worker paths — try page directory first, then GitHub Pages repo root, then plain site root
         let workerPath = getOneSignalWorkerPath();
         let updaterPath = getOneSignalUpdaterPath();
-        if (!(await urlExists(workerPath))) {
-          const rootWorker = `${window.location.origin}/OneSignalSDKWorker.js`;
-          if (await urlExists(rootWorker)) workerPath = rootWorker;
+
+        const candidateWorkerPaths = [
+          workerPath,
+          `${window.location.origin}${getOneSignalSiteRoot()}OneSignalSDKWorker.js`,
+          `${window.location.origin}/OneSignalSDKWorker.js`
+        ];
+        const candidateUpdaterPaths = [
+          updaterPath,
+          `${window.location.origin}${getOneSignalSiteRoot()}OneSignalSDKUpdaterWorker.js`,
+          `${window.location.origin}/OneSignalSDKUpdaterWorker.js`
+        ];
+
+        for (const candidate of candidateWorkerPaths) {
+          if (await urlExists(candidate)) {
+            workerPath = candidate;
+            break;
+          }
         }
-        if (!(await urlExists(updaterPath))) {
-          const rootUpdater = `${window.location.origin}/OneSignalSDKUpdaterWorker.js`;
-          if (await urlExists(rootUpdater)) updaterPath = rootUpdater;
+        for (const candidate of candidateUpdaterPaths) {
+          if (await urlExists(candidate)) {
+            updaterPath = candidate;
+            break;
+          }
         }
 
         console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath);
