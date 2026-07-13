@@ -1,4 +1,4 @@
-https://bhavishyachroniclesofexoplanet.netlify.app/login// Allow Developer Tools for debugging
+// Allow Developer Tools for debugging
 // Uncomment below to disable developer tools (not recommended)
 /*
 document.addEventListener("contextmenu", e => e.preventDefault());
@@ -321,16 +321,27 @@ async function initOneSignalSdk() {
         if (typeof workerPath === 'string' && workerPath.startsWith('/')) workerPath = workerPath.slice(1);
         if (typeof updaterPath === 'string' && updaterPath.startsWith('/')) updaterPath = updaterPath.slice(1);
 
-        console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
-        await OneSignal.init({
-          appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
-          allowLocalhostAsSecureOrigin: true,
-          serviceWorkerPath: workerPath,
-          serviceWorkerUpdaterPath: updaterPath,
-          serviceWorkerParam: {
-            scope
-          }
-        });
+        console.log(
+  'OneSignal: using serviceWorkerPath=',
+  '/OneSignalSDKWorker.js',
+  'updaterPath=',
+  '/OneSignalSDKUpdaterWorker.js',
+  'scope=',
+  '/'
+);
+
+await OneSignal.init({
+  appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
+  allowLocalhostAsSecureOrigin: true,
+
+  serviceWorkerPath: '/OneSignalSDKWorker.js',
+  serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+
+  serviceWorkerParam: {
+    scope: '/'
+  }
+});
+console.log("OneSignal object:", OneSignal);
 
         // Debug: try to log the OneSignal user id if already available
         try {
