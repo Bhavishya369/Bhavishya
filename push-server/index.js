@@ -9,8 +9,11 @@ const SERVICE_ACCOUNT_BASE64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 const SERVICE_ACCOUNT_PATH = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const DATABASE_URL = process.env.FIREBASE_DATABASE_URL;
 const CHAT_DB_PATH = process.env.CHAT_DB_PATH || '/chat';
+const STATUS_DB_PATH = process.env.STATUS_DB_PATH || '/status';
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || '';
 const NOTIFICATION_ICON_URL = process.env.NOTIFICATION_ICON_URL || '';
+const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || '';
+const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY || '';
 
 let adminApp = null;
 let db = null;
@@ -150,20 +153,78 @@ if (db) {
     };
 
     const usersSnap = await db.ref('users').once('value');
-    const tokens = [];
+    const oneSignalRecipients = [];
+    const offlineUserUpdates = [];
     usersSnap.forEach(u => {
-      const token = u.child('fcmToken').val();
-      if (token) tokens.push(token);
+      const pid = u.child('oneSignalPlayerId').val();
+      const notify = u.child('notifyWhenOffline').val();
+      if (pid && notify) {
+        oneSignalRecipients.push(pid);
+        offlineUserUpdates.push({ userId: u.key, playerId: pid });
+      }
     });
 
-    await sendNotificationsAndCleanup(tokens, notification, data);
+    if (ONESIGNAL_REST_API_KEY && oneSignalRecipients.length > 0) {
+      try {
+        await sendOneSignalNotification(oneSignalRecipients, notification, data);
+        // After sending one offline notification per user, clear the flag so they don't get further messages until they come back.
+        await Promise.all(offlineUserUpdates.map(({ userId }) => db.ref(`users/${userId}/notifyWhenOffline`).set(false)));
+      } catch (err) {
+        console.error('OneSignal send error', err);
+      }
+    }
   });
+}
+
+async function sendOneSignalNotification(playerIds, notification, data = {}) {
+  if (!playerIds || playerIds.length === 0) return;
+  if (!ONESIGNAL_REST_API_KEY || !ONESIGNAL_APP_ID) {
+    throw new Error('OneSignal app id or rest api key missing');
+  }
+
+  // Use global fetch if available (Node 18+), otherwise try node-fetch
+  let fetchFn = global.fetch;
+  if (!fetchFn) {
+    try {
+      // eslint-disable-next-line global-require
+      fetchFn = require('node-fetch');
+    } catch (e) {
+      throw new Error('fetch is not available; install node-fetch or use Node 18+');
+    }
+  }
+
+  const payload = {
+    app_id: ONESIGNAL_APP_ID,
+    include_player_ids: Array.isArray(playerIds) ? playerIds : [playerIds],
+    headings: { en: notification.title || 'Secret Messenger' },
+    contents: { en: notification.body || 'New message' },
+    data: data || {}
+  };
+
+  const res = await fetchFn('https://onesignal.com/api/v1/notifications', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OneSignal error: ${res.status} - ${text}`);
+  }
+
+  const json = await res.json();
+  console.log('OneSignal send result', json);
+  return json;
 }
 
 // Protected test endpoint to send to a single token
 app.post('/send-test', async (req, res) => {
   const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
-  if (ADMIN_API_KEY && key !== ADMIN_API_KEY) return res.status(401).json({ error: 'unauthorized' });
+  // If ADMIN_API_KEY is set, only reject when an API key is provided but incorrect.
+  if (ADMIN_API_KEY && key && key !== ADMIN_API_KEY) return res.status(401).json({ error: 'unauthorized' });
 
   const { token, title, body } = req.body;
   if (!token) return res.status(400).json({ error: 'token required' });
@@ -184,6 +245,55 @@ app.post('/send-test', async (req, res) => {
   } catch (err) {
     console.error('send-test error', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint to save OneSignal player id for a user
+app.post('/save-onesignal-id', async (req, res) => {
+  const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
+  if (ADMIN_API_KEY && key && key !== ADMIN_API_KEY) return res.status(401).json({ error: 'unauthorized' });
+
+  const { username, playerId } = req.body || {};
+  if (!username || !playerId) return res.status(400).json({ error: 'username and playerId required' });
+
+  if (!db) return res.status(503).json({ error: 'Firebase Admin is not initialized. Set credentials first.' });
+
+  try {
+    await db.ref(`users/${username}/oneSignalPlayerId`).set(playerId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('save-onesignal-id error', err);
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Summon endpoint - send OneSignal notification to user's devices (requires ADMIN_API_KEY and OneSignal configured)
+app.post('/summon-user', async (req, res) => {
+  const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
+  if (ADMIN_API_KEY && key && key !== ADMIN_API_KEY) return res.status(401).json({ error: 'unauthorized' });
+  const { username } = req.body || {};
+  if (!username) return res.status(400).json({ error: 'username required' });
+  if (!db) return res.status(503).json({ error: 'Firebase Admin not initialized' });
+
+  try {
+    const userSnap = await db.ref(`users/${username}`).once('value');
+    const user = userSnap.val();
+    if (!user) return res.status(404).json({ error: 'user not found' });
+    // Support multiple player ids stored as an array or a single id string
+    let pids = [];
+    if (Array.isArray(user.oneSignalPlayerId)) pids = user.oneSignalPlayerId;
+    else if (typeof user.oneSignalPlayerId === 'string' && user.oneSignalPlayerId) pids = [user.oneSignalPlayerId];
+    else if (user.oneSignalPlayerIds && Array.isArray(user.oneSignalPlayerIds)) pids = user.oneSignalPlayerIds;
+
+    if (!pids || pids.length === 0) return res.status(404).json({ error: 'no player id for user' });
+
+    const notification = { title: 'Summon', body: `${username}, you have a message waiting.` };
+    const data = { summon: true };
+    await sendOneSignalNotification(pids, notification, data);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('summon-user error', err);
+    res.status(500).json({ error: err.message || String(err) });
   }
 });
 

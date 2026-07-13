@@ -529,6 +529,50 @@ input[type="submit"] {
   display: flex;
 }
 
+.summon-btn {
+  position: absolute;
+  right: 38px;
+  top: 44%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--accent-color);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.summon-btn:hover { background: rgba(255,255,255,0.06); }
+
+.seen-by-list { max-height: 320px; overflow:auto; }
+.seen-by-row { display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.03); }
+.seen-by-empty { padding:12px; color:var(--text-secondary); }
+
+/* Custom modal used by showCustomModal() */
+#customModal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.45);
+  z-index: 10050;
+}
+#customModal .modal-content {
+  background: var(--secondary-bg);
+  border-radius: 12px;
+  padding: 14px;
+  min-width: 280px;
+  max-width: 520px;
+  color: var(--text-primary);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.6);
+}
+#customModal .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+#customModal .modal-close { background: transparent; border: none; color: var(--text-primary); font-size: 20px; cursor: pointer; }
+
 .chat__main {
   flex: 1;
   display: flex;

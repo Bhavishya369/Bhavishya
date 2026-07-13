@@ -44,6 +44,7 @@ let isTyping = false;
 let typingTimeout = null;
 let onlineUsers = {};
 let recentChatUsers = {};
+const seenMessagesMarked = new Set();
 let currentMessages = {};
 let isAdmin = false;
 let replyToMessage = null;
@@ -208,8 +209,7 @@ async function saveOneSignalPlayerId(playerId) {
     await fetch('/save-onesignal-id', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ADMIN_API_KEY || ''
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ username: username, playerId })
     });
@@ -236,6 +236,15 @@ async function initOneSignalSdk() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   if (window.__oneSignalInitPromise) return window.__oneSignalInitPromise;
 
+  async function urlExists(url) {
+    try {
+      const r = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+      return r && r.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
   window.__oneSignalInitPromise = new Promise((resolve, reject) => {
     window.OneSignalDeferred.push(async function(OneSignal) {
       try {
@@ -243,11 +252,23 @@ async function initOneSignalSdk() {
           return resolve(OneSignal);
         }
 
+        // Determine service worker paths — try page directory first, fall back to site root
+        let workerPath = getOneSignalWorkerPath();
+        let updaterPath = getOneSignalUpdaterPath();
+        if (!(await urlExists(workerPath))) {
+          const rootWorker = `${window.location.origin}/OneSignalSDKWorker.js`;
+          if (await urlExists(rootWorker)) workerPath = rootWorker;
+        }
+        if (!(await urlExists(updaterPath))) {
+          const rootUpdater = `${window.location.origin}/OneSignalSDKUpdaterWorker.js`;
+          if (await urlExists(rootUpdater)) updaterPath = rootUpdater;
+        }
+
         await OneSignal.init({
           appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
           allowLocalhostAsSecureOrigin: true,
-          serviceWorkerPath: getOneSignalWorkerPath(),
-          serviceWorkerUpdaterPath: getOneSignalUpdaterPath()
+          serviceWorkerPath: workerPath,
+          serviceWorkerUpdaterPath: updaterPath
         });
 
         window.__oneSignalInitialized = true;
@@ -269,23 +290,31 @@ async function setupOneSignal() {
   try {
     const OneSignal = await initOneSignalSdk();
 
-    OneSignal.on('subscriptionChange', async function(isSubscribed) {
-      console.log('OneSignal subscriptionChange', isSubscribed);
-      if (isSubscribed) {
-        try {
-          const playerId = await OneSignal.getUserId();
-          if (playerId) saveOneSignalPlayerId(playerId);
-        } catch (err) {
-          console.error('OneSignal getUserId failed:', err);
+    if (OneSignal && typeof OneSignal.on === 'function') {
+      OneSignal.on('subscriptionChange', async function(isSubscribed) {
+        console.log('OneSignal subscriptionChange', isSubscribed);
+        if (isSubscribed) {
+          try {
+            if (typeof OneSignal.getUserId === 'function') {
+              const playerId = await OneSignal.getUserId();
+              if (playerId) saveOneSignalPlayerId(playerId);
+            }
+          } catch (err) {
+            console.error('OneSignal getUserId failed:', err);
+          }
         }
-      }
-    });
+      });
+    } else {
+      console.warn('OneSignal SDK initialized but expected event methods are missing');
+    }
 
-    const enabled = await OneSignal.isPushNotificationsEnabled();
+    const enabled = (OneSignal && typeof OneSignal.isPushNotificationsEnabled === 'function') ? await OneSignal.isPushNotificationsEnabled() : false;
     console.log('OneSignal enabled?', enabled);
     if (enabled) {
-      const playerId = await OneSignal.getUserId();
-      if (playerId) saveOneSignalPlayerId(playerId);
+      if (typeof OneSignal.getUserId === 'function') {
+        const playerId = await OneSignal.getUserId();
+        if (playerId) saveOneSignalPlayerId(playerId);
+      }
     }
 
     return OneSignal;
@@ -4387,6 +4416,27 @@ async function populateRecentChatsList() {
     li.appendChild(avatarDiv);
     li.appendChild(infoDiv);
 
+    // Summon button (send notification to user's devices)
+    const summonBtn = document.createElement('button');
+    summonBtn.className = 'summon-btn';
+    summonBtn.title = 'Summon user (send notification)';
+    summonBtn.innerHTML = '<i class="fas fa-bell"></i>';
+    summonBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+          await fetch('/summon-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
+          });
+        showNotification('Summon sent');
+      } catch (err) {
+        console.error('Summon failed', err);
+        showNotification('Summon failed', true);
+      }
+    });
+    li.appendChild(summonBtn);
+
     li.addEventListener('click', () => {
       markRecentChatVisited(user);
     });
@@ -4887,6 +4937,13 @@ async function populateRecentChatsList() {
         <i class="fas fa-reply"></i>
       </button>
     `;
+    if (isOwnMessage) {
+      messageActionsHTML += `
+        <button class="message-action seen-by-btn" title="Seen by">
+          <i class="fas fa-eye"></i>
+        </button>
+      `;
+    }
     
     // Show edit/delete buttons based on permissions
     if (canEditDelete) {
@@ -4965,6 +5022,9 @@ async function populateRecentChatsList() {
     }
     
     insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey);
+    if (!isOwnMessage) {
+      markMessageAsSeen(key, msg.name);
+    }
 
     if (!initialLoadComplete) {
       const shouldCount = userChannel === 'admin' || userChannel === 'general' ? (!msg.channel || msg.channel === 'general') : msg.channel === userChannel;
@@ -5210,6 +5270,74 @@ async function populateRecentChatsList() {
     replyToMessage = null;
   }
 
+  function markMessageAsSeen(messageKey, senderName) {
+    if (!messageKey || !senderName) return;
+    if (seenMessagesMarked.has(messageKey)) return;
+    seenMessagesMarked.add(messageKey);
+    const seenPath = `chat/${messageKey}/seenBy/${normalizeName(username)}`;
+    db.ref(seenPath).set({
+      name: username,
+      seenAt: Date.now()
+    }).catch((err) => {
+      console.warn('Failed to mark message as seen:', err);
+    });
+  }
+
+  function formatSeenTime(timestamp) {
+    if (!timestamp) return 'Unknown';
+    const date = new Date(Number(timestamp));
+    return date.toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+  }
+
+  async function showSeenByModal(messageKey, messageDiv) {
+    if (!messageKey) return;
+    try {
+      const snapshot = await db.ref(`chat/${messageKey}/seenBy`).once('value');
+      const seenData = snapshot.val() || {};
+      const entries = Object.values(seenData).filter(item => item && item.name);
+      const modalItems = entries.length > 0
+        ? entries.map(item => `<div class="seen-by-row"><span>${escapeHTML(item.name)}</span><span>${escapeHTML(formatSeenTime(item.seenAt))}</span></div>`).join('')
+        : '<div class="seen-by-empty">No one has seen this yet.</div>';
+      showCustomModal('Seen by', `
+        <div class="seen-by-list">
+          ${modalItems}
+        </div>
+      `);
+    } catch (err) {
+      console.error('Failed to load seen-by data', err);
+      showNotification('Failed to load seen-by list', true);
+    }
+  }
+
+  // Generic modal helper matching site theme (uses existing modal styles if present)
+  function showCustomModal(title, htmlContent) {
+    // Reuse global modal container if exists
+    let modal = document.getElementById('customModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'customModal';
+      modal.className = 'modal custom-modal';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="customModalTitle"></h3>
+            <button id="customModalClose" class="modal-close">×</button>
+          </div>
+          <div id="customModalBody" class="modal-body"></div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      document.getElementById('customModalClose').addEventListener('click', () => {
+        modal.style.display = 'none';
+      });
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    }
+
+    document.getElementById('customModalTitle').textContent = title || '';
+    document.getElementById('customModalBody').innerHTML = htmlContent || '';
+    modal.style.display = 'flex';
+  }
+
   // Copy message
   function copyMessage(messageDiv) {
     try {
@@ -5248,6 +5376,9 @@ async function populateRecentChatsList() {
       } else if (actionButton.classList.contains('reply-btn')) {
         const key = messageDiv.dataset.key;
         replyToMessageFunc(key, messageDiv);
+      } else if (actionButton.classList.contains('seen-by-btn')) {
+        const key = messageDiv.dataset.key;
+        showSeenByModal(key, messageDiv);
       } else if (actionButton.classList.contains('edit-btn')) {
         const key = messageDiv.dataset.key;
         editMessage(key, messageDiv);
