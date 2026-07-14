@@ -6,15 +6,15 @@ const app = express();
 app.use(express.json());
 
 // Optional: comma-separated list of allowed origins (e.g. https://your-site.github.io)
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['https://bhavishyachroniclesofexoplanet.netlify.app'];
 
-// Basic CORS handling to allow browser clients (GitHub Pages) to call this API
+// Basic CORS handling to allow browser clients (GitHub Pages, Netlify) to call this API
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (!ALLOWED_ORIGINS.length || (origin && ALLOWED_ORIGINS.includes(origin))) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-KEY');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, X-API-KEY');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();

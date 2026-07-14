@@ -52,7 +52,7 @@ let isAdmin = false;
 // Use the deployed push server URL or override it by setting window.PUSH_SERVER_URL before login.js loads.
 const PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
 const ONE_SIGNAL_PATH_PREFIX = (window.ONE_SIGNAL_PATH_PREFIX || '').replace(/^\/+|\/+$/g, '');
-const ONE_SIGNAL_SCOPE_OVERRIDE = window.ONE_SIGNAL_SCOPE_OVERRIDE || '';
+const ONE_SIGNAL_SCOPE_OVERRIDE = window.ONE_SIGNAL_SCOPE_OVERRIDE || '/';
 let replyToMessage = null;
 let messageListener = null;
 let isSending = false;
@@ -289,19 +289,19 @@ async function initOneSignalSdk() {
 
         
 
-        const scope = ONE_SIGNAL_SCOPE_OVERRIDE || getOneSignalScope();
+        const scope = ONE_SIGNAL_SCOPE_OVERRIDE;
         const overridePrefix = ONE_SIGNAL_PATH_PREFIX ? `${ONE_SIGNAL_PATH_PREFIX}/` : '';
         const candidateWorkerPaths = [
           overridePrefix ? `${overridePrefix}OneSignalSDKWorker.js` : null,
+          'OneSignalSDKWorker.js',
           workerPath,
-          `${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`,
-          'OneSignalSDKWorker.js'
+          `${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`
         ].filter(Boolean);
         const candidateUpdaterPaths = [
           overridePrefix ? `${overridePrefix}OneSignalSDKUpdaterWorker.js` : null,
+          'OneSignalSDKUpdaterWorker.js',
           updaterPath,
-          `${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`,
-          'OneSignalSDKUpdaterWorker.js'
+          `${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`
         ].filter(Boolean);
 
         for (const candidate of candidateWorkerPaths) {
@@ -343,14 +343,30 @@ await OneSignal.init({
 });
 console.log("OneSignal object:", OneSignal);
 
-        // Debug: try to log the OneSignal user id if already available
+        // Debug: try to log and save the OneSignal player id if available
         try {
-          if (typeof OneSignal.getUserId === 'function') {
+          let playerId = null;
+          if (OneSignal && OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.id) {
+            playerId = OneSignal.User.PushSubscription.id;
+            console.log('OneSignal User ID (post-init):', playerId);
+            if (username) {
+              try {
+                await fetch(`${PUSH_SERVER_URL}/save-onesignal-id`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ username, playerId })
+                });
+                console.log('OneSignal Player ID saved:', playerId);
+              } catch (saveErr) {
+                console.error('Failed to save OneSignal ID:', saveErr);
+              }
+            }
+          } else if (typeof OneSignal.getUserId === 'function') {
             const debugId = await OneSignal.getUserId();
-            if (debugId) console.log('OneSignal User ID (post-init):', debugId);
+            if (debugId) console.log('OneSignal User ID (legacy):', debugId);
           }
         } catch (e) {
-          // ignore
+          console.warn('OneSignal player id extraction failed:', e);
         }
 
         window.__oneSignalInitialized = true;
