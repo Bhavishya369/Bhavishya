@@ -263,9 +263,18 @@ async function initOneSignalSdk() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   if (window.__oneSignalInitPromise) return window.__oneSignalInitPromise;
 
+  function absoluteUrl(path) {
+    try {
+      return new URL(path, window.location.origin).href;
+    } catch (e) {
+      return path;
+    }
+  }
+
   async function urlExists(url) {
     try {
-      const r = await fetch(url, { method: 'HEAD', cache: 'no-cache' });
+      const fullUrl = absoluteUrl(url);
+      const r = await fetch(fullUrl, { method: 'HEAD', cache: 'no-cache' });
       return r && r.ok;
     } catch (e) {
       return false;
@@ -279,30 +288,29 @@ async function initOneSignalSdk() {
           return resolve(OneSignal);
         }
 
-        // Determine service worker paths — try page directory first, then repo root path, then plain site root
-        const repoRootPath = `${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`;
-        const repoRootUpdaterPath = `${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`;
-        let workerPath = getOneSignalWorkerPath();
-        let updaterPath = getOneSignalUpdaterPath();
-
-
-
-        
+        const repoRootPath = `/${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`;
+        const repoRootUpdaterPath = `/${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`;
+        let workerPath = '/OneSignalSDKWorker.js';
+        let updaterPath = '/OneSignalSDKUpdaterWorker.js';
 
         const scope = ONE_SIGNAL_SCOPE_OVERRIDE === '/' ? getOneSignalScope() : ONE_SIGNAL_SCOPE_OVERRIDE;
         const overridePrefix = ONE_SIGNAL_PATH_PREFIX ? `${ONE_SIGNAL_PATH_PREFIX}/` : '';
         const candidateWorkerPaths = [
-          overridePrefix ? `${overridePrefix}OneSignalSDKWorker.js` : null,
+          `${window.location.origin}/OneSignalSDKWorker.js`,
           '/OneSignalSDKWorker.js',
-          workerPath,
+          overridePrefix ? `${overridePrefix}OneSignalSDKWorker.js` : null,
+          getOneSignalWorkerPath(),
           repoRootPath,
+          `${window.location.origin}${repoRootPath}`,
           'OneSignalSDKWorker.js'
         ].filter(Boolean);
         const candidateUpdaterPaths = [
-          overridePrefix ? `${overridePrefix}OneSignalSDKUpdaterWorker.js` : null,
+          `${window.location.origin}/OneSignalSDKUpdaterWorker.js`,
           '/OneSignalSDKUpdaterWorker.js',
-          updaterPath,
+          overridePrefix ? `${overridePrefix}OneSignalSDKUpdaterWorker.js` : null,
+          getOneSignalUpdaterPath(),
           repoRootUpdaterPath,
+          `${window.location.origin}${repoRootUpdaterPath}`,
           'OneSignalSDKUpdaterWorker.js'
         ].filter(Boolean);
 
@@ -321,7 +329,7 @@ async function initOneSignalSdk() {
 
         console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
 
-await OneSignal.init({
+        await OneSignal.init({
   appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
   allowLocalhostAsSecureOrigin: true,
 

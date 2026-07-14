@@ -543,9 +543,19 @@ input[type="submit"] {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.summon-btn:hover { background: rgba(255,255,255,0.06); }
+.summon-btn:hover {
+  background: rgba(124, 58, 237, 0.16);
+  transform: translateY(-50%) scale(1.08);
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12);
+}
+
+.summon-btn:focus-visible {
+  outline: 2px solid rgba(124, 58, 237, 0.5);
+  outline-offset: 2px;
+}
 
 .seen-by-list { max-height: 320px; overflow:auto; }
 .seen-by-row { display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.03); }
