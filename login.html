@@ -54,11 +54,25 @@
   <!-- OneSignal Web SDK -->
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
+    // Use Render push server and GitHub Pages site path
     window.PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
-    window.ONE_SIGNAL_PATH_PREFIX = '';
-    window.ONE_SIGNAL_SCOPE_OVERRIDE = '/';
+    // GitHub Pages site serves at https://bhavishya369.github.io
+    // OneSignal service worker files are hosted under /Bhavishya/
+    window.ONE_SIGNAL_PATH_PREFIX = 'Bhavishya/';
+    window.ONE_SIGNAL_SCOPE_OVERRIDE = '/Bhavishya/';
   </script>
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "453e37ab-e655-4aee-a716-1234072cf2a8",
+        serviceWorkerPath: "Bhavishya/OneSignalSDKWorker.js",
+        serviceWorkerUpdaterPath: "Bhavishya/OneSignalSDKUpdaterWorker.js",
+        serviceWorkerParam: { scope: "/Bhavishya/" }
+      });
+    });
+  </script>
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
