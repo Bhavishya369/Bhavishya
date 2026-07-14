@@ -6,16 +6,23 @@ const app = express();
 app.use(express.json());
 
 // Optional: comma-separated list of allowed origins (e.g. https://your-site.github.io)
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['https://bhavishyachroniclesofexoplanet.netlify.app'];
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim()).filter(Boolean)
+  : [];
 
 // Basic CORS handling to allow browser clients (GitHub Pages, Netlify) to call this API
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!ALLOWED_ORIGINS.length || (origin && ALLOWED_ORIGINS.includes(origin))) {
+  const allowed = !ALLOWED_ORIGINS.length || (origin && ALLOWED_ORIGINS.includes(origin));
+
+  if (allowed) {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, X-API-KEY');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, X-API-KEY, Origin, Accept');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
+
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -319,4 +326,3 @@ app.post('/summon-user', async (req, res) => {
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log('Push server listening on port', port));
-

@@ -289,19 +289,21 @@ async function initOneSignalSdk() {
 
         
 
-        const scope = ONE_SIGNAL_SCOPE_OVERRIDE;
+        const scope = ONE_SIGNAL_SCOPE_OVERRIDE === '/' ? getOneSignalScope() : ONE_SIGNAL_SCOPE_OVERRIDE;
         const overridePrefix = ONE_SIGNAL_PATH_PREFIX ? `${ONE_SIGNAL_PATH_PREFIX}/` : '';
         const candidateWorkerPaths = [
           overridePrefix ? `${overridePrefix}OneSignalSDKWorker.js` : null,
-          'OneSignalSDKWorker.js',
+          '/OneSignalSDKWorker.js',
           workerPath,
-          `${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`
+          repoRootPath,
+          'OneSignalSDKWorker.js'
         ].filter(Boolean);
         const candidateUpdaterPaths = [
           overridePrefix ? `${overridePrefix}OneSignalSDKUpdaterWorker.js` : null,
-          'OneSignalSDKUpdaterWorker.js',
+          '/OneSignalSDKUpdaterWorker.js',
           updaterPath,
-          `${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`
+          repoRootUpdaterPath,
+          'OneSignalSDKUpdaterWorker.js'
         ].filter(Boolean);
 
         for (const candidate of candidateWorkerPaths) {
@@ -317,28 +319,17 @@ async function initOneSignalSdk() {
           }
         }
 
-        // Normalize paths: OneSignal examples expect no leading slash for subdirectory paths
-        if (typeof workerPath === 'string' && workerPath.startsWith('/')) workerPath = workerPath.slice(1);
-        if (typeof updaterPath === 'string' && updaterPath.startsWith('/')) updaterPath = updaterPath.slice(1);
-
-        console.log(
-  'OneSignal: using serviceWorkerPath=',
-  '/OneSignalSDKWorker.js',
-  'updaterPath=',
-  '/OneSignalSDKUpdaterWorker.js',
-  'scope=',
-  '/'
-);
+        console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
 
 await OneSignal.init({
   appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
   allowLocalhostAsSecureOrigin: true,
 
-  serviceWorkerPath: '/OneSignalSDKWorker.js',
-  serviceWorkerUpdaterPath: '/OneSignalSDKUpdaterWorker.js',
+  serviceWorkerPath: workerPath,
+  serviceWorkerUpdaterPath: updaterPath,
 
   serviceWorkerParam: {
-    scope: '/'
+    scope
   }
 });
 console.log("OneSignal object:", OneSignal);

@@ -55,8 +55,16 @@
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
-    window.ONE_SIGNAL_PATH_PREFIX = '';
-    window.ONE_SIGNAL_SCOPE_OVERRIDE = '/';
+
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    if (pathSegments.length > 0) {
+      const firstSegment = pathSegments[0];
+      window.ONE_SIGNAL_PATH_PREFIX = `/${firstSegment}`;
+      window.ONE_SIGNAL_SCOPE_OVERRIDE = `/${firstSegment}/`;
+    } else {
+      window.ONE_SIGNAL_PATH_PREFIX = '';
+      window.ONE_SIGNAL_SCOPE_OVERRIDE = '/';
+    }
   </script>
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
   <!-- Supabase JS SDK -->
@@ -774,6 +782,5 @@
   </div>
 </body>
 </html>
-
 
 
