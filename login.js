@@ -4349,10 +4349,11 @@ function initializeChatApp() {
     return Object.fromEntries(recentChatMap.entries());
   }
 
-// Load recent chats from the same channel
+// Load recent chats from the same channel (preserve Firebase storage order)
 function loadRecentChats() {
   const visits = getRecentChatVisits();
 
+  // Use server-side timestamp ordering to avoid client-side filtering
   const query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
 
   query.once('value', (snapshot) => {
@@ -4775,14 +4776,14 @@ async function populateRecentChatsList() {
   // For private channels, only show messages with matching channel
   let query;
   if (userChannel === 'general') {
-    // For general chat, preserve Firebase storage order and filter client-side
-    query = db.ref('chat').orderByKey().limitToLast(1000);
+    // For general chat, fetch messages ordered by timestamp server-side
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
   } else if (userChannel === 'admin') {
-    // Admin in admin panel can see all messages in Firebase storage order
-    query = db.ref('chat').orderByKey().limitToLast(1000);
+    // Admin in admin panel can see all messages ordered by timestamp
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
   } else {
-    // For private channels, use Firebase storage order and filter client-side
-    query = db.ref('chat').orderByKey().limitToLast(1000);
+    // For private channels, fetch messages ordered by timestamp server-side
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
   }
   
   messageListener = query;
