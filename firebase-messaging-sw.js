@@ -15,11 +15,11 @@ firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const notificationTitle = payload.notification?.title || 'Secret Messenger';
+  const notificationTitle = payload.notification?.title || 'Bhavishya';
   const notificationOptions = {
     body: payload.notification?.body || 'Update app for a better experience 🚀',
     icon: payload.notification?.icon || 'bhavishya.jpg',
-    tag: payload.notification?.tag || 'secret-messenger-update',
+    tag: payload.notification?.tag || 'bhavishya-update',
     renotify: false
   };
 

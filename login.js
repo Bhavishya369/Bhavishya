@@ -509,7 +509,8 @@ async function saveSettingsToFirebase() {
   if (!username) return;
   
   try {
-    const settingsRef = db.ref(`users/${username}/settings`);
+    const safeKey = getFirebaseSafeUserKey(username);
+    const settingsRef = db.ref(`users/${safeKey}/settings`);
     const settings = {
       profileImage: userProfileImage || '',
       chatBackground: chatBackground,
@@ -531,7 +532,8 @@ async function loadSettingsFromFirebase() {
   if (!username) return false;
   
   try {
-    const settingsRef = db.ref(`users/${username}/settings`);
+    const safeKey = getFirebaseSafeUserKey(username);
+    const settingsRef = db.ref(`users/${safeKey}/settings`);
     const snapshot = await settingsRef.once('value');
     const settings = snapshot.val();
     
@@ -626,7 +628,8 @@ function setupSettingsSyncListener() {
   if (!username) return;
   
   try {
-    const settingsRef = db.ref(`users/${username}/settings`);
+    const safeKey = getFirebaseSafeUserKey(username);
+    const settingsRef = db.ref(`users/${safeKey}/settings`);
     settingsRef.on('value', (snapshot) => {
       const settings = snapshot.val();
       if (settings && settings.lastUpdated) {
@@ -733,7 +736,8 @@ async function getUserProfileImage(userName) {
   }
 
   try {
-    const settingsRef = db.ref(`users/${userName}/settings`);
+    const safeKey = getFirebaseSafeUserKey(userName);
+    const settingsRef = db.ref(`users/${safeKey}/settings`);
     const snapshot = await settingsRef.once('value');
     const settings = snapshot.val();
     const imageUrl = settings && settings.profileImage ? settings.profileImage : null;
@@ -788,6 +792,19 @@ function escapeHTML(text) {
   return text.replace(/[&<>\"']/g, function(char) {
     return map[char] || char;
   });
+}
+
+// Generate a Firebase-safe user key from username/email
+// Replaces invalid Firebase path characters: . # $ [ ]
+function getFirebaseSafeUserKey(username) {
+  if (!username || typeof username !== 'string') return 'unknown';
+  return String(username)
+    .trim()
+    .toLowerCase()
+    .replace(/\.+/g, '_')  // Replace . with _
+    .replace(/[#$\[\]]/g, '_')  // Replace invalid Firebase chars with _
+    .replace(/\s+/g, '_')  // Replace spaces with _
+    .substring(0, 100);  // Limit length
 }
 
 // Normalize a user/display name for comparison (remove control/chars, collapse spaces)
@@ -1081,10 +1098,10 @@ function markChatVisited() {
 }
 
 async function showChatNotification(messageText, metadata = {}) {
-  const title = metadata.title || 'Secret Messenger';
+  const title = metadata.title || 'Bhavishya';
   const body = metadata.body || messageText || 'Update app for a better experience 🚀';
   const icon = metadata.icon || 'bhavishya.jpg';
-  const tag = metadata.tag || 'secret-messenger-update';
+  const tag = metadata.tag || 'bhavishya-update';
 
   try {
     if ('serviceWorker' in navigator) {
@@ -1625,7 +1642,8 @@ async function requestNotificationPermissionIfNeeded() {
 async function saveFcmTokenToFirebase(token) {
   if (!username || !token) return;
   try {
-    await db.ref(`users/${username}/fcmToken`).set(token);
+    const safeKey = getFirebaseSafeUserKey(username);
+    await db.ref(`users/${safeKey}/fcmToken`).set(token);
     localStorage.setItem('fcm_token', token);
   } catch (error) {
     console.error('Error saving FCM token to Firebase:', error);
@@ -1650,10 +1668,10 @@ async function setupFirebaseMessaging() {
 
     messaging.onMessage((payload) => {
       if (payload?.notification) {
-        new Notification(payload.notification.title || 'Secret Messenger', {
+        new Notification(payload.notification.title || 'Bhavishya', {
           body: payload.notification.body || 'Experience a smoother app performance with our latest update. Get it now! 🚀',
           icon: payload.notification.icon || 'bhavishya.jpg',
-          tag: payload.notification.tag || 'secret-messenger-update'
+          tag: payload.notification.tag || 'bhavishya-update'
         });
       }
     });
@@ -4889,14 +4907,14 @@ async function populateRecentChatsList() {
   // For private channels, only show messages with matching channel
   let query;
   if (userChannel === 'general') {
-    // For general chat, fetch messages ordered by timestamp server-side
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
+    // Load the full chat history for general chat so older Firebase messages remain visible.
+    query = db.ref('chat').orderByChild('timestamp');
   } else if (userChannel === 'admin') {
-    // Admin in admin panel can see all messages ordered by timestamp
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
+    // Admin can see all messages, so load the full history too.
+    query = db.ref('chat').orderByChild('timestamp');
   } else {
-    // For private channels, fetch messages ordered by timestamp server-side
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
+    // Private channels also need the full history for the current channel.
+    query = db.ref('chat').orderByChild('timestamp');
   }
   
   messageListener = query;
@@ -4984,6 +5002,7 @@ async function populateRecentChatsList() {
     if (!initialLoadComplete) {
       const allMessages = snapshot.val() || {};
       expectedInitialMessages = Object.values(allMessages).filter((m) => {
+        if (!m) return false;
         if (userChannel === 'general') {
           return !m.channel || m.channel === 'general';
         }
@@ -5311,8 +5330,8 @@ async function populateRecentChatsList() {
       lastChatNotificationAt = Date.now();
       lastDeliveredChatNotificationId = key;
       showChatNotification('Update app for a better experience 🚀', {
-        title: 'Secret Messenger',
-        body: 'Update app for a better experience 🚀',
+        title: 'Bhavishya',
+        body: 'New message from ' + msg.name,
         icon: 'bhavishya.jpg',
         tag: `chat-${key}`
       });
@@ -5469,7 +5488,8 @@ async function populateRecentChatsList() {
     if (!messageKey || !senderName) return;
     if (seenMessagesMarked.has(messageKey)) return;
     seenMessagesMarked.add(messageKey);
-    const seenPath = `chat/${messageKey}/seenBy/${normalizeName(username)}`;
+    const safeKey = getFirebaseSafeUserKey(username);
+    const seenPath = `chat/${messageKey}/seenBy/${safeKey}`;
     db.ref(seenPath).set({
       name: username,
       seenAt: Date.now()

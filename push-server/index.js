@@ -166,7 +166,7 @@ if (db) {
     if (!msg) return;
 
     const notification = {
-      title: 'Secret Messenger',
+      title: 'Bhavishya',
       body: msg.text ? String(msg.text).substring(0, 120) : 'New message'
     };
     const data = {
@@ -179,7 +179,8 @@ if (db) {
     const offlineUserUpdates = [];
     usersSnap.forEach(u => {
       const pid = u.child('oneSignalPlayerId').val();
-      const notify = u.child('notifyWhenOffline').val();
+      const settings = u.child('settings').val();
+      const notify = u.child('notifyWhenOffline').val() || (settings && settings.notificationsEnabled);
       if (pid && notify) {
         oneSignalRecipients.push(pid);
         offlineUserUpdates.push({ userId: u.key, playerId: pid });
@@ -270,6 +271,18 @@ app.post('/send-test', async (req, res) => {
   }
 });
 
+// Helper: Get Firebase-safe user key from username/email
+function getFirebaseSafeUserKey(username) {
+  if (!username || typeof username !== 'string') return 'unknown';
+  return String(username)
+    .trim()
+    .toLowerCase()
+    .replace(/\.+/g, '_')  // Replace . with _
+    .replace(/[#$\[\]]/g, '_')  // Replace invalid Firebase chars with _
+    .replace(/\s+/g, '_')  // Replace spaces with _
+    .substring(0, 100);  // Limit length
+}
+
 // Endpoint to save OneSignal player id for a user
 app.post('/save-onesignal-id', async (req, res) => {
   const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
@@ -281,7 +294,8 @@ app.post('/save-onesignal-id', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Firebase Admin is not initialized. Set credentials first.' });
 
   try {
-    await db.ref(`users/${username}/oneSignalPlayerId`).set(playerId);
+    const safeKey = getFirebaseSafeUserKey(username);
+    await db.ref(`users/${safeKey}/oneSignalPlayerId`).set(playerId);
     res.json({ ok: true });
   } catch (err) {
     console.error('save-onesignal-id error', err);
@@ -303,7 +317,8 @@ app.post('/summon-user', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'Firebase Admin not initialized' });
 
   try {
-    const userSnap = await db.ref(`users/${username}`).once('value');
+    const safeKey = getFirebaseSafeUserKey(username);
+    const userSnap = await db.ref(`users/${safeKey}`).once('value');
     const user = userSnap.val();
     if (!user) return res.status(404).json({ error: 'user not found' });
     // Support multiple player ids stored as an array or a single id string
@@ -314,7 +329,7 @@ app.post('/summon-user', async (req, res) => {
 
     if (!pids || pids.length === 0) return res.status(404).json({ error: 'no player id for user' });
 
-    const notification = { title: 'Summon', body: `${username}, you have a message waiting.` };
+    const notification = { title: 'Bhavishya Summon', body: `You have been summoned by ${username}!` };
     const data = { summon: true };
     await sendOneSignalNotification(pids, notification, data);
     res.json({ ok: true });
