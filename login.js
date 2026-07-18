@@ -214,6 +214,7 @@ async function saveOneSignalPlayerId(playerId) {
   const effectiveUsername = username || localStorage.getItem('chat_username') || '';
   if (!effectiveUsername) {
     localStorage.setItem('onesignal_player_id_pending', playerId);
+    console.log('⏳ OneSignal player ID pending (username not set yet):', playerId.substring(0, 20) + '...');
     return;
   }
 
@@ -221,6 +222,7 @@ async function saveOneSignalPlayerId(playerId) {
     const trimmedPlayerId = String(playerId).trim();
     if (!trimmedPlayerId) return;
 
+    console.log('💾 Saving OneSignal Player ID for:', effectiveUsername);
     await fetch(`${PUSH_SERVER_URL}/save-onesignal-id`, {
       method: 'POST',
       headers: {
@@ -231,8 +233,10 @@ async function saveOneSignalPlayerId(playerId) {
 
     localStorage.setItem(`onesignal_player_id_${effectiveUsername}`, trimmedPlayerId);
     localStorage.removeItem('onesignal_player_id_pending');
+    console.log('✅ OneSignal Player ID saved successfully');
+    logNotificationDiagnostics();
   } catch (err) {
-    console.error('Failed to save OneSignal player id:', err);
+    console.error('❌ Failed to save OneSignal player id:', err);
     localStorage.setItem('onesignal_player_id_pending', String(playerId));
   }
 }
@@ -805,6 +809,86 @@ function getFirebaseSafeUserKey(username) {
     .replace(/[#$\[\]]/g, '_')  // Replace invalid Firebase chars with _
     .replace(/\s+/g, '_')  // Replace spaces with _
     .substring(0, 100);  // Limit length
+}
+
+// Diagnostic function to check notification and summon system status
+async function logNotificationDiagnostics() {
+  console.group('🔔 NOTIFICATION & SUMMON DIAGNOSTICS');
+  
+  try {
+    // 1. Check push server health
+    console.log('📡 Push Server URL:', PUSH_SERVER_URL);
+    try {
+      const healthCheck = await Promise.race([
+        fetch(`${PUSH_SERVER_URL}/health`).then(r => r.json()),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+      ]);
+      console.log('✅ Push Server:', healthCheck.initialized ? 'RUNNING' : 'NOT INITIALIZED', healthCheck);
+    } catch (err) {
+      console.error('❌ Push Server Health Check Failed:', err.message);
+    }
+    
+    // 2. Check OneSignal SDK status
+    console.log('📱 OneSignal SDK Initialized:', !!window.__oneSignalInitialized);
+    if (window.OneSignal) {
+      console.log('✅ OneSignal object available');
+    } else {
+      console.warn('⚠️ OneSignal object NOT available');
+    }
+    
+    // 3. Check notifications enabled
+    console.log('🔊 Notifications Enabled:', notificationsEnabled);
+    console.log('🔐 Notification Permission:', Notification.permission);
+    
+    // 4. Check OneSignal player ID
+    const storedPlayerId = localStorage.getItem(`onesignal_player_id_${username}`);
+    console.log('🆔 OneSignal Player ID Saved:', storedPlayerId ? '✅ YES' : '❌ NO');
+    if (storedPlayerId) {
+      console.log('   ID:', storedPlayerId.substring(0, 20) + '...');
+    }
+    
+    // 5. Check FCM token
+    const fcmToken = localStorage.getItem('fcm_token');
+    console.log('🔑 FCM Token Saved:', fcmToken ? '✅ YES' : '❌ NO');
+    if (fcmToken) {
+      console.log('   Token:', fcmToken.substring(0, 20) + '...');
+    }
+    
+    // 6. Check service worker
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      console.log('⚙️ Service Workers Registered:', registrations.length);
+      registrations.forEach((reg, i) => {
+        console.log(`   [${i}] Scope: ${reg.scope}`);
+      });
+    } else {
+      console.warn('⚠️ Service Workers NOT supported');
+    }
+    
+    // 7. Check Firebase messaging
+    console.log('🔥 Firebase Messaging:', messaging ? '✅ INITIALIZED' : '❌ NOT INITIALIZED');
+    
+    // 8. Summary
+    console.log('\n📋 SUMMARY:');
+    const isReady = notificationsEnabled && 
+                   (Notification.permission === 'granted' || Notification.permission === 'default') && 
+                   !!storedPlayerId && 
+                   !!PUSH_SERVER_URL;
+    
+    if (isReady) {
+      console.log('✅ NOTIFICATION SYSTEM: READY - You will receive notifications when messages arrive');
+    } else {
+      console.warn('⚠️ NOTIFICATION SYSTEM: NOT FULLY READY');
+      if (!notificationsEnabled) console.warn('   → Enable notifications in settings');
+      if (Notification.permission === 'denied') console.warn('   → Grant notification permission in browser settings');
+      if (!storedPlayerId) console.warn('   → OneSignal player ID not saved - enable notifications first');
+      if (!PUSH_SERVER_URL) console.warn('   → Push server URL not configured');
+    }
+  } catch (error) {
+    console.error('Diagnostic check error:', error);
+  }
+  
+  console.groupEnd();
 }
 
 // Normalize a user/display name for comparison (remove control/chars, collapse spaces)
@@ -1619,21 +1703,35 @@ function downloadProfile(userName, profileImage) {
 }
 
 async function requestNotificationPermissionIfNeeded() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'default') return;
-  if (notificationPromptInProgress) return;
+  if (!('Notification' in window)) {
+    console.warn('⚠️ Notifications NOT supported in this browser');
+    return;
+  }
+  if (Notification.permission !== 'default') {
+    console.log('📍 Notification permission already set to:', Notification.permission);
+    return;
+  }
+  if (notificationPromptInProgress) {
+    console.log('⏳ Notification permission request already in progress');
+    return;
+  }
 
   notificationPromptInProgress = true;
   try {
+    console.log('🔔 Requesting notification permission...');
     const permission = await Notification.requestPermission();
+    console.log('✓ User permission response:', permission);
+    
     if (permission === 'granted') {
+      console.log('✅ Notification permission GRANTED');
       showNotification('Notifications enabled for general chat!');
       await subscribeOneSignal();
     } else if (permission === 'denied') {
+      console.warn('❌ Notification permission DENIED by user');
       showNotification('Notifications blocked. You can change this in browser settings.', true);
     }
   } catch (error) {
-    console.error('Notification permission request failed:', error);
+    console.error('❌ Notification permission request failed:', error);
   } finally {
     notificationPromptInProgress = false;
   }
@@ -1651,22 +1749,34 @@ async function saveFcmTokenToFirebase(token) {
 }
 
 async function setupFirebaseMessaging() {
-  if (!('serviceWorker' in navigator) || !('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  if (typeof firebase.messaging !== 'function') return;
+  if (!('serviceWorker' in navigator) || !('Notification' in window)) {
+    console.warn('⚠️ Firebase Messaging: Service Worker or Notification API not supported');
+    return;
+  }
+  if (Notification.permission !== 'granted') {
+    console.log('⚠️ Firebase Messaging: Notification permission not granted (current:', Notification.permission + ')');
+    return;
+  }
+  if (typeof firebase.messaging !== 'function') {
+    console.warn('⚠️ Firebase Messaging API not available');
+    return;
+  }
 
   try {
+    console.log('🔥 Setting up Firebase Cloud Messaging...');
     const serviceWorkerBasePath = getOneSignalBasePath();
     const registration = await navigator.serviceWorker.register(`${serviceWorkerBasePath}firebase-messaging-sw.js`, {
       scope: serviceWorkerBasePath
     });
-    console.log('Service worker registered:', registration.scope);
+    console.log('✅ Service worker registered:', registration.scope);
+    
     messaging = firebase.messaging();
     if (typeof messaging.useServiceWorker === 'function') {
       messaging.useServiceWorker(registration);
     }
 
     messaging.onMessage((payload) => {
+      console.log('📨 FCM message received (app in foreground):', payload);
       if (payload?.notification) {
         new Notification(payload.notification.title || 'Bhavishya', {
           body: payload.notification.body || 'Experience a smoother app performance with our latest update. Get it now! 🚀',
@@ -1680,16 +1790,18 @@ async function setupFirebaseMessaging() {
     // to avoid scope/auth issues in some environments.
     let currentToken;
     try {
+      console.log('🔐 Requesting FCM token...');
       currentToken = await messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: registration });
     } catch (err) {
-      console.error('messaging.getToken failed:', err.code || err.name, err.message || err);
+      console.error('❌ messaging.getToken failed:', err.code || err.name, err.message || err);
       throw err;
     }
     if (currentToken) {
+      console.log('✅ FCM token received:', currentToken.substring(0, 30) + '...');
       await saveFcmTokenToFirebase(currentToken);
     }
   } catch (error) {
-    console.error('Firebase messaging setup failed:', error);
+    console.error('❌ Firebase messaging setup failed:', error);
     // Provide actionable guidance to the user when subscription fails
     const msg = error && error.message ? String(error.message) : 'Unknown error while subscribing to FCM.';
     if (msg.includes('Request is missing required authentication credential')) {
@@ -3406,6 +3518,12 @@ function initializeChatApp() {
       migrateSettingsToFirebase();
     }
     setupSettingsSyncListener();
+    
+    // Log notification diagnostics after settings are loaded
+    setTimeout(() => {
+      console.log('🚀 Chat app initialized, running diagnostics...');
+      logNotificationDiagnostics();
+    }, 2000);
   });
   const sidebarToggle = document.getElementById('sidebarToggle');
   const chatSidebar = document.getElementById('chatSidebar');
@@ -4654,16 +4772,41 @@ async function populateRecentChatsList() {
     summonBtn.innerHTML = '<i class="fas fa-bell"></i>';
     summonBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      console.group('📢 SUMMON REQUEST: ' + displayName);
       try {
-        await fetch(`${PUSH_SERVER_URL}/summon-user`, {
+        console.log('🎯 Target User:', displayName);
+        console.log('📡 Push Server:', PUSH_SERVER_URL);
+        console.log('⏳ Sending summon notification...');
+        
+        const response = await fetch(`${PUSH_SERVER_URL}/summon-user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
         });
-        showNotification('Summon sent');
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          console.log('✅ SUMMON SENT SUCCESSFULLY', result);
+          console.log('   → User will receive notification to their OneSignal-registered devices');
+          showNotification('✅ Summon sent to ' + displayName);
+        } else {
+          console.error('❌ SUMMON FAILED:', result);
+          if (result.error === 'no player id for user') {
+            console.warn('   → User has not enabled notifications or no OneSignal player ID saved');
+            showNotification('User has not enabled notifications', true);
+          } else if (result.error === 'user not found') {
+            console.warn('   → User not found in database');
+            showNotification('User not found', true);
+          } else {
+            showNotification('Summon failed: ' + (result.error || 'Unknown error'), true);
+          }
+        }
       } catch (err) {
-        console.error('Summon failed', err);
-        showNotification('Summon failed', true);
+        console.error('❌ SUMMON REQUEST ERROR:', err);
+        showNotification('Summon failed: ' + err.message, true);
+      } finally {
+        console.groupEnd();
       }
     });
     li.appendChild(summonBtn);
@@ -6493,17 +6636,28 @@ async function populateRecentChatsList() {
   
   menuNotificationToggle.addEventListener('change', async (e) => {
     notificationsEnabled = e.target.checked;
+    console.log('🔔 Notification toggle:', notificationsEnabled ? 'ON' : 'OFF');
+    
     localStorage.setItem('notifications_enabled', notificationsEnabled);
     await saveSettingsToFirebase();
+    console.log('💾 Settings saved to Firebase');
     
     if (notificationsEnabled && userChannel === 'general') {
+      console.log('✅ Enabling notifications...');
       if (Notification.permission === 'granted') {
+        console.log('📱 Permission already granted, subscribing to OneSignal...');
         await subscribeOneSignal();
       } else if (Notification.permission === 'default') {
+        console.log('❓ Permission not set, requesting from user...');
         await requestNotificationPermissionIfNeeded();
+      } else if (Notification.permission === 'denied') {
+        console.error('❌ Notification permission denied by browser');
+        showNotification('Notifications are blocked in browser settings. Please allow notifications for this site.', true);
       }
       showNotification('Notifications enabled for general chat');
+      logNotificationDiagnostics();
     } else {
+      console.log('❌ Disabling notifications...');
       await unsubscribeOneSignal();
       showNotification('Notifications disabled');
     }
