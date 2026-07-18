@@ -210,21 +210,30 @@ function updateBrush() {
 
 async function saveOneSignalPlayerId(playerId) {
   if (!playerId) return;
-  if (!username) {
-    // If user not identified yet, store locally and attempt to send later
+
+  const effectiveUsername = username || localStorage.getItem('chat_username') || '';
+  if (!effectiveUsername) {
     localStorage.setItem('onesignal_player_id_pending', playerId);
     return;
   }
+
   try {
+    const trimmedPlayerId = String(playerId).trim();
+    if (!trimmedPlayerId) return;
+
     await fetch(`${PUSH_SERVER_URL}/save-onesignal-id`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ username: username, playerId })
+      body: JSON.stringify({ username: effectiveUsername, playerId: trimmedPlayerId })
     });
+
+    localStorage.setItem(`onesignal_player_id_${effectiveUsername}`, trimmedPlayerId);
+    localStorage.removeItem('onesignal_player_id_pending');
   } catch (err) {
     console.error('Failed to save OneSignal player id:', err);
+    localStorage.setItem('onesignal_player_id_pending', String(playerId));
   }
 }
 
@@ -4628,21 +4637,15 @@ async function populateRecentChatsList() {
     summonBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-          await fetch(`${PUSH_SERVER_URL}/summon-user`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
-          });
-        showChatNotification('Update app for a better experience 🚀', {
-          title: 'Secret Messenger',
-          body: 'Update app for a better experience 🚀',
-          icon: 'bhavishya.jpg',
-          tag: 'summon-notification'
+        await fetch(`${PUSH_SERVER_URL}/summon-user`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
         });
-        showNotification('Update app for a better experience 🚀');
+        showNotification('Summon sent');
       } catch (err) {
         console.error('Summon failed', err);
-        showNotification('Update app for a better experience 🚀', true);
+        showNotification('Summon failed', true);
       }
     });
     li.appendChild(summonBtn);
@@ -5303,7 +5306,7 @@ async function populateRecentChatsList() {
     }
     updateScrollToBottomButton();
     
-    const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted' && (document.visibilityState === 'hidden' || !document.hasFocus()) && (Date.now() - lastChatVisitAt > 5000) && lastDeliveredChatNotificationId !== key && Date.now() - lastChatNotificationAt > 1000;
+    const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && lastDeliveredChatNotificationId !== key && Date.now() - lastChatNotificationAt > 1000;
     if (shouldNotifyForChat) {
       lastChatNotificationAt = Date.now();
       lastDeliveredChatNotificationId = key;
