@@ -48,6 +48,9 @@ const seenMessagesMarked = new Set();
 let currentMessages = {};
 let isAdmin = false;
 
+const MAX_CHAT_MESSAGES = 200;
+const profileImageCache = new Map();
+
 // URL of your push server (Render, Heroku, etc.).
 // Use the deployed push server URL or override it by setting window.PUSH_SERVER_URL before login.js loads.
 const PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
@@ -60,6 +63,7 @@ let lastDateSeparator = '';
 let messagesDiv = null;
 let recentChatsList = null;
 let chatDiv = null;
+let chatLayoutNeedsRefresh = false;
 
 // Voice recording variables
 let mediaRecorder = null;
@@ -225,19 +229,20 @@ async function saveOneSignalPlayerId(playerId) {
 }
 
 function getOneSignalBasePath() {
-  const path = window.location.pathname;
-  const lastSegment = path.substring(path.lastIndexOf('/') + 1);
+  const path = window.location.pathname || '/';
+  const normalizedPath = path.replace(/\/index\.html?$/i, '/');
+  const lastSegment = normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1);
   const isFile = lastSegment.includes('.');
 
-  if (path === '/' || path.endsWith('/')) {
-    return path;
+  if (normalizedPath === '/' || normalizedPath.endsWith('/')) {
+    return normalizedPath;
   }
 
   if (!isFile) {
-    return `${path}/`;
+    return `${normalizedPath}/`;
   }
 
-  return path.substring(0, path.lastIndexOf('/') + 1);
+  return normalizedPath.substring(0, normalizedPath.lastIndexOf('/') + 1);
 }
 
 function getOneSignalWorkerPath() {
@@ -329,18 +334,20 @@ async function initOneSignalSdk() {
 
         console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
 
+        const resolvedWorkerPath = workerPath.startsWith('/') ? workerPath : `/${workerPath}`;
+        const resolvedUpdaterPath = updaterPath.startsWith('/') ? updaterPath : `/${updaterPath}`;
+
         await OneSignal.init({
-  appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
-  allowLocalhostAsSecureOrigin: true,
-
-  serviceWorkerPath: workerPath,
-  serviceWorkerUpdaterPath: updaterPath,
-
-  serviceWorkerParam: {
-    scope
-  }
-});
-console.log("OneSignal object:", OneSignal);
+          appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
+          allowLocalhostAsSecureOrigin: true,
+          autoResubscribe: false,
+          serviceWorkerPath: resolvedWorkerPath,
+          serviceWorkerUpdaterPath: resolvedUpdaterPath,
+          serviceWorkerParam: {
+            scope
+          }
+        });
+        console.log('OneSignal object:', OneSignal);
 
         // Debug: try to log and save the OneSignal player id if available
         try {
@@ -423,23 +430,29 @@ async function setupOneSignal() {
 
 async function subscribeOneSignal() {
   try {
-    const OneSignal = await setupOneSignal();
-    const enabled =
-  OneSignal.User.PushSubscription.optedIn;
-    if (!enabled) {
-      if (Notification.permission === 'denied') {
-        showNotification('Notifications are blocked in your browser settings.', true);
-        return;
-      }
-      try {
-        await OneSignal.Notifications.requestPermission();
-      } catch (err) {
-        console.warn('OneSignal showNativePrompt failed', err);
-      }
-      
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'denied') {
+      showNotification('Notifications are blocked in your browser settings.', true);
+      return;
     }
-    const playerId =
-  OneSignal.User?.PushSubscription?.id;
+
+    const OneSignal = await setupOneSignal();
+    const enabled = OneSignal?.User?.PushSubscription?.optedIn || false;
+    if (!enabled) {
+      if (Notification.permission === 'default') {
+        if (notificationPromptInProgress) return;
+        notificationPromptInProgress = true;
+        try {
+          await OneSignal.Notifications.requestPermission();
+        } catch (err) {
+          console.warn('OneSignal showNativePrompt failed', err);
+        } finally {
+          notificationPromptInProgress = false;
+        }
+      }
+    }
+
+    const playerId = OneSignal?.User?.PushSubscription?.id;
     if (playerId) saveOneSignalPlayerId(playerId);
   } catch (err) {
     console.error('subscribeOneSignal failed', err);
@@ -449,9 +462,9 @@ async function subscribeOneSignal() {
 async function unsubscribeOneSignal() {
   try {
     const OneSignal = await initOneSignalSdk();
-
-    await OneSignal.User.PushSubscription.optOut();
-
+    if (OneSignal?.User?.PushSubscription?.optOut) {
+      await OneSignal.User.PushSubscription.optOut();
+    }
   } catch (err) {
     console.warn('unsubscribeOneSignal failed', err);
   }
@@ -464,6 +477,11 @@ let secretNotificationSent = false;
 let userProfileImage = null;
 let chatBackground = 'default';
 let notificationPermission = false;
+let notificationPromptInProgress = false;
+let lastChatNotificationId = null;
+let lastChatVisitAt = Date.now();
+let lastChatNotificationAt = 0;
+let lastDeliveredChatNotificationId = null;
 
 // Navigation history variables
 let navigationHistory = []; // Track navigation history [{ type: 'login' | 'admin' | 'channel', channel?: string }]
@@ -688,13 +706,29 @@ function applyCustomBackground(imageUrl) {
 
 // Get user profile image from Firebase settings
 async function getUserProfileImage(userName) {
+  if (!userName) return null;
+  if (profileImageCache.has(userName)) return profileImageCache.get(userName);
+
+  const localKey = `profile_image_${userName}`;
+  const localImage = localStorage.getItem(localKey);
+  if (localImage) {
+    profileImageCache.set(userName, localImage);
+    return localImage;
+  }
+
   try {
     const settingsRef = db.ref(`users/${userName}/settings`);
     const snapshot = await settingsRef.once('value');
     const settings = snapshot.val();
-    return settings && settings.profileImage ? settings.profileImage : null;
+    const imageUrl = settings && settings.profileImage ? settings.profileImage : null;
+    profileImageCache.set(userName, imageUrl || null);
+    if (imageUrl) {
+      localStorage.setItem(localKey, imageUrl);
+    }
+    return imageUrl;
   } catch (error) {
     console.error('Error fetching user profile:', error);
+    profileImageCache.set(userName, null);
     return null;
   }
 }
@@ -804,6 +838,11 @@ function formatMessageTime(timestamp) {
 function refreshDateSeparators() {
   if (!messagesDiv) return;
   const existingSeparators = Array.from(messagesDiv.querySelectorAll('.date-separator'));
+  if (existingSeparators.length === 0) {
+    const messages = Array.from(messagesDiv.querySelectorAll('.message')).filter((el) => !el.classList.contains('welcome'));
+    if (messages.length === 0) return;
+  }
+
   existingSeparators.forEach(separator => separator.remove());
 
   const messages = Array.from(messagesDiv.querySelectorAll('.message'))
@@ -848,21 +887,14 @@ function refreshMessageGroups() {
     const avatarWrapper = msgEl.querySelector('.message__avatar-wrapper');
     const senderEl = msgEl.querySelector('.message__sender');
 
-    if (sameSenderAsPrev) {
-      msgEl.classList.remove('message--first-in-group');
-      msgEl.classList.add('message--continued');
-      if (avatarWrapper) {
-        avatarWrapper.style.display = 'none';
-      }
-      if (senderEl) senderEl.style.display = 'none';
-    } else {
-      msgEl.classList.remove('message--continued');
-      msgEl.classList.add('message--first-in-group');
-      if (avatarWrapper) {
-        avatarWrapper.style.display = type === 'sent' ? 'none' : 'flex';
-      }
-      if (senderEl) senderEl.style.display = 'inline';
+    const shouldShowAvatar = !sameSenderAsPrev && type !== 'sent';
+    msgEl.classList.toggle('message--continued', sameSenderAsPrev);
+    msgEl.classList.toggle('message--first-in-group', !sameSenderAsPrev);
+
+    if (avatarWrapper) {
+      avatarWrapper.style.display = shouldShowAvatar ? 'flex' : 'none';
     }
+    if (senderEl) senderEl.style.display = sameSenderAsPrev ? 'none' : 'inline';
 
     prevSender = sender;
     prevType = type;
@@ -878,7 +910,7 @@ function getNodeDateLabel(node) {
   return node.dataset?.date || null;
 }
 
-function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey) {
+function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayout = true) {
   const timestamp = Number(msg.timestamp || Date.now());
   const messageDate = formatDateSeparator(timestamp);
 
@@ -889,7 +921,6 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey) {
     .filter(el => !el.classList.contains('welcome'));
 
   if (prevChildKey == null) {
-    // If this is the very first message in order, insert before the first message
     const firstMessage = existingMessages[0];
     if (firstMessage) {
       messagesDiv.insertBefore(messageDiv, firstMessage);
@@ -905,7 +936,6 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey) {
         messagesDiv.appendChild(messageDiv);
       }
     } else {
-      // If previous node is not found, fall back to inserting by timestamp ordering
       let insertBefore = null;
       for (const existing of existingMessages) {
         const existingTimestamp = Number(existing.dataset.timestamp || 0);
@@ -922,9 +952,13 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey) {
     }
   }
 
-  refreshDateSeparators();
-  refreshMessageGroups();
-  
+  if (refreshLayout) {
+    refreshDateSeparators();
+    refreshMessageGroups();
+  } else {
+    chatLayoutNeedsRefresh = true;
+  }
+
   // Setup reactions for this message
   setupReactionOnMessage(messageDiv);
   loadMessageReactions(messageDiv.dataset.key);
@@ -1013,6 +1047,34 @@ function showNotification(message, isError = false) {
   setTimeout(() => {
     notification.remove();
   }, 3000);
+}
+
+function markChatVisited() {
+  lastChatVisitAt = Date.now();
+  lastDeliveredChatNotificationId = null;
+}
+
+async function showChatNotification(messageText, metadata = {}) {
+  const title = metadata.title || 'Secret Messenger';
+  const body = metadata.body || messageText || 'Update app for a better experience 🚀';
+  const icon = metadata.icon || 'bhavishya.jpg';
+  const tag = metadata.tag || 'secret-messenger-update';
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration && typeof registration.showNotification === 'function') {
+        registration.showNotification(title, { body, icon, tag, renotify: false });
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn('Service worker notification failed', err);
+  }
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon, tag, renotify: false });
+  }
 }
 
 // Show download link notification with copy button
@@ -1516,7 +1578,9 @@ function downloadProfile(userName, profileImage) {
 async function requestNotificationPermissionIfNeeded() {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'default') return;
+  if (notificationPromptInProgress) return;
 
+  notificationPromptInProgress = true;
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
@@ -1527,6 +1591,8 @@ async function requestNotificationPermissionIfNeeded() {
     }
   } catch (error) {
     console.error('Notification permission request failed:', error);
+  } finally {
+    notificationPromptInProgress = false;
   }
 }
 
@@ -1546,8 +1612,10 @@ async function setupFirebaseMessaging() {
   if (typeof firebase.messaging !== 'function') return;
 
   try {
-    // Register service worker from site root to ensure scope is correct
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const serviceWorkerBasePath = getOneSignalBasePath();
+    const registration = await navigator.serviceWorker.register(`${serviceWorkerBasePath}firebase-messaging-sw.js`, {
+      scope: serviceWorkerBasePath
+    });
     console.log('Service worker registered:', registration.scope);
     messaging = firebase.messaging();
     if (typeof messaging.useServiceWorker === 'function') {
@@ -4113,7 +4181,7 @@ function initializeChatApp() {
     onlineUsersList.appendChild(currentUserLi);
     
     // Add other users from the same channel (or all channels for admin)
-    Object.keys(users).forEach(async (id) => {
+    Object.keys(users).forEach((id) => {
       const user = users[id];
       if (user && user.online && id !== userId) {
         // Show user if: admin OR same channel
@@ -4128,9 +4196,15 @@ function initializeChatApp() {
           const li = document.createElement('li');
           li.className = `user-item ${user.isAdmin ? 'admin' : ''}`;
           
-          // Load user profile image
-          const userProfileImg = await getUserProfileImage(user.username);
-          const avatarDiv = createUserAvatarElement(user.username, userProfileImg);
+          const avatarDiv = createUserAvatarElement(user.username, null);
+          getUserProfileImage(user.username).then((userProfileImg) => {
+            if (userProfileImg) {
+              avatarDiv.style.backgroundImage = `url(${userProfileImg})`;
+              avatarDiv.style.backgroundSize = 'cover';
+              avatarDiv.style.backgroundPosition = 'center';
+              avatarDiv.textContent = '';
+            }
+          }).catch(() => {});
           
           // Hide channel info from normal users
           const statusText = user.online ? 'Online now' : 'Offline';
@@ -4354,7 +4428,7 @@ function loadRecentChats() {
   const visits = getRecentChatVisits();
 
   // Use server-side timestamp ordering to avoid client-side filtering
-  const query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+  const query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
 
   query.once('value', (snapshot) => {
     const allMessages = snapshot.val() || {};
@@ -4426,8 +4500,15 @@ async function populateRecentChatsList() {
         const li = document.createElement('li');
         li.className = 'user-item';
 
-        const userProfileImg = await getUserProfileImage(displayName);
-        const avatarDiv = createUserAvatarElement(displayName, userProfileImg);
+        const avatarDiv = createUserAvatarElement(displayName, null);
+        getUserProfileImage(displayName).then((img) => {
+          if (img) {
+            avatarDiv.style.backgroundImage = `url(${img})`;
+            avatarDiv.style.backgroundSize = 'cover';
+            avatarDiv.style.backgroundPosition = 'center';
+            avatarDiv.textContent = '';
+          }
+        }).catch(() => {});
 
         const lastOnlineText = onlineUser.online ? 'Online now' : 'Last active';
         const infoDiv = document.createElement('div');
@@ -4489,8 +4570,15 @@ async function populateRecentChatsList() {
     const li = document.createElement('li');
     li.className = 'user-item';
 
-    const userProfileImg = await getUserProfileImage(displayName);
-    const avatarDiv = createUserAvatarElement(displayName, userProfileImg);
+    const avatarDiv = createUserAvatarElement(displayName, null);
+    getUserProfileImage(displayName).then((img) => {
+      if (img) {
+        avatarDiv.style.backgroundImage = `url(${img})`;
+        avatarDiv.style.backgroundSize = 'cover';
+        avatarDiv.style.backgroundPosition = 'center';
+        avatarDiv.textContent = '';
+      }
+    }).catch(() => {});
 
     let lastOnlineText = 'Recently';
     if (user.timestamp) {
@@ -4529,10 +4617,16 @@ async function populateRecentChatsList() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
           });
-        showNotification('Summon sent');
+        showChatNotification('Update app for a better experience 🚀', {
+          title: 'Secret Messenger',
+          body: 'Update app for a better experience 🚀',
+          icon: 'bhavishya.jpg',
+          tag: 'summon-notification'
+        });
+        showNotification('Update app for a better experience 🚀');
       } catch (err) {
         console.error('Summon failed', err);
-        showNotification('Summon failed', true);
+        showNotification('Update app for a better experience 🚀', true);
       }
     });
     li.appendChild(summonBtn);
@@ -4594,8 +4688,8 @@ async function populateRecentChatsList() {
         }
       });
       
-      // Also check messages to find existing channels
-      db.ref('chat').once('value', (snapshot) => {
+      // Also check recent messages to find existing channels
+      db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES).once('value', (snapshot) => {
         const messages = snapshot.val() || {};
         Object.values(messages).forEach(msg => {
           if (msg && msg.channel && msg.channel !== 'general' && msg.channel !== 'admin') {
@@ -4777,13 +4871,13 @@ async function populateRecentChatsList() {
   let query;
   if (userChannel === 'general') {
     // For general chat, fetch messages ordered by timestamp server-side
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
   } else if (userChannel === 'admin') {
     // Admin in admin panel can see all messages ordered by timestamp
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
   } else {
     // For private channels, fetch messages ordered by timestamp server-side
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(1000);
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
   }
   
   messageListener = query;
@@ -4924,10 +5018,29 @@ async function populateRecentChatsList() {
     const sameSenderAsPrev = previousSender && normalizeName(previousSender) === normalizeName(msg.name) && previousType === (isOwnMessage ? 'sent' : 'received');
     const showAvatar = !sameSenderAsPrev && !isOwnMessage;
 
-      const profileImage = msg.name === username && userProfileImage
+      const cachedProfileImage = msg.name === username && userProfileImage
       ? userProfileImage
-      : await getUserProfileImage(msg.name);
+      : profileImageCache.get(msg.name) || null;
 
+    if (!profileImageCache.has(msg.name) && msg.name) {
+      getUserProfileImage(msg.name).then((imageUrl) => {
+        if (!imageUrl) return;
+        profileImageCache.set(msg.name, imageUrl);
+        const existingMessageDiv = document.querySelector(`[data-key="${key}"]`);
+        if (existingMessageDiv) {
+          const avatarEl = existingMessageDiv.querySelector('.message__avatar');
+          if (avatarEl) {
+            avatarEl.style.backgroundImage = `url(${imageUrl})`;
+            avatarEl.style.backgroundSize = 'cover';
+            avatarEl.style.backgroundPosition = 'center';
+          }
+        }
+      }).catch(() => {
+        profileImageCache.set(msg.name, null);
+      });
+    }
+
+    const profileImage = cachedProfileImage;
     const renderedTime = msg.timestamp
       ? formatMessageTime(msg.timestamp)
       : msg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -5121,12 +5234,13 @@ async function populateRecentChatsList() {
       }
     }
     
-    insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey);
+    insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, initialLoadComplete);
     if (!isOwnMessage) {
       markMessageAsSeen(key, msg.name);
     }
 
     if (!initialLoadComplete) {
+      chatLayoutNeedsRefresh = true;
       const shouldCount = userChannel === 'admin' || userChannel === 'general' ? (!msg.channel || msg.channel === 'general') : msg.channel === userChannel;
       if (shouldCount) {
         initialMessagesAdded += 1;
@@ -5134,6 +5248,11 @@ async function populateRecentChatsList() {
       scrollMessagesToBottom();
       if (initialMessagesAdded >= expectedInitialMessages && expectedInitialMessages > 0) {
         initialLoadComplete = true;
+        if (chatLayoutNeedsRefresh) {
+          refreshDateSeparators();
+          refreshMessageGroups();
+          chatLayoutNeedsRefresh = false;
+        }
         setTimeout(() => {
           scrollMessagesToBottom();
           loadRecentChats();
@@ -5145,53 +5264,6 @@ async function populateRecentChatsList() {
     // Store message reference
     currentMessages[key] = messageDiv;
     
-    // Attach direct event listeners to action buttons
-    const reactBtn = messageDiv.querySelector('.react-btn');
-    if (reactBtn) {
-      reactBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        messageDiv.classList.add('message-selected');
-        showReactionPicker(messageDiv, e);
-      });
-    }
-    
-    const copyBtn = messageDiv.querySelector('.copy-btn');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        copyMessage(messageDiv);
-      });
-    }
-    
-    const replyBtn = messageDiv.querySelector('.reply-btn');
-    if (replyBtn) {
-      replyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        replyToMessageFunc(key, messageDiv);
-      });
-    }
-    
-    const editBtn = messageDiv.querySelector('.edit-btn');
-    if (editBtn) {
-      editBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        editMessage(key, messageDiv);
-      });
-    }
-    
-    const deleteBtn = messageDiv.querySelector('.delete-btn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        deleteMessage(key);
-      });
-    }
-    
     // Set up media duration for video/audio
     if (msg.mediaType === 'video' || msg.mediaType === 'audio') {
       const mediaElement = messageDiv.querySelector(msg.mediaType === 'video' ? 'video' : 'audio');
@@ -5202,25 +5274,30 @@ async function populateRecentChatsList() {
           if (durationElement) {
             durationElement.textContent = formatTime(this.duration);
           }
-        });
+        }, { once: true });
       }
     }
     
     // Scroll to bottom if new message is from current user or if at bottom
     if (isOwnMessage || isAtBottom) {
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      requestAnimationFrame(() => {
+        if (messagesDiv) {
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+      });
     }
     updateScrollToBottomButton();
     
-    // Send one secret notification for new messages in general chat until the page is refreshed
-    if (!isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted' && !secretNotificationSent) {
-      new Notification('Secret Messenger', {
-        body: 'Experience a smoother app performance with our latest update. Get it now! 🚀',
+    const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && 'Notification' in window && Notification.permission === 'granted' && (document.visibilityState === 'hidden' || !document.hasFocus()) && (Date.now() - lastChatVisitAt > 5000) && lastDeliveredChatNotificationId !== key && Date.now() - lastChatNotificationAt > 1000;
+    if (shouldNotifyForChat) {
+      lastChatNotificationAt = Date.now();
+      lastDeliveredChatNotificationId = key;
+      showChatNotification('Update app for a better experience 🚀', {
+        title: 'Secret Messenger',
+        body: 'Update app for a better experience 🚀',
         icon: 'bhavishya.jpg',
-        tag: 'secret-messenger-update',
-        requireInteraction: false
+        tag: `chat-${key}`
       });
-      secretNotificationSent = true;
     }
     
     // Load recent chats when new message arrives
@@ -6375,7 +6452,11 @@ async function populateRecentChatsList() {
     await saveSettingsToFirebase();
     
     if (notificationsEnabled && userChannel === 'general') {
-      await subscribeOneSignal();
+      if (Notification.permission === 'granted') {
+        await subscribeOneSignal();
+      } else if (Notification.permission === 'default') {
+        await requestNotificationPermissionIfNeeded();
+      }
       showNotification('Notifications enabled for general chat');
     } else {
       await unsubscribeOneSignal();
@@ -6632,7 +6713,11 @@ async function populateRecentChatsList() {
     await saveSettingsToFirebase();
     
     if (notificationsEnabled && userChannel === 'general') {
-      await subscribeOneSignal();
+      if (Notification.permission === 'granted') {
+        await subscribeOneSignal();
+      } else if (Notification.permission === 'default') {
+        await requestNotificationPermissionIfNeeded();
+      }
     } else {
       await unsubscribeOneSignal();
     }
@@ -7047,8 +7132,10 @@ async function populateRecentChatsList() {
 
   // Initialize the app
   async function initApp() {
-    await loadEmojiData();
     initEmojiPicker();
+    loadEmojiData()
+      .then(() => renderEmojiPicker())
+      .catch(() => {});
     updateUserPresence(true);
     cleanRecentChatVisits();
     
@@ -7066,7 +7153,7 @@ async function populateRecentChatsList() {
     // Hide login back button when in chat
     document.querySelector(".back-button").style.display = "none";
     
-    // Show welcome notification
+      // Show welcome notification
     setTimeout(() => {
       if (userChannel === 'general') {
         showNotification(`Welcome ${username}! You're now in General Chat.`);
@@ -7076,6 +7163,8 @@ async function populateRecentChatsList() {
         showNotification(`Welcome ${username}! You're now in Private Channel CH-${userChannel}.`);
       }
     }, 1000);
+
+    markChatVisited();
     
     // Listen for window close/refresh to set offline
     window.addEventListener('beforeunload', () => {
@@ -7117,7 +7206,13 @@ document.addEventListener('visibilitychange', () => {
     if (localStorage.getItem('page_reload_in_progress') !== 'true') {
       sessionStorage.removeItem('session_valid');
     }
+  } else {
+    markChatVisited();
   }
+});
+
+window.addEventListener('focus', () => {
+  markChatVisited();
 });
 
 function updateLoginBackground() {

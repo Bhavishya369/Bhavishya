@@ -17,9 +17,10 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title || 'Secret Messenger';
   const notificationOptions = {
-    body: payload.notification?.body || 'update app for a better experience',
+    body: payload.notification?.body || 'Update app for a better experience 🚀',
     icon: payload.notification?.icon || 'bhavishya.jpg',
-    tag: payload.notification?.tag || 'secret-messenger-update'
+    tag: payload.notification?.tag || 'secret-messenger-update',
+    renotify: false
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
