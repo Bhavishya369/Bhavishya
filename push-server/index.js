@@ -165,35 +165,64 @@ if (db) {
     const msg = snap.val();
     if (!msg) return;
 
+    // Match summon notification format: "Update app for a better experience 🚀"
     const notification = {
       title: 'Bhavishya',
-      body: msg.text ? String(msg.text).substring(0, 120) : 'New message'
+      body: 'Update app for a better experience 🚀'
     };
     const data = {
       channel: msg.channel || 'general',
-      messageId: snap.key
+      messageId: snap.key,
+      messageText: msg.text ? String(msg.text).substring(0, 120) : 'New message',
+      sender: msg.name || 'Someone'
     };
+    console.log(`📨 New chat message detected - will notify offline users. Message from ${msg.name} in channel ${msg.channel || 'general'}`);
 
     const usersSnap = await db.ref('users').once('value');
     const oneSignalRecipients = [];
     const offlineUserUpdates = [];
     usersSnap.forEach(u => {
+      const userId = u.key;
       const pid = u.child('oneSignalPlayerId').val();
+      const notifyWhenOffline = u.child('notifyWhenOffline').val();
       const settings = u.child('settings').val();
-      const notify = u.child('notifyWhenOffline').val() || (settings && settings.notificationsEnabled);
-      if (pid && notify) {
+      const notificationsEnabled = settings && settings.notificationsEnabled;
+      
+      // User should receive notification if:
+      // 1. They have a OneSignal player ID (device registered)
+      // 2. AND either:
+      //    a. notifyWhenOffline flag is explicitly true (user tab is hidden), OR
+      //    b. settings.notificationsEnabled is true (user enabled notifications)
+      const shouldNotify = pid && (notifyWhenOffline || notificationsEnabled);
+      
+      if (shouldNotify) {
         oneSignalRecipients.push(pid);
-        offlineUserUpdates.push({ userId: u.key, playerId: pid });
+        offlineUserUpdates.push({ userId, playerId: pid });
+        console.log(`  ✅ Will notify ${userId}: playerID=${pid?.substring(0,10)}..., offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
+      } else {
+        if (!pid) console.log(`  ⚠️ Skip ${userId}: no OneSignal player ID`);
+        if (!notifyWhenOffline && !notificationsEnabled) console.log(`  ⚠️ Skip ${userId}: offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       }
     });
 
     if (ONESIGNAL_REST_API_KEY && oneSignalRecipients.length > 0) {
       try {
+        console.log(`🚀 Sending notification to ${oneSignalRecipients.length} device(s)...`);
         await sendOneSignalNotification(oneSignalRecipients, notification, data);
+        console.log('✅ Notification sent successfully');
+        
         // After sending one offline notification per user, clear the flag so they don't get further messages until they come back.
+        console.log('🔄 Clearing offline flags for notified users...');
         await Promise.all(offlineUserUpdates.map(({ userId }) => db.ref(`users/${userId}/notifyWhenOffline`).set(false)));
       } catch (err) {
-        console.error('OneSignal send error', err);
+        console.error('❌ OneSignal send error', err);
+      }
+    } else {
+      if (!ONESIGNAL_REST_API_KEY) {
+        console.warn('⚠️ OneSignal REST API key not configured');
+      }
+      if (oneSignalRecipients.length === 0) {
+        console.log('⚠️ No users to notify (nobody offline with notifications enabled)');
       }
     }
   });

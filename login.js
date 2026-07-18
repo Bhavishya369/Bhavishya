@@ -1748,6 +1748,24 @@ async function saveFcmTokenToFirebase(token) {
   }
 }
 
+// Set notifyWhenOffline flag - tells push server to send notifications when user is offline
+async function setUserOfflineStatus(isOffline) {
+  if (!username || !notificationsEnabled) return;
+  
+  try {
+    const safeKey = getFirebaseSafeUserKey(username);
+    await db.ref(`users/${safeKey}/notifyWhenOffline`).set(isOffline);
+    console.log(`🔔 notifyWhenOffline set to: ${isOffline}`);
+    if (isOffline) {
+      console.log('📵 You are now OFFLINE - push server will send notifications to your devices');
+    } else {
+      console.log('✅ You are now ONLINE - notifications will be handled by browser');
+    }
+  } catch (error) {
+    console.error('Error setting offline status:', error);
+  }
+}
+
 async function setupFirebaseMessaging() {
   if (!('serviceWorker' in navigator) || !('Notification' in window)) {
     console.warn('⚠️ Firebase Messaging: Service Worker or Notification API not supported');
@@ -7405,13 +7423,28 @@ document.addEventListener('visibilitychange', () => {
     if (localStorage.getItem('page_reload_in_progress') !== 'true') {
       sessionStorage.removeItem('session_valid');
     }
+    // Tab hidden - mark as offline for push notifications
+    console.log('👁️ Tab hidden - setting offline status');
+    setUserOfflineStatus(true);
   } else {
     markChatVisited();
+    // Tab visible again - mark as online
+    console.log('👁️ Tab visible - setting online status');
+    setUserOfflineStatus(false);
   }
 });
 
 window.addEventListener('focus', () => {
   markChatVisited();
+  // Window focused - mark as online
+  console.log('🎯 Window focused - setting online status');
+  setUserOfflineStatus(false);
+});
+
+window.addEventListener('blur', () => {
+  // Window lost focus - mark as offline
+  console.log('😴 Window lost focus - setting offline status');
+  setUserOfflineStatus(true);
 });
 
 function updateLoginBackground() {
