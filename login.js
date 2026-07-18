@@ -4440,14 +4440,11 @@ function initializeChatApp() {
     return Object.fromEntries(recentChatMap.entries());
   }
 
-// Load recent chats from the same channel (preserve Firebase storage order)
+// Load recent chats from the same channel using the full chat history so older Firebase conversations still appear.
 function loadRecentChats() {
   const visits = getRecentChatVisits();
 
-  // Use server-side timestamp ordering to avoid client-side filtering
-  const query = db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES);
-
-  query.once('value', (snapshot) => {
+  db.ref('chat').once('value', (snapshot) => {
     const allMessages = snapshot.val() || {};
     const filteredMessages = {};
 
@@ -4464,6 +4461,10 @@ function loadRecentChats() {
     });
 
     recentChatUsers = buildRecentChatUsers(filteredMessages, visits);
+    populateRecentChatsList();
+  }, (error) => {
+    console.error('Error loading recent chats:', error);
+    recentChatUsers = buildRecentChatUsers({}, visits);
     populateRecentChatsList();
   });
 }
