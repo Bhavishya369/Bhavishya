@@ -246,11 +246,19 @@ function getOneSignalBasePath() {
 }
 
 function getOneSignalWorkerPath() {
-  return `${getOneSignalBasePath()}OneSignalSDKWorker.js`;
+  try {
+    return new URL('./OneSignalSDKWorker.js', window.location.href).pathname;
+  } catch (e) {
+    return '/OneSignalSDKWorker.js';
+  }
 }
 
 function getOneSignalUpdaterPath() {
-  return `${getOneSignalBasePath()}OneSignalSDKUpdaterWorker.js`;
+  try {
+    return new URL('./OneSignalSDKUpdaterWorker.js', window.location.href).pathname;
+  } catch (e) {
+    return '/OneSignalSDKUpdaterWorker.js';
+  }
 }
 
 function getOneSignalScope() {
@@ -293,29 +301,28 @@ async function initOneSignalSdk() {
           return resolve(OneSignal);
         }
 
-        const repoRootPath = `/${getOneSignalSiteRootPath()}OneSignalSDKWorker.js`;
-        const repoRootUpdaterPath = `/${getOneSignalSiteRootPath()}OneSignalSDKUpdaterWorker.js`;
-        let workerPath = '/OneSignalSDKWorker.js';
-        let updaterPath = '/OneSignalSDKUpdaterWorker.js';
-
         const scope = ONE_SIGNAL_SCOPE_OVERRIDE === '/' ? getOneSignalScope() : ONE_SIGNAL_SCOPE_OVERRIDE;
         const overridePrefix = ONE_SIGNAL_PATH_PREFIX ? `${ONE_SIGNAL_PATH_PREFIX}/` : '';
+
+        const fallbackWorkerPath = getOneSignalWorkerPath();
+        const fallbackUpdaterPath = getOneSignalUpdaterPath();
+        let workerPath = fallbackWorkerPath;
+        let updaterPath = fallbackUpdaterPath;
+
         const candidateWorkerPaths = [
+          fallbackWorkerPath,
+          `${window.location.origin}${fallbackWorkerPath}`,
           `${window.location.origin}/OneSignalSDKWorker.js`,
           '/OneSignalSDKWorker.js',
           overridePrefix ? `${overridePrefix}OneSignalSDKWorker.js` : null,
-          getOneSignalWorkerPath(),
-          repoRootPath,
-          `${window.location.origin}${repoRootPath}`,
           'OneSignalSDKWorker.js'
         ].filter(Boolean);
         const candidateUpdaterPaths = [
+          fallbackUpdaterPath,
+          `${window.location.origin}${fallbackUpdaterPath}`,
           `${window.location.origin}/OneSignalSDKUpdaterWorker.js`,
           '/OneSignalSDKUpdaterWorker.js',
           overridePrefix ? `${overridePrefix}OneSignalSDKUpdaterWorker.js` : null,
-          getOneSignalUpdaterPath(),
-          repoRootUpdaterPath,
-          `${window.location.origin}${repoRootUpdaterPath}`,
           'OneSignalSDKUpdaterWorker.js'
         ].filter(Boolean);
 
@@ -733,19 +740,29 @@ async function getUserProfileImage(userName) {
   }
 }
 
+function applyProfileImageToAvatarElement(avatarElement, userName, profileImage) {
+  if (!avatarElement) return;
+
+  if (profileImage) {
+    avatarElement.style.backgroundImage = `url(${profileImage})`;
+    avatarElement.style.backgroundSize = 'cover';
+    avatarElement.style.backgroundPosition = 'center';
+    avatarElement.textContent = '';
+    avatarElement.dataset.profileImage = profileImage;
+  } else {
+    avatarElement.style.backgroundImage = '';
+    avatarElement.style.backgroundSize = '';
+    avatarElement.style.backgroundPosition = '';
+    avatarElement.textContent = (userName || 'U').charAt(0).toUpperCase();
+    avatarElement.dataset.profileImage = '';
+  }
+}
+
 // Create user avatar element with profile image or initial
 function createUserAvatarElement(userName, profileImage = null) {
   const avatarDiv = document.createElement('div');
   avatarDiv.className = 'user-avatar';
-  
-  if (profileImage) {
-    avatarDiv.style.backgroundImage = `url(${profileImage})`;
-    avatarDiv.style.backgroundSize = 'cover';
-    avatarDiv.style.backgroundPosition = 'center';
-  } else {
-    avatarDiv.textContent = userName.charAt(0).toUpperCase();
-  }
-  
+  applyProfileImageToAvatarElement(avatarDiv, userName, profileImage);
   return avatarDiv;
 }
 
@@ -4503,10 +4520,9 @@ async function populateRecentChatsList() {
         const avatarDiv = createUserAvatarElement(displayName, null);
         getUserProfileImage(displayName).then((img) => {
           if (img) {
-            avatarDiv.style.backgroundImage = `url(${img})`;
-            avatarDiv.style.backgroundSize = 'cover';
-            avatarDiv.style.backgroundPosition = 'center';
-            avatarDiv.textContent = '';
+            applyProfileImageToAvatarElement(avatarDiv, displayName, img);
+          } else {
+            applyProfileImageToAvatarElement(avatarDiv, displayName, null);
           }
         }).catch(() => {});
 
@@ -4573,10 +4589,9 @@ async function populateRecentChatsList() {
     const avatarDiv = createUserAvatarElement(displayName, null);
     getUserProfileImage(displayName).then((img) => {
       if (img) {
-        avatarDiv.style.backgroundImage = `url(${img})`;
-        avatarDiv.style.backgroundSize = 'cover';
-        avatarDiv.style.backgroundPosition = 'center';
-        avatarDiv.textContent = '';
+        applyProfileImageToAvatarElement(avatarDiv, displayName, img);
+      } else {
+        applyProfileImageToAvatarElement(avatarDiv, displayName, null);
       }
     }).catch(() => {});
 
@@ -5030,9 +5045,8 @@ async function populateRecentChatsList() {
         if (existingMessageDiv) {
           const avatarEl = existingMessageDiv.querySelector('.message__avatar');
           if (avatarEl) {
-            avatarEl.style.backgroundImage = `url(${imageUrl})`;
-            avatarEl.style.backgroundSize = 'cover';
-            avatarEl.style.backgroundPosition = 'center';
+            applyProfileImageToAvatarElement(avatarEl, msg.name, imageUrl);
+            avatarEl.dataset.profileImage = imageUrl || '';
           }
         }
       }).catch(() => {
@@ -5824,24 +5838,31 @@ async function populateRecentChatsList() {
     currentEditingVideo = type === 'video' ? url : null;
   }
 
-  function openProfilePreview(userName, profileImage) {
+  async function openProfilePreview(userName, profileImage) {
     if (!profilePreview) return;
-    if (profileImage) {
-      profilePreviewAvatar.style.backgroundImage = `url(${profileImage})`;
+    const resolvedProfileImage = profileImage || (await getUserProfileImage(userName)) || null;
+
+    if (resolvedProfileImage) {
+      profilePreviewAvatar.style.backgroundImage = `url(${resolvedProfileImage})`;
+      profilePreviewAvatar.style.backgroundSize = 'cover';
+      profilePreviewAvatar.style.backgroundPosition = 'center';
       profilePreviewAvatar.textContent = '';
     } else {
       profilePreviewAvatar.style.backgroundImage = '';
+      profilePreviewAvatar.style.backgroundSize = '';
+      profilePreviewAvatar.style.backgroundPosition = '';
       profilePreviewAvatar.textContent = (userName || 'U').charAt(0).toUpperCase();
     }
+
     profilePreviewName.textContent = userName || 'Unknown User';
-    profilePreviewStatus.textContent = profileImage
+    profilePreviewStatus.textContent = resolvedProfileImage
       ? 'Profile image available'
       : 'No profile image available';
     
     // Store profile data for download button
     const downloadBtn = document.getElementById('profileDownloadBtn');
     if (downloadBtn) {
-      downloadBtn.onclick = () => downloadProfile(userName, profileImage);
+      downloadBtn.onclick = () => downloadProfile(userName, resolvedProfileImage);
     }
     
     profilePreview.style.display = 'flex';
