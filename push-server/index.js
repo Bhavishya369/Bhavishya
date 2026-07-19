@@ -183,24 +183,34 @@ if (db) {
     const offlineUserUpdates = [];
     usersSnap.forEach(u => {
       const userId = u.key;
-      const pid = u.child('oneSignalPlayerId').val();
       const notifyWhenOffline = u.child('notifyWhenOffline').val();
       const settings = u.child('settings').val();
       const notificationsEnabled = settings && settings.notificationsEnabled;
-      
-      // User should receive notification if:
-      // 1. They have a OneSignal player ID (device registered)
-      // 2. AND either:
-      //    a. notifyWhenOffline flag is explicitly true (user tab is hidden), OR
-      //    b. settings.notificationsEnabled is true (user enabled notifications)
-      const shouldNotify = pid && (notifyWhenOffline || notificationsEnabled);
-      
+      const devices = u.child('devices').val() || {};
+      const enabledDeviceIds = [];
+
+      Object.keys(devices).forEach((deviceKey) => {
+        const device = devices[deviceKey];
+        if (device && device.playerId && device.enabled !== false) {
+          enabledDeviceIds.push(device.playerId);
+        }
+      });
+
+      const fallbackPid = u.child('oneSignalPlayerId').val();
+      if (!enabledDeviceIds.length && fallbackPid) {
+        enabledDeviceIds.push(fallbackPid);
+      }
+
+      const shouldNotify = enabledDeviceIds.length > 0 && (notifyWhenOffline || notificationsEnabled);
+
       if (shouldNotify) {
-        oneSignalRecipients.push(pid);
-        offlineUserUpdates.push({ userId, playerId: pid });
-        console.log(`  ✅ Will notify ${userId}: playerID=${pid?.substring(0,10)}..., offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
+        enabledDeviceIds.forEach((pid) => {
+          oneSignalRecipients.push(pid);
+          offlineUserUpdates.push({ userId, playerId: pid });
+        });
+        console.log(`  ✅ Will notify ${userId}: deviceCount=${enabledDeviceIds.length}, offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       } else {
-        if (!pid) console.log(`  ⚠️ Skip ${userId}: no OneSignal player ID`);
+        if (!enabledDeviceIds.length) console.log(`  ⚠️ Skip ${userId}: no enabled devices for notification`);
         if (!notifyWhenOffline && !notificationsEnabled) console.log(`  ⚠️ Skip ${userId}: offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       }
     });
@@ -317,14 +327,20 @@ app.post('/save-onesignal-id', async (req, res) => {
   const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
   if (ADMIN_API_KEY && key && key !== ADMIN_API_KEY) return res.status(401).json({ error: 'unauthorized' });
 
-  const { username, playerId } = req.body || {};
+  const { username, playerId, label } = req.body || {};
   if (!username || !playerId) return res.status(400).json({ error: 'username and playerId required' });
 
   if (!db) return res.status(503).json({ error: 'Firebase Admin is not initialized. Set credentials first.' });
 
   try {
     const safeKey = getFirebaseSafeUserKey(username);
-    await db.ref(`users/${safeKey}/oneSignalPlayerId`).set(playerId);
+    const deviceRef = db.ref(`users/${safeKey}/devices/${playerId}`);
+    await deviceRef.update({
+      playerId,
+      label: label || 'Device',
+      enabled: true,
+      lastUpdated: firebase.database.ServerValue.TIMESTAMP
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error('save-onesignal-id error', err);
@@ -350,18 +366,34 @@ app.post('/summon-user', async (req, res) => {
     const userSnap = await db.ref(`users/${safeKey}`).once('value');
     const user = userSnap.val();
     if (!user) return res.status(404).json({ error: 'user not found' });
-    // Support multiple player ids stored as an array or a single id string
+
     let pids = [];
-    if (Array.isArray(user.oneSignalPlayerId)) pids = user.oneSignalPlayerId;
-    else if (typeof user.oneSignalPlayerId === 'string' && user.oneSignalPlayerId) pids = [user.oneSignalPlayerId];
-    else if (user.oneSignalPlayerIds && Array.isArray(user.oneSignalPlayerIds)) pids = user.oneSignalPlayerIds;
+    const devices = user.devices || {};
+    if (devices && typeof devices === 'object') {
+      Object.values(devices).forEach((device) => {
+        if (device && device.playerId && device.enabled !== false) {
+          pids.push(device.playerId);
+        }
+      });
+    }
+
+    if (!pids.length) {
+      if (Array.isArray(user.oneSignalPlayerId)) pids = user.oneSignalPlayerId;
+      else if (typeof user.oneSignalPlayerId === 'string' && user.oneSignalPlayerId) pids = [user.oneSignalPlayerId];
+      else if (user.oneSignalPlayerIds && Array.isArray(user.oneSignalPlayerIds)) pids = user.oneSignalPlayerIds;
+    }
+
+    if (!pids.length) {
+      const fallbackPid = user.oneSignalPlayerId;
+      if (fallbackPid) pids.push(fallbackPid);
+      else if (Array.isArray(user.oneSignalPlayerIds)) pids.push(...user.oneSignalPlayerIds);
+    }
 
     if (!pids || pids.length === 0) return res.status(404).json({ error: 'no player id for user' });
 
     const notification = { title: 'Bhavishya Summon', body: `You have been summoned by ${username}!` };
     const data = { summon: true };
     await sendOneSignalNotification(pids, notification, data);
-    res.json({ ok: true });
   } catch (err) {
     console.error('summon-user error', err);
     res.status(500).json({ error: err.message || String(err) });

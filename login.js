@@ -228,11 +228,18 @@ async function saveOneSignalPlayerId(playerId) {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ username: effectiveUsername, playerId: trimmedPlayerId })
+      body: JSON.stringify({ username: effectiveUsername, playerId: trimmedPlayerId, label: getCurrentDeviceLabel() })
     });
 
     localStorage.setItem(`onesignal_player_id_${effectiveUsername}`, trimmedPlayerId);
+    localStorage.setItem(getDeviceStorageKey(), trimmedPlayerId);
     localStorage.removeItem('onesignal_player_id_pending');
+    currentDeviceId = trimmedPlayerId;
+    await saveDeviceEntryToFirebase(trimmedPlayerId, {
+      playerId: trimmedPlayerId,
+      enabled: notificationsEnabled,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
+    });
     console.log('✅ OneSignal Player ID saved successfully');
     logNotificationDiagnostics();
   } catch (err) {
@@ -502,6 +509,75 @@ let lastChatNotificationId = null;
 let lastChatVisitAt = Date.now();
 let lastChatNotificationAt = 0;
 let lastDeliveredChatNotificationId = null;
+let currentDeviceId = '';
+let currentDeviceLabel = '';
+
+function getDeviceStorageKey() {
+  return username ? `chat_device_id_${username}` : 'chat_device_id';
+}
+
+function getCurrentDeviceId() {
+  if (currentDeviceId) return currentDeviceId;
+  const storedId = username ? localStorage.getItem(getDeviceStorageKey()) || localStorage.getItem(`onesignal_player_id_${username}`) : localStorage.getItem(getDeviceStorageKey());
+  currentDeviceId = storedId || '';
+  return currentDeviceId;
+}
+
+function getCurrentDeviceLabel() {
+  if (currentDeviceLabel) return currentDeviceLabel;
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || 'Device';
+  const browser = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') && !ua.includes('Chrome') ? 'Safari' : 'Browser';
+  currentDeviceLabel = `${browser} on ${platform}`;
+  return currentDeviceLabel;
+}
+
+function getFirebaseSafeDeviceKey(deviceId) {
+  if (!deviceId || typeof deviceId !== 'string') return 'unknown_device';
+  return deviceId
+    .trim()
+    .replace(/\.+/g, '_')
+    .replace(/[#$\[\]]/g, '_')
+    .replace(/\s+/g, '_')
+    .substring(0, 100);
+}
+
+async function saveDeviceEntryToFirebase(deviceId, entry = {}) {
+  if (!username || !deviceId) return;
+  try {
+    const safeKey = getFirebaseSafeUserKey(username);
+    const safeDeviceKey = getFirebaseSafeDeviceKey(deviceId);
+    const deviceRef = db.ref(`users/${safeKey}/devices/${safeDeviceKey}`);
+    const data = {
+      playerId: deviceId,
+      label: getCurrentDeviceLabel(),
+      enabled: true,
+      lastUpdated: firebase.database.ServerValue.TIMESTAMP,
+      ...entry
+    };
+    await deviceRef.update(data);
+  } catch (error) {
+    console.error('Error saving device entry to Firebase:', error);
+  }
+}
+
+async function updateCurrentDeviceEnabled(enabled) {
+  const deviceId = getCurrentDeviceId();
+  if (!deviceId) return;
+  await saveDeviceEntryToFirebase(deviceId, {
+    enabled,
+    lastSeen: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+async function updateCurrentDeviceOfflineStatus(isOffline) {
+  const deviceId = getCurrentDeviceId();
+  if (!deviceId) return;
+  await saveDeviceEntryToFirebase(deviceId, {
+    offline: isOffline,
+    lastSeen: firebase.database.ServerValue.TIMESTAMP
+  });
+}
 
 // Navigation history variables
 let navigationHistory = []; // Track navigation history [{ type: 'login' | 'admin' | 'channel', channel?: string }]
@@ -572,18 +648,16 @@ async function loadSettingsFromFirebase() {
       if (settings.hasOwnProperty('notificationsEnabled')) {
         notificationsEnabled = settings.notificationsEnabled;
         localStorage.setItem('notifications_enabled', notificationsEnabled.toString());
-        const menuNotificationToggle = document.getElementById('menuNotificationToggle');
         const notificationToggle = document.getElementById('notificationToggle');
-        if (menuNotificationToggle) {
-          menuNotificationToggle.checked = notificationsEnabled;
-        }
         if (notificationToggle) {
           notificationToggle.checked = notificationsEnabled;
         }
-        if (notificationsEnabled && 'Notification' in window && Notification.permission === 'default') {
-          requestNotificationPermissionIfNeeded();
-        } else if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
-          await subscribeOneSignal();
+        if (notificationsEnabled && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            await subscribeOneSignal();
+          } else {
+            await requestNotificationPermissionIfNeeded();
+          }
         }
       }
 
@@ -669,9 +743,9 @@ function setupSettingsSyncListener() {
           if (settings.hasOwnProperty('notificationsEnabled') && settings.notificationsEnabled !== notificationsEnabled) {
             notificationsEnabled = settings.notificationsEnabled;
             localStorage.setItem('notifications_enabled', notificationsEnabled.toString());
-            const menuNotificationToggle = document.getElementById('menuNotificationToggle');
-            if (menuNotificationToggle) {
-              menuNotificationToggle.checked = notificationsEnabled;
+            const notificationToggle = document.getElementById('notificationToggle');
+            if (notificationToggle) {
+              notificationToggle.checked = notificationsEnabled;
             }
           }
           
@@ -6586,10 +6660,6 @@ async function populateRecentChatsList() {
       menuSwitchChannel.style.display = 'none';
     }
     
-    // Update notification toggle state
-    const menuNotificationToggle = document.getElementById('menuNotificationToggle');
-    menuNotificationToggle.checked = notificationsEnabled;
-    
     hideScrollToBottomButton();
     setMenuOpenState(true);
     if (menuOverlay) {
@@ -6670,39 +6740,15 @@ async function populateRecentChatsList() {
 
   // ===== NEW MENU ITEM HANDLERS =====
   
-  // Notifications toggle in menu
-  const menuNotificationToggle = document.getElementById('menuNotificationToggle');
+  const menuConfigureNotifications = document.getElementById('menuConfigureNotifications');
   const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
-  const menuNotifications = document.getElementById('menuNotifications');
-  
-  menuNotificationToggle.addEventListener('change', async (e) => {
-    notificationsEnabled = e.target.checked;
-    console.log('🔔 Notification toggle:', notificationsEnabled ? 'ON' : 'OFF');
-    
-    localStorage.setItem('notifications_enabled', notificationsEnabled);
-    await saveSettingsToFirebase();
-    console.log('💾 Settings saved to Firebase');
-    
-    if (notificationsEnabled && userChannel === 'general') {
-      console.log('✅ Enabling notifications...');
-      if (Notification.permission === 'granted') {
-        console.log('📱 Permission already granted, subscribing to OneSignal...');
-        await subscribeOneSignal();
-      } else if (Notification.permission === 'default') {
-        console.log('❓ Permission not set, requesting from user...');
-        await requestNotificationPermissionIfNeeded();
-      } else if (Notification.permission === 'denied') {
-        console.error('❌ Notification permission denied by browser');
-        showNotification('Notifications are blocked in browser settings. Please allow notifications for this site.', true);
-      }
-      showNotification('Notifications enabled for general chat');
-      logNotificationDiagnostics();
-    } else {
-      console.log('❌ Disabling notifications...');
-      await unsubscribeOneSignal();
-      showNotification('Notifications disabled');
-    }
-  });
+
+  if (menuConfigureNotifications) {
+    menuConfigureNotifications.addEventListener('click', () => {
+      closeOpenMenus();
+      openDeviceSettingsModal();
+    });
+  }
 
   menuBetterUiToggle.addEventListener('change', async (e) => {
     betterUiEnabled = e.target.checked;
@@ -6711,6 +6757,34 @@ async function populateRecentChatsList() {
     await saveSettingsToFirebase();
     showNotification(betterUiEnabled ? 'Better UI enabled' : 'Better UI disabled');
   });
+
+  const manageDevicesBtn = document.getElementById('manageDevicesBtn');
+  const deviceSettingsModal = document.getElementById('deviceSettingsModal');
+  const closeDeviceSettingsBtn = document.getElementById('closeDeviceSettingsBtn');
+  const deviceListContainer = document.getElementById('deviceListContainer');
+
+  if (manageDevicesBtn) {
+    manageDevicesBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      openDeviceSettingsModal();
+    });
+  }
+
+  if (closeDeviceSettingsBtn) {
+    closeDeviceSettingsBtn.addEventListener('click', () => {
+      if (deviceSettingsModal) {
+        deviceSettingsModal.style.display = 'none';
+      }
+    });
+  }
+
+  if (deviceSettingsModal) {
+    deviceSettingsModal.addEventListener('click', (e) => {
+      if (e.target === deviceSettingsModal) {
+        deviceSettingsModal.style.display = 'none';
+      }
+    });
+  }
 
   // Profile picture upload from menu
   const menuUploadProfile = document.getElementById('menuUploadProfile');
@@ -6951,19 +7025,100 @@ async function populateRecentChatsList() {
     notificationsEnabled = e.target.checked;
     localStorage.setItem('notifications_enabled', notificationsEnabled);
     await saveSettingsToFirebase();
-    
+
     if (notificationsEnabled && userChannel === 'general') {
       if (Notification.permission === 'granted') {
         await subscribeOneSignal();
       } else if (Notification.permission === 'default') {
         await requestNotificationPermissionIfNeeded();
       }
+      await updateCurrentDeviceEnabled(true);
     } else {
       await unsubscribeOneSignal();
+      await updateCurrentDeviceEnabled(false);
     }
-    
+
     showNotification(notificationsEnabled ? 'Notifications enabled for general chat' : 'Notifications disabled');
   });
+
+  // Device settings modal helpers
+  async function fetchDeviceList() {
+    if (!username) return {};
+    const safeKey = getFirebaseSafeUserKey(username);
+    const snapshot = await db.ref(`users/${safeKey}/devices`).once('value');
+    return snapshot.val() || {};
+  }
+
+  function escapeHtml(text) {
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async function renderDeviceList() {
+    if (!deviceListContainer) return;
+    deviceListContainer.innerHTML = '<div class="device-empty">Loading devices…</div>';
+
+    const devices = await fetchDeviceList();
+    const deviceKeys = Object.keys(devices || {});
+    if (!deviceKeys.length) {
+      deviceListContainer.innerHTML = '<div class="device-empty">No registered devices found.</div>';
+      return;
+    }
+
+    deviceListContainer.innerHTML = '';
+    const currentId = getCurrentDeviceId();
+
+    deviceKeys.sort((a, b) => {
+      const labelA = devices[a]?.label || a;
+      const labelB = devices[b]?.label || b;
+      return labelA.localeCompare(labelB);
+    });
+
+    deviceKeys.forEach((deviceKey) => {
+      const device = devices[deviceKey] || {};
+      const deviceId = device.playerId || deviceKey;
+      const deviceLabel = device.label || deviceId;
+      const enabled = device.enabled !== false;
+      const item = document.createElement('div');
+      item.className = 'device-item';
+      item.innerHTML = `
+        <div class="device-info">
+          <div class="device-name">${escapeHtml(deviceLabel)}${deviceId === currentId ? ' <span class="device-current">(this device)</span>' : ''}</div>
+          <div class="device-id">${escapeHtml(deviceId.slice(0, 10))}...</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" data-device-id="${escapeHtml(deviceId)}" ${enabled ? 'checked' : ''}>
+          <span class="toggle-slider"></span>
+        </label>
+      `;
+
+      const toggle = item.querySelector('input');
+      if (toggle) {
+        toggle.addEventListener('change', async (e) => {
+          const isEnabled = e.target.checked;
+          await saveDeviceEntryToFirebase(deviceId, {
+            enabled: isEnabled,
+            lastSeen: firebase.database.ServerValue.TIMESTAMP
+          });
+          if (deviceId === currentId) {
+            showNotification(isEnabled ? 'This device will receive notifications' : 'This device will no longer receive notifications');
+          }
+        });
+      }
+
+      deviceListContainer.appendChild(item);
+    });
+  }
+
+  function openDeviceSettingsModal() {
+    if (!deviceSettingsModal) return;
+    deviceSettingsModal.style.display = 'flex';
+    renderDeviceList();
+  }
 
   // Profile upload
   uploadProfileBtn.addEventListener('click', () => {
