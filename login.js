@@ -287,10 +287,7 @@ function getOneSignalSiteRootPath() {
 
 async function initOneSignalSdk() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
-  if (window.__oneSignalInitPromise) {
-    console.log('🔄 OneSignal init already in progress, returning existing promise');
-    return window.__oneSignalInitPromise;
-  }
+  if (window.__oneSignalInitPromise) return window.__oneSignalInitPromise;
 
   function absoluteUrl(path) {
     try {
@@ -311,12 +308,9 @@ async function initOneSignalSdk() {
   }
 
   window.__oneSignalInitPromise = new Promise((resolve, reject) => {
-    console.log('📍 OneSignal: Pushing deferred function to queue');
     window.OneSignalDeferred.push(async function(OneSignal) {
-      console.log('🔧 OneSignal: Deferred function executing, OneSignal object received:', !!OneSignal);
       try {
         if (window.__oneSignalInitialized) {
-          console.log('✅ OneSignal already initialized, returning');
           return resolve(OneSignal);
         }
 
@@ -358,12 +352,11 @@ async function initOneSignalSdk() {
           }
         }
 
-        console.log('🔧 OneSignal: Config - serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
+        console.log('OneSignal: using serviceWorkerPath=', workerPath, 'updaterPath=', updaterPath, 'scope=', scope);
 
         const resolvedWorkerPath = workerPath.startsWith('/') ? workerPath : `/${workerPath}`;
         const resolvedUpdaterPath = updaterPath.startsWith('/') ? updaterPath : `/${updaterPath}`;
 
-        console.log('⏳ OneSignal: Calling OneSignal.init()...');
         await OneSignal.init({
           appId: '453e37ab-e655-4aee-a716-1234072cf2a8',
           allowLocalhostAsSecureOrigin: true,
@@ -374,16 +367,14 @@ async function initOneSignalSdk() {
             scope
           }
         });
-        console.log('✅ OneSignal.init() completed successfully');
-        console.log('📦 OneSignal object:', OneSignal);
+        console.log('OneSignal object:', OneSignal);
 
         // Debug: try to log and save the OneSignal player id if available
         try {
-          console.log('🔍 Extracting OneSignal player ID...');
           let playerId = null;
           if (OneSignal && OneSignal.User && OneSignal.User.PushSubscription && OneSignal.User.PushSubscription.id) {
             playerId = OneSignal.User.PushSubscription.id;
-            console.log('✅ OneSignal Player ID found (v16):', playerId?.substring(0, 20) + '...');
+            console.log('OneSignal User ID (post-init):', playerId);
             if (username) {
               try {
                 await fetch(`${PUSH_SERVER_URL}/save-onesignal-id`, {
@@ -391,35 +382,23 @@ async function initOneSignalSdk() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ username, playerId })
                 });
-                console.log('✅ OneSignal Player ID saved to push server:', playerId?.substring(0, 20) + '...');
+                console.log('OneSignal Player ID saved:', playerId);
               } catch (saveErr) {
-                console.error('❌ Failed to save OneSignal ID to server:', saveErr);
+                console.error('Failed to save OneSignal ID:', saveErr);
               }
-            } else {
-              console.warn('⚠️ Username not available yet, player ID not saved');
             }
           } else if (typeof OneSignal.getUserId === 'function') {
-            console.log('🔍 Trying legacy OneSignal.getUserId()...');
             const debugId = await OneSignal.getUserId();
-            if (debugId) {
-              console.log('✅ OneSignal User ID (legacy):', debugId);
-            } else {
-              console.warn('⚠️ OneSignal.getUserId() returned empty');
-            }
-          } else {
-            console.warn('⚠️ No player ID available: OneSignal.User.PushSubscription.id not found');
+            if (debugId) console.log('OneSignal User ID (legacy):', debugId);
           }
         } catch (e) {
-          console.error('❌ OneSignal player id extraction failed:', e);
+          console.warn('OneSignal player id extraction failed:', e);
         }
 
         window.__oneSignalInitialized = true;
-        console.log('✅ OneSignal initialization complete: window.__oneSignalInitialized =', window.__oneSignalInitialized);
         resolve(OneSignal);
       } catch (err) {
-        console.error('❌ Error in OneSignal deferred function:', err);
         if (err && err.message && err.message.includes('SDK already initialized')) {
-          console.log('ℹ️ SDK already initialized, marking as done');
           window.__oneSignalInitialized = true;
           return resolve(OneSignal);
         }
@@ -433,103 +412,70 @@ async function initOneSignalSdk() {
 
 async function setupOneSignal() {
   try {
-    console.log('📱 setupOneSignal() called');
     const OneSignal = await initOneSignalSdk();
-    console.log('✅ initOneSignalSdk() completed, OneSignal object:', !!OneSignal);
 
     if (OneSignal?.User?.PushSubscription) {
-      console.log('✅ OneSignal v16 detected - User.PushSubscription available');
-      OneSignal.User.PushSubscription.addEventListener(
-        'change',
-        (event) => {
-          console.log('🔔 Push subscription changed:', event);
-          const playerId = OneSignal.User.PushSubscription.id;
-          if (playerId) {
-            console.log('💾 Saving changed player ID:', playerId?.substring(0, 20) + '...');
-            saveOneSignalPlayerId(playerId);
-          }
-        }
-      );
-    } else {
-      console.warn('⚠️ OneSignal.User.PushSubscription not available');
-    }
+  console.log('OneSignal v16 detected');
 
-    const enabled = OneSignal?.User?.PushSubscription?.optedIn || false;
-    console.log('🔊 OneSignal opted in?', enabled);
+  OneSignal.User.PushSubscription.addEventListener(
+    'change',
+    (event) => {
+      console.log('Push subscription changed', event);
+
+      const playerId = OneSignal.User.PushSubscription.id;
+      if (playerId) {
+        saveOneSignalPlayerId(playerId);
+      }
+    }
+  );
+}
+
+    const enabled =
+  OneSignal?.User?.PushSubscription?.optedIn || false;
+    console.log('OneSignal enabled?', enabled);
     if (enabled) {
       if (typeof OneSignal.getUserId === 'function') {
-        const playerId = OneSignal.User?.PushSubscription?.id;
-        if (playerId) {
-          console.log('💾 Saving player ID from setup:', playerId?.substring(0, 20) + '...');
-          saveOneSignalPlayerId(playerId);
-        } else {
-          console.warn('⚠️ Player ID not available even though opted in');
-        }
+        const playerId =
+  OneSignal.User?.PushSubscription?.id;
+        if (playerId) saveOneSignalPlayerId(playerId);
       }
     }
 
-    console.log('✅ setupOneSignal() complete');
     return OneSignal;
   } catch (e) {
-    console.error('❌ setupOneSignal failed:', e);
+    console.warn('OneSignal init error', e);
     throw e;
   }
 }
 
 async function subscribeOneSignal() {
   try {
-    console.log('🔔 subscribeOneSignal() called');
-    if (!('Notification' in window)) {
-      console.warn('❌ Notification API not supported');
-      return;
-    }
+    if (!('Notification' in window)) return;
     if (Notification.permission === 'denied') {
-      console.error('❌ Notification permission denied');
       showNotification('Notifications are blocked in your browser settings.', true);
       return;
     }
 
-    console.log('⏳ Calling setupOneSignal()...');
     const OneSignal = await setupOneSignal();
-    console.log('✅ setupOneSignal() returned, checking subscription status...');
-    
     const enabled = OneSignal?.User?.PushSubscription?.optedIn || false;
-    console.log('🔊 Opted in status:', enabled);
-    
     if (!enabled) {
-      console.log('⏳ Not opted in, requesting permission...');
       if (Notification.permission === 'default') {
-        if (notificationPromptInProgress) {
-          console.log('⚠️ Notification prompt already in progress');
-          return;
-        }
+        if (notificationPromptInProgress) return;
         notificationPromptInProgress = true;
         try {
-          console.log('⏳ Calling OneSignal.Notifications.requestPermission()...');
           await OneSignal.Notifications.requestPermission();
-          console.log('✅ Permission request completed');
         } catch (err) {
-          console.error('❌ OneSignal.Notifications.requestPermission() failed:', err);
+          console.warn('OneSignal showNativePrompt failed', err);
         } finally {
           notificationPromptInProgress = false;
         }
-      } else {
-        console.log('ℹ️ Notification permission status:', Notification.permission);
       }
-    } else {
-      console.log('✅ Already opted in');
     }
 
     const playerId = OneSignal?.User?.PushSubscription?.id;
-    console.log('🔍 Final player ID check:', playerId ? '✅ ' + playerId?.substring(0, 20) + '...' : '❌ Not available');
-    if (playerId) {
-      console.log('💾 Saving final player ID...');
-      await saveOneSignalPlayerId(playerId);
-    } else {
-      console.warn('⚠️ Player ID still not available after subscription');
-    }
+    if (playerId) saveOneSignalPlayerId(playerId);
   } catch (err) {
-    console.error('❌ subscribeOneSignal failed:', err);
+    console.error('subscribeOneSignal failed', err);
   }
 }
 
@@ -1091,31 +1037,31 @@ function getNodeDateLabel(node) {
   return node.dataset?.date || null;
 }
 
-function getMessageOrderValue(msg, key) {
-  if (key) {
-    return String(key);
-  }
+function sortMessagesByTimestampAndKey() {
+  if (!messagesDiv) return;
+  const messageNodes = Array.from(messagesDiv.querySelectorAll('.message'))
+    .filter(el => !el.classList.contains('welcome'));
 
-  const numericTimestamp = Number(msg?.timestamp);
-  if (Number.isFinite(numericTimestamp) && numericTimestamp > 0) {
-    return String(numericTimestamp);
-  }
+  messageNodes.sort((a, b) => {
+    const aTimestamp = Number(a.dataset.timestamp || 0);
+    const bTimestamp = Number(b.dataset.timestamp || 0);
+    if (aTimestamp !== bTimestamp) {
+      return aTimestamp - bTimestamp;
+    }
+    return String(a.dataset.key || '').localeCompare(String(b.dataset.key || ''), undefined, { numeric: true, sensitivity: 'base' });
+  });
 
-  return '';
+  messageNodes.forEach((node) => {
+    messagesDiv.appendChild(node);
+  });
 }
 
-function compareMessageOrderValues(left, right) {
-  return String(left).localeCompare(String(right));
-}
-
-function insertMessageByFirebaseOrder(messageDiv, msg, key, prevChildKey, refreshLayout = true) {
+function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayout = true) {
   const timestamp = Number(msg.timestamp || Date.now());
   const messageDate = formatDateSeparator(timestamp);
-  const sortValue = getMessageOrderValue(msg, key);
 
   messageDiv.dataset.timestamp = timestamp;
   messageDiv.dataset.date = messageDate;
-  messageDiv.dataset.sortValue = sortValue;
 
   const existingMessages = Array.from(messagesDiv.querySelectorAll('.message'))
     .filter(el => !el.classList.contains('welcome'));
@@ -1138,8 +1084,9 @@ function insertMessageByFirebaseOrder(messageDiv, msg, key, prevChildKey, refres
     } else {
       let insertBefore = null;
       for (const existing of existingMessages) {
-        const existingSortValue = existing.dataset.sortValue;
-        if (compareMessageOrderValues(existingSortValue, sortValue) > 0) {
+        const existingTimestamp = Number(existing.dataset.timestamp || 0);
+        const existingKey = existing.dataset.key || '';
+        if (existingTimestamp > timestamp || (existingTimestamp === timestamp && existingKey > (messageDiv.dataset.key || ''))) {
           insertBefore = existing;
           break;
         }
@@ -1151,6 +1098,9 @@ function insertMessageByFirebaseOrder(messageDiv, msg, key, prevChildKey, refres
       }
     }
   }
+
+  // Ensure DOM order is correct even when prevChildKey references skipped messages or timestamp ties occur
+  sortMessagesByTimestampAndKey();
 
   if (refreshLayout) {
     refreshDateSeparators();
@@ -1776,54 +1726,37 @@ function downloadProfile(userName, profileImage) {
 }
 
 async function requestNotificationPermissionIfNeeded() {
-  console.group('🛠️ REQUEST NOTIFICATION PERMISSION');
-  try {
-    if (!('Notification' in window)) {
-      console.error('❌ Notification API not supported in this browser');
-      console.groupEnd();
-      return;
-    }
-    
-    console.log('📍 Current permission status:', Notification.permission);
-    
-    if (Notification.permission !== 'default') {
-      console.log('⚠️ Permission already set (not default), skipping');
-      console.groupEnd();
-      return;
-    }
-    
-    if (notificationPromptInProgress) {
-      console.log('⏳ Notification permission request already in progress');
-      console.groupEnd();
-      return;
-    }
+  if (!('Notification' in window)) {
+    console.warn('⚠️ Notifications NOT supported in this browser');
+    return;
+  }
+  if (Notification.permission !== 'default') {
+    console.log('📍 Notification permission already set to:', Notification.permission);
+    return;
+  }
+  if (notificationPromptInProgress) {
+    console.log('⏳ Notification permission request already in progress');
+    return;
+  }
 
-    notificationPromptInProgress = true;
-    console.log('⏳ Requesting notification permission from user...');
+  notificationPromptInProgress = true;
+  try {
+    console.log('🔔 Requesting notification permission...');
+    const permission = await Notification.requestPermission();
+    console.log('✓ User permission response:', permission);
     
-    try {
-      const permission = await Notification.requestPermission();
-      console.log('✓ User response:', permission);
-      
-      if (permission === 'granted') {
-        console.log('✅ PERMISSION GRANTED');
-        console.log('🔔 Now subscribing to OneSignal...');
-        showNotification('Notifications enabled for general chat!');
-        await subscribeOneSignal();
-      } else if (permission === 'denied') {
-        console.error('❌ PERMISSION DENIED by user');
-        showNotification('Notifications blocked. You can change this in browser settings.', true);
-      } else if (permission === 'default') {
-        console.log('❓ PERMISSION: default (user dismissed prompt)');
-      }
-    } catch (error) {
-      console.error('❌ Error during permission request:', error);
+    if (permission === 'granted') {
+      console.log('✅ Notification permission GRANTED');
+      showNotification('Notifications enabled for general chat!');
+      await subscribeOneSignal();
+    } else if (permission === 'denied') {
+      console.warn('❌ Notification permission DENIED by user');
+      showNotification('Notifications blocked. You can change this in browser settings.', true);
     }
   } catch (error) {
-    console.error('❌ Unexpected error in requestNotificationPermissionIfNeeded:', error);
+    console.error('❌ Notification permission request failed:', error);
   } finally {
     notificationPromptInProgress = false;
-    console.groupEnd();
   }
 }
 
@@ -5158,14 +5091,14 @@ async function populateRecentChatsList() {
   // For private channels, only show messages with matching channel
   let query;
   if (userChannel === 'general') {
-    // Follow the message order stored in Firebase so older/newer chats render consistently.
-    query = db.ref('chat').orderByKey();
+    // Load the full chat history for general chat so older Firebase messages remain visible.
+    query = db.ref('chat').orderByChild('timestamp');
   } else if (userChannel === 'admin') {
     // Admin can see all messages, so load the full history too.
-    query = db.ref('chat').orderByKey();
+    query = db.ref('chat').orderByChild('timestamp');
   } else {
     // Private channels also need the full history for the current channel.
-    query = db.ref('chat').orderByKey();
+    query = db.ref('chat').orderByChild('timestamp');
   }
   
   messageListener = query;
@@ -5522,7 +5455,7 @@ async function populateRecentChatsList() {
       }
     }
     
-    insertMessageByFirebaseOrder(messageDiv, msg, key, prevChildKey, initialLoadComplete);
+    insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, initialLoadComplete);
     if (!isOwnMessage) {
       markMessageAsSeen(key, msg.name);
     }
@@ -5582,7 +5515,7 @@ async function populateRecentChatsList() {
       lastDeliveredChatNotificationId = key;
       showChatNotification('Update app for a better experience 🚀', {
         title: 'Bhavishya',
-        body: 'Update app for a better experience 🚀',
+        body: 'New message from ' + msg.name,
         icon: 'bhavishya.jpg',
         tag: `chat-${key}`
       });

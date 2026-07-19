@@ -602,6 +602,24 @@ input[type="submit"] {
   position: relative;
 }
 
+.load-more-messages-btn {
+  display: block;
+  margin: 10px auto 8px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
+}
+
+.load-more-messages-btn:disabled {
+  opacity: 0.8;
+  cursor: wait;
+}
+
 .scroll-to-bottom-btn {
   position: absolute;
   right: 16px;
@@ -1579,7 +1597,6 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .message__header,
 :root.better-ui .message__time,
 :root.better-ui .reaction-user-item,
-:root.better-ui .emoji-picker,
 :root.better-ui .menu-item,
 :root.better-ui .modal-content,
 :root.better-ui .popover,
@@ -1588,6 +1605,70 @@ body.menu-open .scroll-to-bottom-btn {
   border: none !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
+}
+
+:root.better-ui .emoji-picker {
+  background: rgba(8, 12, 24, 0.78) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.42) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  background-clip: padding-box !important;
+}
+
+:root.better-ui .emoji-search-input,
+:root.better-ui .reaction-search-input {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  color: var(--text-primary) !important;
+}
+
+:root.better-ui .emoji-category,
+:root.better-ui .emoji-tab,
+:root.better-ui .emoji-item,
+:root.better-ui .emoji-load-more,
+:root.better-ui .emoji-item.media-item {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
+}
+
+:root.better-ui .emoji-category:hover,
+:root.better-ui .emoji-category.active,
+:root.better-ui .emoji-tab.active,
+:root.better-ui .emoji-tab:hover,
+:root.better-ui .emoji-load-more:hover {
+  background: rgba(124, 58, 237, 0.28) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: var(--text-primary) !important;
+}
+
+:root.better-ui .emoji-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.24) !important;
+}
+
+:root.better-ui .load-more-messages-btn {
+  display: block !important;
+  margin: 12px auto 10px !important;
+  padding: 10px 16px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.96), rgba(79, 70, 229, 0.96)) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.32) !important;
+  backdrop-filter: blur(14px) !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+
+:root.better-ui .load-more-messages-btn:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.98), rgba(99, 102, 241, 0.98)) !important;
+}
+
+:root.better-ui .load-more-messages-btn:disabled {
+  opacity: 0.8 !important;
+  cursor: wait !important;
 }
 
 :root.better-ui .button,
@@ -2087,16 +2168,18 @@ body.menu-open .scroll-to-bottom-btn {
   bottom: calc(100% + 8px);
   left: 0;
   right: auto;
-  background: var(--secondary-bg);
-  border: 1px solid var(--border-color);
+  background: rgba(10, 14, 32, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 18px;
   padding: 18px 18px 16px;
   width: min(320px, calc(100% - 12px));
   max-height: 520px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
   z-index: 100;
   display: none;
   overflow: hidden;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
 }
 
 .emoji-picker.show {
