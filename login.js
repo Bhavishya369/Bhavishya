@@ -3169,7 +3169,7 @@ function setupReactionOnMessage(messageDiv) {
       isPressHeld = true;
       messageDiv.classList.add('message-selected');
       showReactionPicker(messageDiv, e);
-    }, 400); // 400ms press-and-hold
+    }, 2000); // 2s press-and-hold
   };
 
   const endPress = () => {
@@ -6761,12 +6761,34 @@ async function populateRecentChatsList() {
   // ===== NEW MENU ITEM HANDLERS =====
   
   const menuConfigureNotifications = document.getElementById('menuConfigureNotifications');
+  const menuCurrentDeviceNotificationToggle = document.getElementById('menuCurrentDeviceNotificationToggle');
   const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
 
   if (menuConfigureNotifications) {
     menuConfigureNotifications.addEventListener('click', () => {
       closeOpenMenus();
       openDeviceSettingsModal();
+    });
+  }
+
+  if (menuCurrentDeviceNotificationToggle) {
+    menuCurrentDeviceNotificationToggle.checked = getCurrentDeviceEnabledState();
+    menuCurrentDeviceNotificationToggle.addEventListener('change', async (e) => {
+      const isEnabled = e.target.checked;
+      await updateCurrentDeviceEnabled(isEnabled);
+      if (isEnabled && notificationsEnabled && userChannel === 'general') {
+        if (Notification.permission === 'granted') {
+          await subscribeOneSignal();
+        } else if (Notification.permission === 'default') {
+          await requestNotificationPermissionIfNeeded();
+        }
+      } else if (!isEnabled) {
+        await unsubscribeOneSignal();
+      }
+      if (currentDeviceNotificationToggle) {
+        currentDeviceNotificationToggle.checked = isEnabled;
+      }
+      showNotification(isEnabled ? 'This device will receive notifications' : 'This device will no longer receive notifications');
     });
   }
 
