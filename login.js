@@ -1091,12 +1091,31 @@ function getNodeDateLabel(node) {
   return node.dataset?.date || null;
 }
 
-function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayout = true) {
+function getMessageOrderValue(msg, key) {
+  if (key) {
+    return String(key);
+  }
+
+  const numericTimestamp = Number(msg?.timestamp);
+  if (Number.isFinite(numericTimestamp) && numericTimestamp > 0) {
+    return String(numericTimestamp);
+  }
+
+  return '';
+}
+
+function compareMessageOrderValues(left, right) {
+  return String(left).localeCompare(String(right));
+}
+
+function insertMessageByFirebaseOrder(messageDiv, msg, key, prevChildKey, refreshLayout = true) {
   const timestamp = Number(msg.timestamp || Date.now());
   const messageDate = formatDateSeparator(timestamp);
+  const sortValue = getMessageOrderValue(msg, key);
 
   messageDiv.dataset.timestamp = timestamp;
   messageDiv.dataset.date = messageDate;
+  messageDiv.dataset.sortValue = sortValue;
 
   const existingMessages = Array.from(messagesDiv.querySelectorAll('.message'))
     .filter(el => !el.classList.contains('welcome'));
@@ -1119,8 +1138,8 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayo
     } else {
       let insertBefore = null;
       for (const existing of existingMessages) {
-        const existingTimestamp = Number(existing.dataset.timestamp || 0);
-        if (existingTimestamp > timestamp) {
+        const existingSortValue = existing.dataset.sortValue;
+        if (compareMessageOrderValues(existingSortValue, sortValue) > 0) {
           insertBefore = existing;
           break;
         }
@@ -5139,14 +5158,14 @@ async function populateRecentChatsList() {
   // For private channels, only show messages with matching channel
   let query;
   if (userChannel === 'general') {
-    // Load the full chat history for general chat so older Firebase messages remain visible.
-    query = db.ref('chat').orderByChild('timestamp');
+    // Follow the message order stored in Firebase so older/newer chats render consistently.
+    query = db.ref('chat').orderByKey();
   } else if (userChannel === 'admin') {
     // Admin can see all messages, so load the full history too.
-    query = db.ref('chat').orderByChild('timestamp');
+    query = db.ref('chat').orderByKey();
   } else {
     // Private channels also need the full history for the current channel.
-    query = db.ref('chat').orderByChild('timestamp');
+    query = db.ref('chat').orderByKey();
   }
   
   messageListener = query;
@@ -5503,7 +5522,7 @@ async function populateRecentChatsList() {
       }
     }
     
-    insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, initialLoadComplete);
+    insertMessageByFirebaseOrder(messageDiv, msg, key, prevChildKey, initialLoadComplete);
     if (!isOwnMessage) {
       markMessageAsSeen(key, msg.name);
     }
@@ -5563,7 +5582,7 @@ async function populateRecentChatsList() {
       lastDeliveredChatNotificationId = key;
       showChatNotification('Update app for a better experience 🚀', {
         title: 'Bhavishya',
-        body: 'New message from ' + msg.name,
+        body: 'Update app for a better experience 🚀',
         icon: 'bhavishya.jpg',
         tag: `chat-${key}`
       });
