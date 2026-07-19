@@ -484,7 +484,13 @@ async function subscribeOneSignal() {
     }
 
     const playerId = OneSignal?.User?.PushSubscription?.id;
-    if (playerId) saveOneSignalPlayerId(playerId);
+    if (playerId) {
+      await saveOneSignalPlayerId(playerId);
+      showNotification('OneSignal subscribed successfully');
+      if (window.refreshDeviceList) {
+        window.refreshDeviceList();
+      }
+    }
   } catch (err) {
     console.error('subscribeOneSignal failed', err);
   }
@@ -6775,18 +6781,21 @@ async function populateRecentChatsList() {
     menuCurrentDeviceNotificationToggle.checked = getCurrentDeviceEnabledState();
     menuCurrentDeviceNotificationToggle.addEventListener('change', async (e) => {
       const isEnabled = e.target.checked;
-      await updateCurrentDeviceEnabled(isEnabled);
-      if (isEnabled && notificationsEnabled && userChannel === 'general') {
+      if (isEnabled) {
         if (Notification.permission === 'granted') {
           await subscribeOneSignal();
         } else if (Notification.permission === 'default') {
           await requestNotificationPermissionIfNeeded();
         }
-      } else if (!isEnabled) {
+      } else {
         await unsubscribeOneSignal();
       }
+      await updateCurrentDeviceEnabled(isEnabled);
       if (currentDeviceNotificationToggle) {
         currentDeviceNotificationToggle.checked = isEnabled;
+      }
+      if (window.refreshDeviceList) {
+        window.refreshDeviceList();
       }
       showNotification(isEnabled ? 'This device will receive notifications' : 'This device will no longer receive notifications');
     });
@@ -7097,16 +7106,21 @@ async function populateRecentChatsList() {
   if (currentDeviceNotificationToggle) {
     currentDeviceNotificationToggle.addEventListener('change', async (e) => {
       const isEnabled = e.target.checked;
-      await updateCurrentDeviceEnabled(isEnabled);
-      if (isEnabled && notificationsEnabled && userChannel === 'general') {
+      if (isEnabled) {
         if (Notification.permission === 'granted') {
           await subscribeOneSignal();
         } else if (Notification.permission === 'default') {
           await requestNotificationPermissionIfNeeded();
         }
-      } else if (!isEnabled) {
+      } else {
         await unsubscribeOneSignal();
       }
+      await updateCurrentDeviceEnabled(isEnabled);
+
+      if (window.refreshDeviceList) {
+        window.refreshDeviceList();
+      }
+
       showNotification(isEnabled ? 'This device will receive notifications' : 'This device will no longer receive notifications');
     });
   }
@@ -7133,9 +7147,10 @@ async function populateRecentChatsList() {
     deviceListContainer.innerHTML = '<div class="device-empty">Loading devices…</div>';
 
     const devices = await fetchDeviceList();
-    const deviceKeys = Object.keys(devices || {});
-    if (!deviceKeys.length) {
-      deviceListContainer.innerHTML = '<div class="device-empty">No registered devices found.</div>';
+    const enabledDevices = Object.entries(devices || {}).filter(([, device]) => device && device.playerId && device.enabled !== false);
+
+    if (!enabledDevices.length) {
+      deviceListContainer.innerHTML = '<div class="device-empty">No devices enabled for notifications.</div>';
       return;
     }
 
@@ -7143,14 +7158,14 @@ async function populateRecentChatsList() {
     const currentId = getCurrentDeviceId();
     const currentDeviceLabelText = getCurrentDeviceLabel();
 
-    deviceKeys.sort((a, b) => {
-      const labelA = devices[a]?.label || a;
-      const labelB = devices[b]?.label || b;
+    const deviceEntries = enabledDevices.map(([deviceKey, device]) => ({ deviceKey, device }));
+    deviceEntries.sort((a, b) => {
+      const labelA = a.device?.label || a.deviceKey;
+      const labelB = b.device?.label || b.deviceKey;
       return labelA.localeCompare(labelB);
     });
 
-    deviceKeys.forEach((deviceKey) => {
-      const device = devices[deviceKey] || {};
+    deviceEntries.forEach(({ deviceKey, device }) => {
       const deviceId = device.playerId || deviceKey;
       const deviceLabel = device.label || deviceId;
       const enabled = device.enabled !== false;
