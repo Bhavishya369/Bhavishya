@@ -1284,10 +1284,13 @@ async function showChatNotification(messageText, metadata = {}) {
   const icon = metadata.icon || 'bhavishya.jpg';
   const tag = metadata.tag || 'bhavishya-update';
 
+  console.log('🔔 showChatNotification called:', { title, body, tag, permission: Notification.permission });
+
   try {
     if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.ready;
       if (registration && typeof registration.showNotification === 'function') {
+        console.log('🔔 Showing notification via service worker');
         registration.showNotification(title, { body, icon, tag, renotify: false });
         return;
       }
@@ -1297,7 +1300,10 @@ async function showChatNotification(messageText, metadata = {}) {
   }
 
   if ('Notification' in window && Notification.permission === 'granted') {
+    console.log('🔔 Falling back to window.Notification');
     new Notification(title, { body, icon, tag, renotify: false });
+  } else {
+    console.warn('🔔 Notification not shown: permission not granted or no Notification API');
   }
 }
 
@@ -5585,6 +5591,7 @@ async function populateRecentChatsList() {
     
     const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && lastDeliveredChatNotificationId !== key && Date.now() - lastChatNotificationAt > 1000;
     if (shouldNotifyForChat) {
+      console.log('📢 New chat notification triggered for message id:', key, 'from:', msg.name, 'channel:', userChannel);
       lastChatNotificationAt = Date.now();
       lastDeliveredChatNotificationId = key;
       showChatNotification('Update app for a better experience 🚀', {
