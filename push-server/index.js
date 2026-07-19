@@ -322,6 +322,16 @@ function getFirebaseSafeUserKey(username) {
     .substring(0, 100);  // Limit length
 }
 
+function getFirebaseSafeDeviceKey(deviceId) {
+  if (!deviceId || typeof deviceId !== 'string') return 'unknown_device';
+  return deviceId
+    .trim()
+    .replace(/\.+/g, '_')
+    .replace(/[#$\[\]]/g, '_')
+    .replace(/\s+/g, '_')
+    .substring(0, 100);
+}
+
 // Endpoint to save OneSignal player id for a user
 app.post('/save-onesignal-id', async (req, res) => {
   const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
@@ -334,7 +344,8 @@ app.post('/save-onesignal-id', async (req, res) => {
 
   try {
     const safeKey = getFirebaseSafeUserKey(username);
-    const deviceRef = db.ref(`users/${safeKey}/devices/${playerId}`);
+    const safeDeviceKey = getFirebaseSafeDeviceKey(playerId);
+    const deviceRef = db.ref(`users/${safeKey}/devices/${safeDeviceKey}`);
     await deviceRef.update({
       playerId,
       label: label || 'Device',
