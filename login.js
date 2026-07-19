@@ -235,6 +235,7 @@ async function saveOneSignalPlayerId(playerId) {
     localStorage.setItem(getDeviceStorageKey(), trimmedPlayerId);
     localStorage.removeItem('onesignal_player_id_pending');
     currentDeviceId = trimmedPlayerId;
+    localStorage.setItem(`device_enabled_${getFirebaseSafeUserKey(effectiveUsername)}_${trimmedPlayerId}`, notificationsEnabled ? 'true' : 'false');
     await saveDeviceEntryToFirebase(trimmedPlayerId, {
       playerId: trimmedPlayerId,
       enabled: notificationsEnabled,
@@ -567,6 +568,9 @@ async function saveDeviceEntryToFirebase(deviceId, entry = {}) {
 async function updateCurrentDeviceEnabled(enabled) {
   const deviceId = getCurrentDeviceId();
   if (!deviceId) return;
+  if (username) {
+    localStorage.setItem(`device_enabled_${getFirebaseSafeUserKey(username)}_${deviceId}`, enabled ? 'true' : 'false');
+  }
   await saveDeviceEntryToFirebase(deviceId, {
     enabled,
     lastSeen: firebase.database.ServerValue.TIMESTAMP
@@ -580,6 +584,12 @@ async function updateCurrentDeviceOfflineStatus(isOffline) {
     offline: isOffline,
     lastSeen: firebase.database.ServerValue.TIMESTAMP
   });
+}
+
+function getCurrentDeviceEnabledState() {
+  const deviceId = getCurrentDeviceId();
+  if (!deviceId || !username) return notificationsEnabled;
+  return Boolean(localStorage.getItem(`device_enabled_${getFirebaseSafeUserKey(username)}_${deviceId}`) !== 'false');
 }
 
 // Navigation history variables
@@ -6994,6 +7004,7 @@ async function populateRecentChatsList() {
   const settingsModal = document.getElementById('settingsModal');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const notificationToggle = document.getElementById('notificationToggle');
+  const currentDeviceNotificationToggle = document.getElementById('currentDeviceNotificationToggle');
   const uploadProfileBtn = document.getElementById('uploadProfileBtn');
   const profileUploadInput = document.getElementById('profileUploadInput');
   const backgroundGrid = document.getElementById('backgroundGrid');
@@ -7003,7 +7014,12 @@ async function populateRecentChatsList() {
     settingsModal.style.display = 'flex';
     
     // Update notification toggle state
-    notificationToggle.checked = notificationsEnabled;
+    if (notificationToggle) {
+      notificationToggle.checked = notificationsEnabled;
+    }
+    if (currentDeviceNotificationToggle) {
+      currentDeviceNotificationToggle.checked = getCurrentDeviceEnabledState();
+    }
     
     // Update background selection
     document.querySelectorAll('.bg-option').forEach(option => {
@@ -7031,25 +7047,47 @@ async function populateRecentChatsList() {
   });
 
   // Notification toggle
-  notificationToggle.addEventListener('change', async (e) => {
-    notificationsEnabled = e.target.checked;
-    localStorage.setItem('notifications_enabled', notificationsEnabled);
-    await saveSettingsToFirebase();
+  if (notificationToggle) {
+    notificationToggle.addEventListener('change', async (e) => {
+      notificationsEnabled = e.target.checked;
+      localStorage.setItem('notifications_enabled', notificationsEnabled);
+      await saveSettingsToFirebase();
 
-    if (notificationsEnabled && userChannel === 'general') {
-      if (Notification.permission === 'granted') {
-        await subscribeOneSignal();
-      } else if (Notification.permission === 'default') {
-        await requestNotificationPermissionIfNeeded();
+      if (notificationsEnabled && userChannel === 'general') {
+        if (Notification.permission === 'granted') {
+          await subscribeOneSignal();
+        } else if (Notification.permission === 'default') {
+          await requestNotificationPermissionIfNeeded();
+        }
+        await updateCurrentDeviceEnabled(true);
+      } else {
+        await unsubscribeOneSignal();
+        await updateCurrentDeviceEnabled(false);
       }
-      await updateCurrentDeviceEnabled(true);
-    } else {
-      await unsubscribeOneSignal();
-      await updateCurrentDeviceEnabled(false);
-    }
 
-    showNotification(notificationsEnabled ? 'Notifications enabled for general chat' : 'Notifications disabled');
-  });
+      if (currentDeviceNotificationToggle) {
+        currentDeviceNotificationToggle.checked = getCurrentDeviceEnabledState();
+      }
+      showNotification(notificationsEnabled ? 'Notifications enabled for general chat' : 'Notifications disabled');
+    });
+  }
+
+  if (currentDeviceNotificationToggle) {
+    currentDeviceNotificationToggle.addEventListener('change', async (e) => {
+      const isEnabled = e.target.checked;
+      await updateCurrentDeviceEnabled(isEnabled);
+      if (isEnabled && notificationsEnabled && userChannel === 'general') {
+        if (Notification.permission === 'granted') {
+          await subscribeOneSignal();
+        } else if (Notification.permission === 'default') {
+          await requestNotificationPermissionIfNeeded();
+        }
+      } else if (!isEnabled) {
+        await unsubscribeOneSignal();
+      }
+      showNotification(isEnabled ? 'This device will receive notifications' : 'This device will no longer receive notifications');
+    });
+  }
 
   // Device settings modal helpers
   async function fetchDeviceList() {
