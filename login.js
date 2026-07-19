@@ -240,6 +240,9 @@ async function saveOneSignalPlayerId(playerId) {
       enabled: notificationsEnabled,
       lastSeen: firebase.database.ServerValue.TIMESTAMP
     });
+    if (typeof window !== 'undefined' && typeof window.refreshDeviceList === 'function') {
+      window.refreshDeviceList();
+    }
     console.log('✅ OneSignal Player ID saved successfully');
     logNotificationDiagnostics();
   } catch (err) {
@@ -7078,6 +7081,7 @@ async function populateRecentChatsList() {
 
     deviceListContainer.innerHTML = '';
     const currentId = getCurrentDeviceId();
+    const currentDeviceLabelText = getCurrentDeviceLabel();
 
     deviceKeys.sort((a, b) => {
       const labelA = devices[a]?.label || a;
@@ -7090,11 +7094,12 @@ async function populateRecentChatsList() {
       const deviceId = device.playerId || deviceKey;
       const deviceLabel = device.label || deviceId;
       const enabled = device.enabled !== false;
+      const isCurrentDevice = Boolean(deviceId && currentId && String(deviceId) === String(currentId));
       const item = document.createElement('div');
       item.className = 'device-item';
       item.innerHTML = `
         <div class="device-info">
-          <div class="device-name">${escapeHtml(deviceLabel)}${deviceId === currentId ? ' <span class="device-current">(this device)</span>' : ''}</div>
+          <div class="device-name">${escapeHtml(deviceLabel)}${isCurrentDevice ? ' <span class="device-current">(this device)</span>' : ''}</div>
           <div class="device-id">${escapeHtml(deviceId.slice(0, 10))}...</div>
         </div>
         <label class="toggle-switch">
@@ -7111,7 +7116,7 @@ async function populateRecentChatsList() {
             enabled: isEnabled,
             lastSeen: firebase.database.ServerValue.TIMESTAMP
           });
-          if (deviceId === currentId) {
+          if (String(deviceId) === String(currentId)) {
             showNotification(isEnabled ? 'This device will receive notifications' : 'This device will no longer receive notifications');
           }
         });
@@ -7126,6 +7131,10 @@ async function populateRecentChatsList() {
     deviceSettingsModal.style.display = 'flex';
     renderDeviceList();
   }
+
+  window.refreshDeviceList = () => {
+    renderDeviceList();
+  };
 
   // Profile upload
   uploadProfileBtn.addEventListener('click', () => {
