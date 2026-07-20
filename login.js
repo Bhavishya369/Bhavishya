@@ -231,14 +231,15 @@ async function saveOneSignalPlayerId(playerId) {
       body: JSON.stringify({ username: effectiveUsername, playerId: trimmedPlayerId, label: getCurrentDeviceLabel() })
     });
 
+    const currentDeviceEnabled = getCurrentDeviceEnabledState();
     localStorage.setItem(`onesignal_player_id_${effectiveUsername}`, trimmedPlayerId);
     localStorage.setItem(getDeviceStorageKey(), trimmedPlayerId);
     localStorage.removeItem('onesignal_player_id_pending');
     currentDeviceId = trimmedPlayerId;
-    localStorage.setItem(`device_enabled_${getFirebaseSafeUserKey(effectiveUsername)}_${trimmedPlayerId}`, notificationsEnabled ? 'true' : 'false');
+    localStorage.setItem(`device_enabled_${getFirebaseSafeUserKey(effectiveUsername)}_${trimmedPlayerId}`, currentDeviceEnabled ? 'true' : 'false');
     await saveDeviceEntryToFirebase(trimmedPlayerId, {
       playerId: trimmedPlayerId,
-      enabled: notificationsEnabled,
+      enabled: currentDeviceEnabled,
       lastSeen: firebase.database.ServerValue.TIMESTAMP
     });
     if (typeof window !== 'undefined' && typeof window.refreshDeviceList === 'function') {
@@ -250,6 +251,20 @@ async function saveOneSignalPlayerId(playerId) {
     console.error('❌ Failed to save OneSignal player id:', err);
     localStorage.setItem('onesignal_player_id_pending', String(playerId));
   }
+}
+
+function isOneSignalSupported() {
+  const hostname = (window.location.hostname || '').toLowerCase();
+  const protocol = (window.location.protocol || '').toLowerCase();
+
+  if (protocol !== 'https:') {
+    return false;
+  }
+
+  return hostname === 'bhavishya369.github.io' ||
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.endsWith('.github.io');
 }
 
 function getOneSignalBasePath() {
@@ -299,6 +314,12 @@ function getOneSignalSiteRootPath() {
 async function initOneSignalSdk() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   if (window.__oneSignalInitPromise) return window.__oneSignalInitPromise;
+
+  if (!isOneSignalSupported()) {
+    console.warn('OneSignal skipped: unsupported origin', window.location.href);
+    window.__oneSignalInitialized = true;
+    return null;
+  }
 
   function absoluteUrl(path) {
     try {
@@ -519,6 +540,7 @@ let lastChatNotificationId = null;
 let lastChatVisitAt = Date.now();
 let lastChatNotificationAt = 0;
 let lastDeliveredChatNotificationId = null;
+let chatNotificationSentSinceLastVisit = false;
 let currentDeviceId = '';
 let currentDeviceLabel = '';
 
@@ -1295,6 +1317,7 @@ function showNotification(message, isError = false) {
 function markChatVisited() {
   lastChatVisitAt = Date.now();
   lastDeliveredChatNotificationId = null;
+  chatNotificationSentSinceLastVisit = false;
 }
 
 async function showChatNotification(messageText, metadata = {}) {
@@ -2065,19 +2088,22 @@ function generateWaveform(audioData, width, height) {
 }
 
 // Create voice message HTML
-function createVoiceMessage(audioUrl, duration) {
+function createVoiceMessage(audioUrl, duration, deviceSent = false) {
   const waveform = generateWaveform(null, 200, 36);
   const waveformHTML = waveform.map(bar => 
     `<div class="waveform-bar" style="left: ${bar.x}px; height: ${bar.height}px;"></div>`
   ).join('');
   
   return `
-    <div class="voice-message" data-audio-url="${audioUrl}">
+    <div class="voice-message" data-audio-url="${audioUrl}" data-device-sent="${deviceSent}">
       <button class="voice-play-btn">
         <i class="fas fa-play"></i>
       </button>
       <div class="voice-waveform">
         ${waveformHTML}
+      </div>
+      <div class="voice-progress seekable">
+        <div class="voice-progress-fill"></div>
       </div>
       <div class="voice-duration">${formatTime(duration)}</div>
     </div>
@@ -2325,7 +2351,8 @@ async function sendVoiceMessage(audioBlob) {
       voiceMessage: {
         url: result.secure_url,
         duration: duration,
-        format: 'webm'
+        format: 'webm',
+        deviceSent: true
       }
     };
     
@@ -3058,6 +3085,8 @@ async function checkSecretAndProceed(data) {
       // Set username for chat - trim and normalize
       username = (data.username || data.robo_id || `User${Math.floor(Math.random() * 1000)}`).trim();
       localStorage.setItem('chat_username', username);
+      currentDeviceId = '';
+      currentDeviceLabel = '';
 
       // If a OneSignal player id was captured earlier before login, send it now
       try {
@@ -3613,6 +3642,8 @@ function initializeChatApp() {
   chatDiv = document.getElementById('chat');
   const emojiBtn = document.getElementById('emojiBtn');
   const voiceBtn = document.getElementById('voiceBtn');
+  const attachBtn = document.getElementById('attachBtn');
+  const inputWrapper = document.querySelector('.chat__input-row .input-wrapper');
   const emojiPicker = document.getElementById('emojiPicker');
   const emojiGrid = document.getElementById('emojiGrid');
   const themeSwitch = document.getElementById('themeSwitch');
@@ -3625,7 +3656,6 @@ function initializeChatApp() {
   const onlineCount = document.getElementById('onlineCount');
   const searchBtn = document.getElementById('searchBtn');
   const menuBtn = document.getElementById('menuBtn');
-  const attachBtn = document.getElementById('attachBtn');
   const closeEmojiBtn = document.getElementById('closeEmojiBtn');
   const chatBackBtn = document.getElementById('chatBackBtn');
   
@@ -3688,7 +3718,7 @@ function initializeChatApp() {
   const searchBackBtn = document.getElementById('searchBackBtn');
   const searchInput = document.getElementById('searchInput');
   const searchClearBtn = document.getElementById('searchClearBtn');
-  const searchResults = document.getElementById('searchResults');
+  const searchResultsContainer = document.getElementById('searchResults');
   
   // Media viewer elements - UPDATED
   const mediaViewer = document.getElementById('mediaViewer');
@@ -3975,6 +4005,284 @@ function initializeChatApp() {
 
   chatInput.addEventListener('input', autoResizeTextarea);
   
+  const keyboardModeToggle = document.getElementById('keyboardModeToggle');
+  const morseToolbar = document.getElementById('morseToolbar');
+  const morseSuggestion = document.getElementById('morseSuggestion');
+  const morseKeyboard = document.getElementById('morseKeyboard');
+  const morseSoundToggle = document.getElementById('morseSoundToggle');
+  const morseClearBtn = document.getElementById('morseClearBtn');
+  const morseBufferPreview = document.getElementById('morseBufferPreview');
+  const morseLetterPreview = document.getElementById('morseLetterPreview');
+  let morseModeEnabled = false;
+  let morseBuffer = '';
+  let soundEnabled = true;
+  let audioCtx = null;
+
+  function updateMorseToolbarVisibility() {
+    if (!inputWrapper) return;
+    inputWrapper.classList.toggle('morse-mode-active', morseModeEnabled);
+    if (voiceBtn) voiceBtn.style.display = morseModeEnabled ? 'none' : '';
+    if (emojiBtn) emojiBtn.style.display = morseModeEnabled ? 'none' : '';
+    if (attachBtn) attachBtn.style.display = morseModeEnabled ? 'none' : '';
+    if (keyboardModeToggle) {
+      keyboardModeToggle.classList.toggle('active', morseModeEnabled);
+      keyboardModeToggle.title = morseModeEnabled ? 'Switch to normal keyboard' : 'Switch to morse keyboard';
+    }
+    if (morseToolbar) {
+      morseToolbar.style.display = morseModeEnabled ? 'flex' : 'none';
+    }
+    if (chatInput) {
+      chatInput.readOnly = morseModeEnabled;
+    }
+  }
+
+  function playBeep(durationMs, freq = 650) {
+    if (!soundEnabled) return;
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, audioCtx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.01);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime + durationMs / 1000 - 0.02);
+      gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + durationMs / 1000);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + durationMs / 1000);
+    } catch (err) {
+      console.warn('Morse beep failed', err);
+    }
+  }
+
+  function updateMorseSuggestion() {
+    if (!morseSuggestion || !morseBufferPreview || !morseLetterPreview) return;
+    const signal = morseBuffer.trim();
+    const currentSegment = signal.split(' ').pop() || '';
+    const decoded = decodeMorse(currentSegment);
+    morseSuggestion.textContent = currentSegment ? `Next letter: ${decoded || 'unknown'}` : 'Type only . and -, then press space to decode.';
+    morseBufferPreview.innerHTML = signal
+      ? signal.split('').map(ch => ch === '.' ? '•' : ch === '-' ? '—' : ch).join('')
+      : '<span class="morse-buffer-empty">Waiting for keys...</span>';
+    morseLetterPreview.textContent = currentSegment ? (decoded || '?') : '-';
+  }
+
+  function decodeMorse(code) {
+    const map = {
+      '.-': 'A', '-...': 'B', '-.-.': 'C', '-..': 'D', '.': 'E', '..-.': 'F',
+      '--.': 'G', '....': 'H', '..': 'I', '.---': 'J', '-.-': 'K', '.-..': 'L',
+      '--': 'M', '-.': 'N', '---': 'O', '.--.': 'P', '--.-': 'Q', '.-.': 'R',
+      '...': 'S', '-': 'T', '..-': 'U', '...-': 'V', '.--': 'W', '-..-': 'X',
+      '-.--': 'Y', '--..': 'Z', '-----': '0', '.----': '1', '..---': '2',
+      '...--': '3', '....-': '4', '.....': '5', '-....': '6', '--...': '7',
+      '---..': '8', '----.': '9'
+    };
+    return map[code] || '';
+  }
+
+  function setMorseMode(enabled) {
+    morseModeEnabled = enabled;
+    updateMorseToolbarVisibility();
+    if (!enabled) {
+      morseBuffer = '';
+    }
+    updateMorseSuggestion();
+  }
+
+  if (keyboardModeToggle) {
+    keyboardModeToggle.addEventListener('click', () => {
+      setMorseMode(!morseModeEnabled);
+      chatInput.focus();
+    });
+  }
+
+  if (morseKeyboard) {
+    morseKeyboard.addEventListener('click', (e) => {
+      const button = e.target.closest('.morse-key');
+      if (!button) return;
+      const value = button.textContent.trim();
+      if (value === '⌫') {
+        if (morseBuffer.endsWith(' ')) {
+          morseBuffer = morseBuffer.slice(0, -1);
+        }
+        morseBuffer = morseBuffer.slice(0, -1);
+        playBeep(50, 800);
+      } else if (value === 'CLR') {
+        if (morseBuffer) {
+          morseBuffer = '';
+          playBeep(50, 400);
+        }
+      } else if (value === 'space') {
+        const signal = morseBuffer.trim();
+        if (signal) {
+          const letter = decodeMorse(signal) || `[${signal}]`;
+          chatInput.value += letter;
+          playBeep(60, 500);
+        } else {
+          chatInput.value += ' ';
+          playBeep(40, 450);
+        }
+        morseBuffer = '';
+      } else if (value === '.' || value === '-') {
+        morseBuffer += value;
+        playBeep(value === '.' ? 90 : 270);
+      }
+      updateMorseSuggestion();
+      chatInput.focus();
+      autoResizeTextarea();
+    });
+  }
+
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (!morseModeEnabled) return;
+      const allowed = ['.', '-', ' ', 'Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+      if (!allowed.includes(e.key)) {
+        e.preventDefault();
+        return;
+      }
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        const signal = morseBuffer.trim();
+        if (signal) {
+          const letter = decodeMorse(signal) || `[${signal}]`;
+          chatInput.value += letter;
+          playBeep(60, 500);
+        } else {
+          chatInput.value += ' ';
+          playBeep(40, 450);
+        }
+        morseBuffer = '';
+        updateMorseSuggestion();
+        autoResizeTextarea();
+        return;
+      }
+
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (morseBuffer.length > 0) {
+          morseBuffer = morseBuffer.slice(0, -1);
+          updateMorseSuggestion();
+          playBeep(50, 800);
+          return;
+        }
+        if (chatInput.value.length > 0) {
+          chatInput.value = chatInput.value.slice(0, -1);
+          autoResizeTextarea();
+          playBeep(50, 800);
+        }
+        return;
+      }
+
+      if (e.key === '.' || e.key === '-') {
+        e.preventDefault();
+        morseBuffer += e.key;
+        updateMorseSuggestion();
+        playBeep(e.key === '.' ? 90 : 270);
+        return;
+      }
+    });
+  }
+
+  if (morseSoundToggle) {
+    morseSoundToggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      morseSoundToggle.textContent = soundEnabled ? '🔊' : '🔇';
+      morseSoundToggle.classList.toggle('muted', !soundEnabled);
+      if (soundEnabled) {
+        playBeep(60, 650);
+      }
+    });
+  }
+
+  if (morseClearBtn) {
+    morseClearBtn.addEventListener('click', () => {
+      if (morseBuffer) {
+        morseBuffer = '';
+        playBeep(50, 400);
+        updateMorseSuggestion();
+        chatInput.focus();
+      }
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (!morseModeEnabled) return;
+    if (document.activeElement === chatInput || ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+    const keyDot = document.querySelector('.morse-key-dot');
+    const keyDash = document.querySelector('.morse-key-dash');
+    const keySpace = document.querySelector('.morse-space-key');
+    const keyBackspace = document.querySelector('.morse-backspace-key');
+
+    if (e.key === '.') {
+      e.preventDefault();
+      keyDot?.classList.add('active');
+      morseBuffer += '.';
+      playBeep(90);
+      updateMorseSuggestion();
+      autoResizeTextarea();
+    } else if (e.key === '-') {
+      e.preventDefault();
+      keyDash?.classList.add('active');
+      morseBuffer += '-';
+      playBeep(270);
+      updateMorseSuggestion();
+      autoResizeTextarea();
+    } else if (e.key === ' ') {
+      e.preventDefault();
+      keySpace?.classList.add('active');
+      const signal = morseBuffer.trim();
+      if (signal) {
+        const letter = decodeMorse(signal) || `[${signal}]`;
+        chatInput.value += letter;
+        playBeep(60, 500);
+      } else {
+        chatInput.value += ' ';
+        playBeep(40, 450);
+      }
+      morseBuffer = '';
+      updateMorseSuggestion();
+      autoResizeTextarea();
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      keyBackspace?.classList.add('active');
+      if (morseBuffer.length > 0) {
+        morseBuffer = morseBuffer.slice(0, -1);
+        playBeep(50, 800);
+        updateMorseSuggestion();
+      } else if (chatInput.value.length > 0) {
+        chatInput.value = chatInput.value.slice(0, -1);
+        autoResizeTextarea();
+        playBeep(50, 800);
+      }
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const keyDot = document.querySelector('.morse-key-dot');
+    const keyDash = document.querySelector('.morse-key-dash');
+    const keySpace = document.querySelector('.morse-space-key');
+    const keyBackspace = document.querySelector('.morse-backspace-key');
+    if (e.key === '.') {
+      keyDot?.classList.remove('active');
+    } else if (e.key === '-') {
+      keyDash?.classList.remove('active');
+    } else if (e.key === ' ') {
+      keySpace?.classList.remove('active');
+    } else if (e.key === 'Backspace') {
+      keyBackspace?.classList.remove('active');
+    }
+  });
+
   // Remove link preview when button is clicked
   removePreviewBtn.addEventListener('click', () => {
     linkPreviewInput.classList.remove('show');
@@ -4805,12 +5113,10 @@ async function populateRecentChatsList() {
 
         const avatarDiv = createUserAvatarElement(displayName, null);
         getUserProfileImage(displayName).then((img) => {
-          if (img) {
-            applyProfileImageToAvatarElement(avatarDiv, displayName, img);
-          } else {
-            applyProfileImageToAvatarElement(avatarDiv, displayName, null);
-          }
-        }).catch(() => {});
+          applyProfileImageToAvatarElement(avatarDiv, displayName, img);
+        }).catch(() => {
+          applyProfileImageToAvatarElement(avatarDiv, displayName, null);
+        });
 
         const lastOnlineText = onlineUser.online ? 'Online now' : 'Last active';
         const infoDiv = document.createElement('div');
@@ -4874,12 +5180,10 @@ async function populateRecentChatsList() {
 
     const avatarDiv = createUserAvatarElement(displayName, null);
     getUserProfileImage(displayName).then((img) => {
-      if (img) {
-        applyProfileImageToAvatarElement(avatarDiv, displayName, img);
-      } else {
-        applyProfileImageToAvatarElement(avatarDiv, displayName, null);
-      }
-    }).catch(() => {});
+      applyProfileImageToAvatarElement(avatarDiv, displayName, img);
+    }).catch(() => {
+      applyProfileImageToAvatarElement(avatarDiv, displayName, null);
+    });
 
     let lastOnlineText = 'Recently';
     if (user.timestamp) {
@@ -4912,6 +5216,12 @@ async function populateRecentChatsList() {
     summonBtn.innerHTML = '<i class="fas fa-bell"></i>';
     summonBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      const reason = window.prompt(`Enter a reason for summoning ${displayName} (optional):`, '');
+      if (reason === null) {
+        console.log('⚠️ Summon cancelled by user');
+        return;
+      }
+
       console.group('📢 SUMMON REQUEST: ' + displayName);
       try {
         console.log('🎯 Target User:', displayName);
@@ -4921,7 +5231,12 @@ async function populateRecentChatsList() {
         const response = await fetch(`${PUSH_SERVER_URL}/summon-user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: displayName, channel: user.channel || 'general' })
+          body: JSON.stringify({
+            username: displayName,
+            channel: user.channel || 'general',
+            fromUsername: username,
+            reason: reason || ''
+          })
         });
         
         const result = await response.json();
@@ -4929,7 +5244,7 @@ async function populateRecentChatsList() {
         if (response.ok) {
           console.log('✅ SUMMON SENT SUCCESSFULLY', result);
           console.log('   → User will receive notification to their OneSignal-registered devices');
-          showNotification('✅ Summon sent to ' + displayName);
+          showNotification('✅ Summon sent to ' + displayName + (reason ? ` (${reason})` : ''));
         } else {
           console.error('❌ SUMMON FAILED:', result);
           if (result.error === 'no player id for user') {
@@ -5399,7 +5714,9 @@ async function populateRecentChatsList() {
     // Handle voice messages
     let voiceHtml = '';
     if (msg.voiceMessage) {
-      voiceHtml = createVoiceMessage(msg.voiceMessage.url, msg.voiceMessage.duration);
+      const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
+      const deviceSent = !!msg.voiceMessage.deviceSent || isOwnMessage;
+      voiceHtml = createVoiceMessage(msg.voiceMessage.url, msg.voiceMessage.duration, deviceSent);
     }
     
     // UPDATED: File message HTML with proper download handling
@@ -5608,11 +5925,12 @@ async function populateRecentChatsList() {
     }
     updateScrollToBottomButton();
     
-    const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && lastDeliveredChatNotificationId !== key && Date.now() - lastChatNotificationAt > 1000;
+    const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && !chatNotificationSentSinceLastVisit;
     if (shouldNotifyForChat) {
       console.log('📢 New chat notification triggered for message id:', key, 'from:', msg.name, 'channel:', userChannel);
       lastChatNotificationAt = Date.now();
       lastDeliveredChatNotificationId = key;
+      chatNotificationSentSinceLastVisit = true;
       showChatNotification('Update app for a better experience 🚀', {
         title: 'Bhavishya',
         body: 'New message from ' + msg.name,
@@ -5962,29 +6280,125 @@ async function populateRecentChatsList() {
     touchCurrentMessage = null;
   });
 
+  let activeVoiceAudio = null;
+  let activeVoiceButton = null;
+
+  function pauseActiveVoiceAudio() {
+    if (activeVoiceAudio && !activeVoiceAudio.paused) {
+      activeVoiceAudio.pause();
+    }
+    if (activeVoiceButton) {
+      activeVoiceButton.classList.remove('fa-pause');
+      activeVoiceButton.classList.add('fa-play');
+    }
+  }
+
+  function stopActiveVoiceAudio() {
+    if (activeVoiceAudio) {
+      activeVoiceAudio.pause();
+      activeVoiceAudio.currentTime = 0;
+      activeVoiceAudio.remove();
+      activeVoiceAudio = null;
+    }
+    if (activeVoiceButton) {
+      activeVoiceButton.classList.remove('fa-pause');
+      activeVoiceButton.classList.add('fa-play');
+      activeVoiceButton = null;
+    }
+  }
+
   // Voice message playback
   messagesDiv.addEventListener('click', (e) => {
-    if (e.target.closest('.voice-play-btn')) {
+    const progressBar = e.target.closest('.voice-progress');
+    const playButtonTarget = e.target.closest('.voice-play-btn');
+    const voiceMessage = e.target.closest('.voice-message');
+    if (!voiceMessage) return;
+
+    const audioUrl = voiceMessage.dataset.audioUrl;
+    const deviceSent = voiceMessage.dataset.deviceSent === 'true';
+    const playBtn = voiceMessage.querySelector('.voice-play-btn i');
+    const progressFill = voiceMessage.querySelector('.voice-progress-fill');
+
+    if (!audioUrl) return;
+
+    if (playButtonTarget) {
       e.stopPropagation();
-      const voiceMessage = e.target.closest('.voice-message');
-      const audioUrl = voiceMessage.dataset.audioUrl;
-      const playBtn = voiceMessage.querySelector('.voice-play-btn i');
-      
+      if (activeVoiceAudio && activeVoiceAudio.src === audioUrl) {
+        if (activeVoiceAudio.paused) {
+          activeVoiceAudio.play().catch(() => {});
+          playBtn.classList.remove('fa-play');
+          playBtn.classList.add('fa-pause');
+          activeVoiceButton = playBtn;
+          return;
+        }
+        pauseActiveVoiceAudio();
+        return;
+      }
+
+      stopActiveVoiceAudio();
       const audio = new Audio(audioUrl);
-      
-      if (playBtn.classList.contains('fa-play')) {
-        playBtn.classList.remove('fa-play');
-        playBtn.classList.add('fa-pause');
-        audio.play();
-        
-        audio.onended = () => {
+      audio.controls = true;
+      audio.preload = 'metadata';
+      audio.style.display = 'none';
+      document.body.appendChild(audio);
+      activeVoiceAudio = audio;
+      activeVoiceButton = playBtn;
+
+      playBtn.classList.remove('fa-play');
+      playBtn.classList.add('fa-pause');
+
+      audio.addEventListener('timeupdate', () => {
+        if (progressFill && audio.duration > 0) {
+          const percent = (audio.currentTime / audio.duration) * 100;
+          progressFill.style.width = `${percent}%`;
+        }
+      });
+
+      audio.addEventListener('ended', () => {
+        stopActiveVoiceAudio();
+        if (progressFill) progressFill.style.width = '0%';
+      });
+
+      if (progressFill) {
+        const progressContainer = progressFill.parentElement;
+        if (progressContainer) {
+          progressContainer.style.cursor = 'pointer';
+          progressContainer.onclick = (seekEvent) => {
+            if (!audio.duration) return;
+            const rect = progressContainer.getBoundingClientRect();
+            const clickX = seekEvent.clientX - rect.left;
+            const seekPercent = Math.max(0, Math.min(1, clickX / rect.width));
+            audio.currentTime = audio.duration * seekPercent;
+            progressFill.style.width = `${seekPercent * 100}%`;
+          };
+        }
+      }
+
+      audio.addEventListener('pause', () => {
+        if (playBtn.classList.contains('fa-pause')) {
           playBtn.classList.remove('fa-pause');
           playBtn.classList.add('fa-play');
-        };
-      } else {
+        }
+      });
+
+      audio.addEventListener('play', () => {
+        playBtn.classList.remove('fa-play');
+        playBtn.classList.add('fa-pause');
+      });
+
+      audio.play().catch(() => {
         playBtn.classList.remove('fa-pause');
         playBtn.classList.add('fa-play');
-        audio.pause();
+      });
+      return;
+    }
+
+    if (progressBar && activeVoiceAudio && activeVoiceAudio.src === audioUrl && activeVoiceAudio.duration > 0) {
+      const rect = progressBar.getBoundingClientRect();
+      const percent = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+      activeVoiceAudio.currentTime = activeVoiceAudio.duration * percent;
+      if (progressFill) {
+        progressFill.style.width = `${percent * 100}%`;
       }
     }
   });
@@ -7147,18 +7561,26 @@ async function populateRecentChatsList() {
     deviceListContainer.innerHTML = '<div class="device-empty">Loading devices…</div>';
 
     const devices = await fetchDeviceList();
-    const enabledDevices = Object.entries(devices || {}).filter(([, device]) => device && device.playerId && device.enabled !== false);
+    const currentId = getCurrentDeviceId();
+    const currentDeviceLabelText = getCurrentDeviceLabel();
+    const currentDeviceEnabled = getCurrentDeviceEnabledState();
 
-    if (!enabledDevices.length) {
-      deviceListContainer.innerHTML = '<div class="device-empty">No devices enabled for notifications.</div>';
+    const allDevices = Object.entries(devices || {}).filter(([, device]) => device && device.playerId);
+    if (currentId && !allDevices.some(([, device]) => String(device.playerId) === String(currentId))) {
+      allDevices.push([getFirebaseSafeDeviceKey(currentId), {
+        playerId: currentId,
+        label: currentDeviceLabelText,
+        enabled: currentDeviceEnabled
+      }]);
+    }
+
+    if (!allDevices.length) {
+      deviceListContainer.innerHTML = '<div class="device-empty">No devices registered yet. Enable notifications to register this device.</div>';
       return;
     }
 
     deviceListContainer.innerHTML = '';
-    const currentId = getCurrentDeviceId();
-    const currentDeviceLabelText = getCurrentDeviceLabel();
-
-    const deviceEntries = enabledDevices.map(([deviceKey, device]) => ({ deviceKey, device }));
+    const deviceEntries = allDevices.map(([deviceKey, device]) => ({ deviceKey, device }));
     deviceEntries.sort((a, b) => {
       const labelA = a.device?.label || a.deviceKey;
       const labelB = b.device?.label || b.deviceKey;
@@ -7348,6 +7770,8 @@ async function populateRecentChatsList() {
       
       // Keep the same userId for the new username
       username = newUsername;
+      currentDeviceId = '';
+      currentDeviceLabel = '';
       localStorage.setItem('chat_username', username);
       localStorage.setItem(`chat_userId_${username}`, userId);
       

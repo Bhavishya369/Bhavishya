@@ -159,16 +159,30 @@ app.get('/health', (req, res) => {
 });
 
 // Listen for new chat messages and send notifications
+const pendingOfflineNotifications = new Set();
+
 if (db) {
+  const listenerStartedAt = Date.now();
   console.log('Listening for new messages at', CHAT_DB_PATH);
   db.ref(CHAT_DB_PATH).on('child_added', async (snap) => {
     const msg = snap.val();
     if (!msg) return;
 
-    // Match summon notification format: "Update app for a better experience 🚀"
+    const isGeneralMessage = !msg.channel || msg.channel === 'general';
+    const msgTimestamp = Number(msg.timestamp || 0);
+    if (!isGeneralMessage) {
+      console.log(`⏭ Skip non-general channel message ${snap.key} in ${msg.channel || 'general'}`);
+      return;
+    }
+
+    if (msgTimestamp && msgTimestamp < listenerStartedAt - 5000) {
+      console.log(`⏭ Skip historical message ${snap.key} from ${msg.name || 'unknown'} with timestamp ${msgTimestamp}`);
+      return;
+    }
+
     const notification = {
       title: 'Bhavishya',
-      body: 'Update app for a better experience 🚀'
+      body: 'New messages are waiting for you'
     };
     const data = {
       channel: msg.channel || 'general',
@@ -176,14 +190,16 @@ if (db) {
       messageText: msg.text ? String(msg.text).substring(0, 120) : 'New message',
       sender: msg.name || 'Someone'
     };
-    console.log(`📨 New chat message detected - will notify offline users. Message from ${msg.name} in channel ${msg.channel || 'general'}`);
+    console.log(`📨 New chat message detected - evaluating offline notifications. Message from ${msg.name} in channel ${msg.channel || 'general'}`);
 
     const usersSnap = await db.ref('users').once('value');
     const oneSignalRecipients = [];
     const offlineUserUpdates = [];
+    const pendingUsers = [];
+
     usersSnap.forEach(u => {
       const userId = u.key;
-      const notifyWhenOffline = u.child('notifyWhenOffline').val();
+      const notifyWhenOffline = u.child('notifyWhenOffline').val() === true;
       const settings = u.child('settings').val();
       const notificationsEnabled = settings && settings.notificationsEnabled;
       const devices = u.child('devices').val() || {};
@@ -201,17 +217,24 @@ if (db) {
         enabledDeviceIds.push(fallbackPid);
       }
 
-      const shouldNotify = enabledDeviceIds.length > 0 && (notifyWhenOffline || notificationsEnabled);
+      const shouldNotify = enabledDeviceIds.length > 0 && notifyWhenOffline && notificationsEnabled;
 
       if (shouldNotify) {
+        if (pendingOfflineNotifications.has(userId)) {
+          console.log(`  ⏭ Skip ${userId}: already pending offline notification`);
+          return;
+        }
+
         enabledDeviceIds.forEach((pid) => {
           oneSignalRecipients.push(pid);
-          offlineUserUpdates.push({ userId, playerId: pid });
         });
+        offlineUserUpdates.push(userId);
+        pendingUsers.push(userId);
+        pendingOfflineNotifications.add(userId);
         console.log(`  ✅ Will notify ${userId}: deviceCount=${enabledDeviceIds.length}, offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       } else {
         if (!enabledDeviceIds.length) console.log(`  ⚠️ Skip ${userId}: no enabled devices for notification`);
-        if (!notifyWhenOffline && !notificationsEnabled) console.log(`  ⚠️ Skip ${userId}: offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
+        if (!notifyWhenOffline || !notificationsEnabled) console.log(`  ⚠️ Skip ${userId}: offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       }
     });
 
@@ -221,11 +244,12 @@ if (db) {
         await sendOneSignalNotification(oneSignalRecipients, notification, data);
         console.log('✅ Notification sent successfully');
         
-        // After sending one offline notification per user, clear the flag so they don't get further messages until they come back.
         console.log('🔄 Clearing offline flags for notified users...');
-        await Promise.all(offlineUserUpdates.map(({ userId }) => db.ref(`users/${userId}/notifyWhenOffline`).set(false)));
+        await Promise.all(offlineUserUpdates.map((userId) => db.ref(`users/${userId}/notifyWhenOffline`).set(false)));
       } catch (err) {
         console.error('❌ OneSignal send error', err);
+      } finally {
+        pendingUsers.forEach((userId) => pendingOfflineNotifications.delete(userId));
       }
     } else {
       if (!ONESIGNAL_REST_API_KEY) {
@@ -368,7 +392,7 @@ app.get('/summon-user', (req, res) => {
 app.post('/summon-user', async (req, res) => {
   const key = req.headers['x-api-key'] || req.query.api_key || req.body.api_key;
   if (ADMIN_API_KEY && key && key !== ADMIN_API_KEY) return res.status(401).json({ error: 'unauthorized' });
-  const { username } = req.body || {};
+  const { username, fromUsername, reason } = req.body || {};
   if (!username) return res.status(400).json({ error: 'username required' });
   if (!db) return res.status(503).json({ error: 'Firebase Admin not initialized' });
 
@@ -402,9 +426,19 @@ app.post('/summon-user', async (req, res) => {
 
     if (!pids || pids.length === 0) return res.status(404).json({ error: 'no player id for user' });
 
-    const notification = { title: 'Bhavishya Summon', body: `You have been summoned by ${username}!` };
-    const data = { summon: true };
-    await sendOneSignalNotification(pids, notification, data);
+    const senderName = fromUsername || 'Someone';
+    const reasonText = reason ? ` Reason: ${reason}` : '';
+    const notification = {
+      title: 'Bhavishya Summon',
+      body: `You have been summoned by ${senderName}!${reasonText}`
+    };
+    const data = {
+      summon: true,
+      fromUsername: senderName,
+      reason: reason || ''
+    };
+    const result = await sendOneSignalNotification(pids, notification, data);
+    return res.json({ ok: true, playerIds: pids, result });
   } catch (err) {
     console.error('summon-user error', err);
     res.status(500).json({ error: err.message || String(err) });

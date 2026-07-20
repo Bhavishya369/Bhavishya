@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gboard-inspired Morse Keyboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;750&family=JetBrains+Mono:wght@400;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col md:flex-row antialiased select-none">
+
+  <!-- Main Keyboard and Chat Sandbox Interface -->
+  <div class="flex-1 flex flex-col max-w-full md:max-w-xl mx-auto border-r border-slate-900 bg-slate-900 shadow-2xl relative">
+    
+    <!-- Header -->
+    <header class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></div>
+        <h1 class="text-sm font-semibold tracking-wide text-slate-200 flex items-center gap-1.5 mono">
+          📟 Morse Chat Sandbox
+        </h1>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <button id="sound-toggle" class="p-1.5 rounded-lg text-teal-400 bg-slate-800 hover:bg-slate-700 transition" title="Toggle Sound">
+          <i data-lucide="volume-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Chat Messages Screen -->
+    <div id="chat-flow" class="flex-1 overflow-y-auto p-4 space-y-3.5 bg-gradient-to-b from-slate-950 to-slate-900 min-h-[300px]">
+      <div class="flex flex-col max-w-[85%] mr-auto items-start">
+        <div class="px-3.5 py-2.5 rounded-2xl text-sm bg-slate-800 text-slate-100 rounded-bl-none">
+          <p class="leading-relaxed">Hello! Use the Gboard-style Morse keys below to type dots and dashes. Hit the Spacebar key to translate and commit your letters!</p>
+          <div class="mt-1.5 pt-1.5 border-t border-white/10 text-[10px] mono text-slate-300 opacity-80">
+            Morse: .... . .-.. .-.. ---
+          </div>
+        </div>
+        <span class="text-[10px] text-slate-500 mt-1 px-1">Telegraph Bot</span>
+      </div>
+    </div>
+
+    <!-- Active Translate Buffer Bar -->
+    <div class="bg-slate-950 border-t border-slate-800 px-4 py-2.5 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] uppercase font-mono tracking-wider text-slate-500">Buffer:</span>
+        <div id="buffer-preview" class="flex items-center gap-1 mono text-lg font-bold text-teal-400 min-h-[28px] px-2 bg-slate-900/80 rounded border border-slate-800">
+          <span class="text-slate-600 text-xs font-normal italic">Waiting for keys...</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <span class="text-[10px] uppercase font-mono tracking-wider text-slate-500">Letter:</span>
+        <div id="letter-preview" class="flex items-center justify-center mono font-black text-xl text-yellow-400 bg-slate-900 border border-slate-800 w-9 h-9 rounded-lg">-</div>
+      </div>
+    </div>
+
+    <!-- Typing Output Textbox -->
+    <div class="px-4 py-2 bg-slate-950 flex items-center gap-2 border-t border-slate-900">
+      <div class="relative flex-1">
+        <input 
+          type="text" 
+          id="chat-input" 
+          readonly 
+          placeholder="Use Morse keyboard below to write..." 
+          class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
+        >
+        <button id="clear-btn" class="absolute right-3 top-2.5 text-slate-500 hover:text-red-400 transition hidden" title="Clear Text">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+      </div>
+      
+      <button id="send-btn" class="p-2.5 rounded-xl bg-slate-800 text-slate-600 cursor-not-allowed transition" title="Send Message">
+        <i data-lucide="send" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- GBOARD MORSE KEYBOARD COMPONENT -->
+    <div class="bg-slate-950 p-3 pt-1 border-t border-slate-800 pb-5">
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <!-- DOT KEY -->
+        <button id="key-dot" class="relative h-28 rounded-2xl border-2 border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-200 flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-all">
+          <span class="text-5xl font-extrabold block transform -translate-y-1">•</span>
+          <span class="text-[10px] uppercase font-mono tracking-widest text-slate-500 font-medium">Dot</span>
+          <span class="absolute top-2 left-3 text-[9px] font-mono font-bold bg-slate-950 px-1.5 py-0.5 rounded text-slate-600 border border-slate-800/60">.</span>
+        </button>
+
+        <!-- DASH KEY -->
+        <button id="key-dash" class="relative h-28 rounded-2xl border-2 border-slate-800 hover:border-slate-700 bg-slate-900 text-slate-200 flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-all">
+          <span class="text-4xl font-black block leading-none transform -translate-y-1.5">—</span>
+          <span class="text-[10px] uppercase font-mono tracking-widest text-slate-500 font-medium">Dash</span>
+          <span class="absolute top-2 right-3 text-[9px] font-mono font-bold bg-slate-950 px-1.5 py-0.5 rounded text-slate-600 border border-slate-800/60">-</span>
+        </button>
+      </div>
+
+      <!-- Bottom Row: Backspace and Spacebar -->
+      <div class="grid grid-cols-6 gap-2.5">
+        <button id="key-clear-buffer" class="col-span-1 h-12 rounded-xl border border-slate-900 bg-slate-950/50 text-slate-700 cursor-not-allowed flex items-center justify-center transition" title="Clear Buffer">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+
+        <button id="key-space" class="col-span-4 h-12 rounded-xl border-2 border-slate-800 bg-slate-900 text-slate-100 flex flex-col items-center justify-center cursor-pointer active:scale-95 transition">
+          <span class="text-[11px] uppercase font-mono tracking-widest font-bold text-slate-300">Space</span>
+          <span class="text-[8px] font-mono text-slate-500">Insert word gap</span>
+        </button>
+
+        <button id="key-backspace" class="col-span-1 h-12 rounded-xl border-2 border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200 flex items-center justify-center active:scale-95 transition">
+          <span class="text-xs font-bold font-mono">⌫</span>
+        </button>
+      </div>
+
+      <div class="text-[10px] text-center text-slate-600 mt-3 font-mono">
+        Desktop Keys: Period <kbd class="bg-slate-900 px-1 text-teal-500">.</kbd> and Hyphen <kbd class="bg-slate-900 px-1 text-teal-500">-</kbd>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript logic executing Gboard translation map & synthesis -->
+  <script>
+    // Morse standard code maps
+    const MORSE_MAP = {
+      ".-": "A", "-...": "B", "-.-.": "C", "-..": "D", ".": "E",
+      "..-.": "F", "--.": "G", "....": "H", "..": "I", ".---": "J",
+      "-.-": "K", ".-..": "L", "--": "M", "-.": "N", "---": "O",
+      ".--.": "P", "--.-": "Q", ".-.": "R", "...": "S", "-": "T",
+      "..-": "U", "...-": "V", ".--": "W", "-..-": "X", "-.--": "Y",
+      "--..": "Z", "-----": "0", ".----": "1", "..---": "2", "...--": "3",
+      "....-": "4", ".....": "5", "-....": "6", "--...": "7", "---..": "8",
+      "----.": "9"
+    };
+
+    // State
+    let currentMorse = "";
+    let committedText = "";
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    // DOM selectors
+    const bufferPreview = document.getElementById("buffer-preview");
+    const letterPreview = document.getElementById("letter-preview");
+    const chatInput = document.getElementById("chat-input");
+    const clearBtn = document.getElementById("clear-btn");
+    const sendBtn = document.getElementById("send-btn");
+    const chatFlow = document.getElementById("chat-flow");
+    const soundToggle = document.getElementById("sound-toggle");
+
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Sound Beep Player via Web Audio API
+    function playBeep(durationMs, freq = 650) {
+      if (!soundEnabled) return;
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.01);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime + durationMs / 1000 - 0.02);
+        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + durationMs / 1000);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + durationMs / 1000);
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+
+    function updateDisplay() {
+      // Buffer preview
+      if (currentMorse) {
+        bufferPreview.innerHTML = currentMorse.split("").map(sym => `<span>${sym === "." ? "•" : "—"}</span>`).join("");
+        const letter = MORSE_MAP[currentMorse] || "?";
+        letterPreview.innerText = letter;
+        
+        // Spacebar tag visual shift
+        document.querySelector("#key-space span:first-child").innerText = "Commit Letter";
+        document.querySelector("#key-space span:last-child").innerText = "translate code";
+
+        // Enable clear buffer button
+        const clearBufBtn = document.getElementById("key-clear-buffer");
+        clearBufBtn.classList.remove("text-slate-700", "cursor-not-allowed");
+        clearBufBtn.classList.add("text-slate-400", "hover:text-red-400", "cursor-pointer");
+      } else {
+        bufferPreview.innerHTML = `<span class="text-slate-600 text-xs font-normal italic">Waiting for keys...</span>`;
+        letterPreview.innerText = "-";
+        
+        document.querySelector("#key-space span:first-child").innerText = "Space";
+        document.querySelector("#key-space span:last-child").innerText = "Insert word gap";
+
+        const clearBufBtn = document.getElementById("key-clear-buffer");
+        clearBufBtn.classList.add("text-slate-700", "cursor-not-allowed");
+        clearBufBtn.classList.remove("text-slate-400", "hover:text-red-400", "cursor-pointer");
+      }
+
+      // Input field
+      chatInput.value = committedText;
+      if (committedText) {
+        clearBtn.classList.remove("hidden");
+        sendBtn.classList.remove("bg-slate-800", "text-slate-600", "cursor-not-allowed");
+        sendBtn.classList.add("bg-teal-500", "text-slate-950", "hover:bg-teal-400", "cursor-pointer");
+      } else {
+        clearBtn.classList.add("hidden");
+        sendBtn.classList.add("bg-slate-800", "text-slate-600", "cursor-not-allowed");
+        sendBtn.classList.remove("bg-teal-500", "text-slate-950", "hover:bg-teal-400", "cursor-pointer");
+      }
+    }
+
+    // Handlers
+    function handleDot() {
+      playBeep(90);
+      currentMorse += ".";
+      updateDisplay();
+    }
+
+    function handleDash() {
+      playBeep(270);
+      currentMorse += "-";
+      updateDisplay();
+    }
+
+    function handleSpace() {
+      if (currentMorse) {
+        const char = MORSE_MAP[currentMorse] || `[${currentMorse}]`;
+        committedText += char;
+        currentMorse = "";
+        playBeep(60, 500);
+      } else {
+        committedText += " ";
+        playBeep(40, 450);
+      }
+      updateDisplay();
+    }
+
+    function handleBackspace() {
+      if (currentMorse) {
+        currentMorse = currentMorse.slice(0, -1);
+        playBeep(50, 800);
+      } else if (committedText) {
+        committedText = committedText.slice(0, -1);
+        playBeep(50, 750);
+      }
+      updateDisplay();
+    }
+
+    // Set up Actions listeners
+    document.getElementById("key-dot").addEventListener("click", handleDot);
+    document.getElementById("key-dash").addEventListener("click", handleDash);
+    document.getElementById("key-space").addEventListener("click", handleSpace);
+    document.getElementById("key-backspace").addEventListener("click", handleBackspace);
+    
+    document.getElementById("key-clear-buffer").addEventListener("click", () => {
+      if (currentMorse) {
+        currentMorse = "";
+        playBeep(50, 400);
+        updateDisplay();
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      committedText = "";
+      currentMorse = "";
+      playBeep(100, 300);
+      updateDisplay();
+    });
+
+    soundToggle.addEventListener("click", () => {
+      soundEnabled = !soundEnabled;
+      soundToggle.classList.toggle("text-teal-400");
+      soundToggle.classList.toggle("text-slate-500");
+    });
+
+    // Chat logic
+    function sendMessage() {
+      if (!committedText.trim()) return;
+      
+      const textToSend = committedText;
+      committedText = "";
+      updateDisplay();
+
+      // Append User Bubble
+      const userBubble = document.createElement("div");
+      userBubble.className = "flex flex-col max-w-[85%] ml-auto items-end";
+      userBubble.innerHTML = `
+        <div class="px-3.5 py-2.5 rounded-2xl text-sm bg-teal-600 text-white rounded-br-none">
+          <p class="leading-relaxed">${textToSend}</p>
+        </div>
+        <span class="text-[10px] text-slate-500 mt-1 px-1">You</span>
+      `;
+      chatFlow.appendChild(userBubble);
+      chatFlow.scrollTop = chatFlow.scrollHeight;
+
+      // Bot Auto Response
+      setTimeout(() => {
+        const botBubble = document.createElement("div");
+        botBubble.className = "flex flex-col max-w-[85%] mr-auto items-start";
+        botBubble.innerHTML = `
+          <div class="px-3.5 py-2.5 rounded-2xl text-sm bg-slate-800 text-slate-100 rounded-bl-none">
+            <p class="leading-relaxed">Message received! Your Morse telegraphy was decoded successfully.</p>
+          </div>
+          <span class="text-[10px] text-slate-500 mt-1 px-1">Telegraph Bot</span>
+        `;
+        chatFlow.appendChild(botBubble);
+        chatFlow.scrollTop = chatFlow.scrollHeight;
+      }, 800);
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+
+    // Keyboard bindings for desktops
+    window.addEventListener("keydown", (e) => {
+      if (e.key === ".") {
+        e.preventDefault();
+        document.getElementById("key-dot").classList.add("bg-teal-950/60", "border-teal-400");
+        handleDot();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        document.getElementById("key-dash").classList.add("bg-teal-950/60", "border-teal-400");
+        handleDash();
+      } else if (e.key === " ") {
+        e.preventDefault();
+        document.getElementById("key-space").classList.add("bg-teal-950/50", "border-teal-400");
+        handleSpace();
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        document.getElementById("key-backspace").classList.add("bg-red-950/40", "border-red-500");
+        handleBackspace();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.key === ".") {
+        document.getElementById("key-dot").classList.remove("bg-teal-950/60", "border-teal-400");
+      } else if (e.key === "-") {
+        document.getElementById("key-dash").classList.remove("bg-teal-950/60", "border-teal-400");
+      } else if (e.key === " ") {
+        document.getElementById("key-space").classList.remove("bg-teal-950/50", "border-teal-400");
+      } else if (e.key === "Backspace") {
+        document.getElementById("key-backspace").classList.remove("bg-red-950/40", "border-red-500");
+      }
+    });
+  </script>
+</body>
+</html>

@@ -60,24 +60,35 @@
     // OneSignal service worker files are hosted under /Bhavishya/
     window.ONE_SIGNAL_PATH_PREFIX = 'Bhavishya/';
     window.ONE_SIGNAL_SCOPE_OVERRIDE = '/Bhavishya/';
+
+    const oneSignalHost = (window.location.hostname || '').toLowerCase();
+    const oneSignalSupported = window.location.protocol === 'https:' && (
+      oneSignalHost === 'bhavishya369.github.io' ||
+      oneSignalHost === 'localhost' ||
+      oneSignalHost === '127.0.0.1' ||
+      oneSignalHost.endsWith('.github.io')
+    );
+
+    if (oneSignalSupported) {
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "453e37ab-e655-4aee-a716-1234072cf2a8",
+          serviceWorkerPath: "Bhavishya/OneSignalSDKWorker.js",
+          serviceWorkerUpdaterPath: "Bhavishya/OneSignalSDKUpdaterWorker.js",
+          serviceWorkerParam: { scope: "/Bhavishya/" }
+        });
+      });
+    } else {
+      console.warn('OneSignal skipped on unsupported host:', window.location.hostname);
+    }
   </script>
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-  <script>
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    window.OneSignalDeferred.push(async function(OneSignal) {
-      await OneSignal.init({
-        appId: "453e37ab-e655-4aee-a716-1234072cf2a8",
-        serviceWorkerPath: "Bhavishya/OneSignalSDKWorker.js",
-        serviceWorkerUpdaterPath: "Bhavishya/OneSignalSDKUpdaterWorker.js",
-        serviceWorkerParam: { scope: "/Bhavishya/" }
-      });
-    });
-  </script>
   <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="login.css">
+  <link rel="stylesheet" href="morse-keyboard.css">
   
   <!-- Custom JavaScript -->
   <script src="login.js" defer></script>
@@ -244,6 +255,31 @@
                 <button class="input-tool" id="attachBtn" title="Attach file">
                   <i class="fas fa-paperclip"></i>
                 </button>
+
+                <div class="morse-toolbar" id="morseToolbar" style="display: none;">
+                  <div class="morse-panel">
+                    <div class="morse-display-row">
+                      <div class="morse-display-block">
+                        <div class="morse-display-label">Buffer</div>
+                        <div class="morse-buffer-preview" id="morseBufferPreview">Type . or - then press Space to commit</div>
+                      </div>
+                      <div class="morse-display-block morse-letter-block">
+                        <div class="morse-display-label">Letter</div>
+                        <div class="morse-letter-preview" id="morseLetterPreview">-</div>
+                      </div>
+                    </div>
+                    <div class="morse-suggestion" id="morseSuggestion">Type only . and -, then press space to decode.</div>
+                    <button type="button" id="morseSoundToggle" class="morse-sound-toggle" title="Toggle Morse sound">🔊</button>
+                    <div class="morse-keyboard" id="morseKeyboard">
+                      <button type="button" class="morse-key morse-key-dot">.</button>
+                      <button type="button" class="morse-key morse-key-dash">-</button>
+                      <button type="button" class="morse-key morse-clear-key" id="morseClearBtn">CLR</button>
+                      <button type="button" class="morse-key morse-space-key">space</button>
+                      <button type="button" class="morse-key morse-backspace-key">⌫</button>
+                    </div>
+                    <div class="morse-keyboard-hint">Desktop keys: <kbd class="morse-keyboard-hint-key">.</kbd> and <kbd class="morse-keyboard-hint-key">-</kbd></div>
+                  </div>
+                </div>
 
                 <div class="emoji-picker" id="emojiPicker">
                   <div class="emoji-header">

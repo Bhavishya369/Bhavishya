@@ -940,6 +940,103 @@ body.menu-open .scroll-to-bottom-btn {
   text-align: center;
 }
 
+.voice-progress {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 4px;
+}
+
+.voice-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: var(--accent-color);
+  transition: width 0.1s linear;
+}
+
+.morse-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 10px 0 0;
+  width: 100%;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.morse-toolbar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.morse-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.morse-mode-action {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.morse-suggestion {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.morse-keyboard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.morse-key {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  padding: 10px 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.morse-key:hover,
+.morse-mode-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:root.better-ui .morse-toolbar {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+:root.better-ui .morse-key,
+:root.better-ui .morse-mode-action {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+:root.better-ui .morse-suggestion {
+  color: var(--text-secondary);
+}
+
 /* Link Preview Styles */
 .link-preview {
   margin-top: 8px;
@@ -2085,6 +2182,21 @@ body.menu-open .scroll-to-bottom-btn {
   position: relative;
 }
 
+.input-wrapper.morse-mode-active {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 8px 12px 12px;
+}
+
+.input-wrapper.morse-mode-active #chatInput {
+  flex-basis: 100%;
+  margin-bottom: 6px;
+}
+
+.input-wrapper.morse-mode-active .morse-toolbar {
+  margin-top: 2px;
+}
+
 #sendBtn {
   align-self: center;
   flex: 0 0 auto;
@@ -2131,6 +2243,15 @@ body.menu-open .scroll-to-bottom-btn {
 .input-tool:hover {
   color: var(--accent-color);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.input-tool.active {
+  color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.input-tool.is-hidden {
+  display: none;
 }
 
 .input-tool.recording {
