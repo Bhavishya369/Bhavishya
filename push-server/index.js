@@ -82,6 +82,37 @@ async function cleanupInvalidTokens(tokensToRemove) {
   });
 }
 
+async function cleanupInvalidOneSignalPlayerIds(playerIdsToRemove) {
+  if (!playerIdsToRemove || !playerIdsToRemove.length || !db) return;
+
+  const uniquePlayerIds = Array.from(new Set(playerIdsToRemove.filter(Boolean)));
+  if (!uniquePlayerIds.length) return;
+
+  console.log('Cleaning up invalid OneSignal player IDs:', uniquePlayerIds.length);
+  const usersSnap = await db.ref('users').once('value');
+  const cleanupPromises = [];
+
+  usersSnap.forEach((u) => {
+    const userKey = u.key;
+    const devices = u.child('devices').val() || {};
+    const deviceEntries = Object.entries(devices || {});
+
+    deviceEntries.forEach(([deviceKey, device]) => {
+      if (!device || !device.playerId) return;
+      if (uniquePlayerIds.includes(device.playerId)) {
+        cleanupPromises.push(db.ref(`users/${userKey}/devices/${deviceKey}`).remove().catch(() => {}));
+      }
+    });
+
+    const fallbackPid = u.child('oneSignalPlayerId').val();
+    if (fallbackPid && uniquePlayerIds.includes(fallbackPid)) {
+      cleanupPromises.push(db.ref(`users/${userKey}/oneSignalPlayerId`).remove().catch(() => {}));
+    }
+  });
+
+  await Promise.allSettled(cleanupPromises);
+}
+
 function buildFcmMessage(token, notification, data = {}) {
   const message = { token };
 
@@ -303,6 +334,11 @@ async function sendOneSignalNotification(playerIds, notification, data = {}) {
 
   const json = await res.json();
   console.log('OneSignal send result', json);
+
+  if (json?.errors?.invalid_player_ids?.length) {
+    await cleanupInvalidOneSignalPlayerIds(json.errors.invalid_player_ids);
+  }
+
   return json;
 }
 
@@ -374,7 +410,7 @@ app.post('/save-onesignal-id', async (req, res) => {
       playerId,
       label: label || 'Device',
       enabled: true,
-      lastUpdated: firebase.database.ServerValue.TIMESTAMP
+      lastUpdated: admin.database.ServerValue.TIMESTAMP
     });
     res.json({ ok: true });
   } catch (err) {
