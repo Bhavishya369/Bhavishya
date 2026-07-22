@@ -1171,6 +1171,255 @@ function sortMessagesByTimestampAndKey() {
   });
 }
 
+function createChatMessageElement(msg, key, showAvatar, profileImage, renderedTime) {
+  const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
+  const canEditDelete = isOwnMessage || isAdmin;
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'} ${showAvatar ? 'message--first-in-group' : 'message--continued'}`;
+  messageDiv.dataset.id = msg.id;
+  messageDiv.dataset.key = key;
+  messageDiv.dataset.sender = msg.name;
+  messageDiv.dataset.type = isOwnMessage ? 'sent' : 'received';
+  messageDiv.dataset.profileImage = profileImage || '';
+  
+  const channelIndicator = isAdmin && userChannel === 'admin' && msg.channel && msg.channel !== 'general' ? 
+    `<div style="font-size: 10px; opacity: 0.7; margin-bottom: 2px;">CH-${msg.channel}</div>` : '';
+  const editedText = msg.edited ? ' (edited)' : '';
+  let replyHtml = '';
+  if (msg.replyTo) {
+    replyHtml = `
+      <div class="reply-indicator" onclick="scrollToMessage('${msg.replyTo.id}')">
+        <div class="reply-sender">↩ ${escapeHTML(msg.replyTo.sender)}</div>
+        <div class="reply-text"></div>
+      </div>
+    `;
+  }
+
+  let linkPreviewHtml = '';
+  if (msg.linkPreview) {
+    linkPreviewHtml = createLinkPreviewHTML(msg.linkPreview);
+  }
+
+  let voiceHtml = '';
+  if (msg.voiceMessage) {
+    const deviceSent = !!msg.voiceMessage.deviceSent || isOwnMessage;
+    voiceHtml = createVoiceMessage(msg.voiceMessage.url, msg.voiceMessage.duration, deviceSent);
+  }
+
+  let fileHtml = '';
+  if (msg.fileData) {
+    const fileData = msg.fileData;
+    const escapedFileName = escapeHTML(fileData.name);
+    fileHtml = `
+      <div class="file-message" data-file-url="${escapeHTML(fileData.url)}" data-file-name="${escapedFileName}">
+        <div class="file-icon">
+          <i class="${getFileIcon(fileData.name)}"></i>
+        </div>
+        <div class="file-info">
+          <div class="file-name"></div>
+          <div class="file-size">${formatFileSize(fileData.size)}</div>
+        </div>
+        <button class="download-btn" title="Download" onclick="(function(url, name){ if (/\.pdf$/i.test(name)) { downloadPdf(url, name); } else { downloadFile(url, name); } })('${escapeHTML(fileData.url)}', '${escapedFileName}'); event.stopPropagation();">
+          <i class="fas fa-download"></i>
+        </button>
+      </div>
+    `;
+  }
+
+  let mediaHtml = '';
+  if (msg.mediaType === 'image') {
+    mediaHtml = `
+      <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="image" data-file-name="image_${msg.timestamp}.jpg">
+        <img src="${escapeHTML(msg.mediaUrl)}" alt="Image" loading="lazy">
+        <div class="media-play-btn" style="display: none;">
+          <i class="fas fa-play"></i>
+        </div>
+        <div class="media-duration" style="display: none;">0:00</div>
+      </div>
+    `;
+  } else if (msg.mediaType === 'video') {
+    const extMatch = String(msg.mediaUrl || '').match(/\.([a-z0-9]+)(?:\?|$)/i);
+    const ext = extMatch ? extMatch[1].toLowerCase() : 'mp4';
+    const previewUrl = getPlayableVideoUrl(msg.mediaUrl);
+    mediaHtml = `
+      <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="video" data-file-name="video_${msg.timestamp}.${ext}">
+        <video controls muted playsinline preload="metadata" src="${escapeHTML(previewUrl)}"></video>
+        <div class="media-play-btn">
+          <i class="fas fa-play"></i>
+        </div>
+      </div>
+    `;
+  } else if (msg.mediaType === 'audio') {
+    mediaHtml = `
+      <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="audio" data-file-name="audio_${msg.timestamp}.mp3">
+        <audio controls preload="metadata">
+          <source src="${escapeHTML(msg.mediaUrl)}" type="audio/mpeg">
+        </audio>
+      </div>
+    `;
+  }
+
+  const hasDownloadableContent = !!msg.fileData || !!msg.voiceMessage || msg.mediaType === 'image' || msg.mediaType === 'video' || msg.mediaType === 'audio';
+  let messageActionsHTML = `
+    <button class="message-action react-btn" title="React">
+      <i class="fas fa-smile"></i>
+    </button>
+    <button class="message-action copy-btn" title="Copy Message">
+      <i class="fas fa-copy"></i>
+    </button>
+    <button class="message-action reply-btn" title="Reply">
+      <i class="fas fa-reply"></i>
+    </button>
+  `;
+  if (hasDownloadableContent) {
+    messageActionsHTML += `
+      <button class="message-action download-btn" title="Download">
+        <i class="fas fa-download"></i>
+      </button>
+    `;
+  }
+  if (isOwnMessage) {
+    messageActionsHTML += `
+      <button class="message-action seen-by-btn" title="Seen by">
+        <i class="fas fa-eye"></i>
+      </button>
+    `;
+  }
+  if (canEditDelete) {
+    messageActionsHTML += `
+      <button class="message-action edit-btn" title="Edit">
+        <i class="fas fa-edit"></i>
+      </button>
+      <button class="message-action delete-btn" title="Delete">
+        <i class="fas fa-trash"></i>
+      </button>
+    `;
+  } else if (isAdmin) {
+    messageActionsHTML += `
+      <button class="message-action delete-btn" title="Delete (Admin)">
+        <i class="fas fa-trash"></i>
+      </button>
+    `;
+  }
+
+  messageDiv.innerHTML = `
+    ${channelIndicator}
+    ${replyHtml}
+    <div class="message__header">
+      <div class="message__avatar-wrapper"></div>
+      <div class="message__meta">
+        <span class="message__sender">${escapeHTML(msg.name)}</span>
+      </div>
+    </div>
+    <div class="message__content"></div>
+    <span class="message__time">${renderedTime}</span>
+    ${linkPreviewHtml}
+    ${voiceHtml}
+    ${fileHtml}
+    ${mediaHtml}
+    <div class="message__actions">
+      ${messageActionsHTML}
+    </div>
+    <div class="message__reactions"></div>
+  `;
+
+  const avatarWrapper = messageDiv.querySelector('.message__avatar-wrapper');
+  if (avatarWrapper) {
+    avatarWrapper.innerHTML = '';
+    if (showAvatar && !isOwnMessage) {
+      const avatarElement = createUserAvatarElement(msg.name, profileImage);
+      avatarElement.classList.add('message__avatar', 'clickable-profile');
+      avatarElement.dataset.username = msg.name;
+      avatarElement.dataset.profileImage = profileImage || '';
+      avatarWrapper.appendChild(avatarElement);
+      avatarWrapper.style.display = 'flex';
+    } else {
+      avatarWrapper.style.display = 'none';
+    }
+  }
+
+  const contentDiv = messageDiv.querySelector('.message__content');
+  const messageText = msg.text || '';
+  contentDiv.textContent = messageText + editedText;
+  if (msg.replyTo) {
+    const replyTextDiv = messageDiv.querySelector('.reply-text');
+    if (replyTextDiv) {
+      replyTextDiv.textContent = msg.replyTo.text;
+    }
+  }
+  if (msg.fileData) {
+    const fileNameDiv = messageDiv.querySelector('.file-name');
+    if (fileNameDiv) {
+      fileNameDiv.textContent = msg.fileData.name;
+    }
+  }
+
+  setupReactionOnMessage(messageDiv);
+  return messageDiv;
+}
+
+function appendInitialMessages(snapshot) {
+  if (!messagesDiv) return;
+  const allMessages = snapshot.val() || {};
+  const entries = Object.entries(allMessages)
+    .filter(([key, msg]) => {
+      if (!msg) return false;
+      if (userChannel === 'general') {
+        return !msg.channel || msg.channel === 'general';
+      }
+      if (userChannel === 'admin') {
+        return true;
+      }
+      return msg.channel === userChannel;
+    })
+    .sort((a, b) => {
+      const aMsg = a[1];
+      const bMsg = b[1];
+      const aTs = Number(aMsg.timestamp || 0);
+      const bTs = Number(bMsg.timestamp || 0);
+      if (aTs !== bTs) return aTs - bTs;
+      return String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+  const fragment = document.createDocumentFragment();
+  let prevName = null;
+  let prevType = null;
+
+  for (const [key, msg] of entries) {
+    if (currentMessages[key]) continue;
+    const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
+    const type = isOwnMessage ? 'sent' : 'received';
+    const sameSender = prevName && normalizeName(prevName) === normalizeName(msg.name) && prevType === type;
+    const showAvatar = !isOwnMessage && !sameSender;
+    const profileImage = msg.name === username && userProfileImage ? userProfileImage : profileImageCache.get(msg.name) || null;
+    const renderedTime = msg.timestamp ? formatMessageTime(msg.timestamp) : msg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const messageDiv = createChatMessageElement(msg, key, showAvatar, profileImage, renderedTime);
+    messageDiv.dataset.timestamp = Number(msg.timestamp || Date.now());
+    messageDiv.dataset.date = formatDateSeparator(Number(msg.timestamp || Date.now()));
+    fragment.appendChild(messageDiv);
+    currentMessages[key] = messageDiv;
+    if (!profileImageCache.has(msg.name) && msg.name) {
+      getUserProfileImage(msg.name).then((imageUrl) => {
+        if (!imageUrl) return;
+        profileImageCache.set(msg.name, imageUrl);
+        const avatarEl = messageDiv.querySelector('.message__avatar');
+        if (avatarEl) {
+          applyProfileImageToAvatarElement(avatarEl, msg.name, imageUrl);
+          avatarEl.dataset.profileImage = imageUrl || '';
+        }
+      }).catch(() => {
+        profileImageCache.set(msg.name, null);
+      });
+    }
+    prevName = msg.name;
+    prevType = type;
+  }
+
+  messagesDiv.appendChild(fragment);
+  refreshDateSeparators();
+  refreshMessageGroups();
+}
+
 function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayout = true) {
   const timestamp = Number(msg.timestamp || Date.now());
   const messageDate = formatDateSeparator(timestamp);
@@ -1214,9 +1463,8 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayo
     }
   }
 
-  // Ensure DOM order is correct even when prevChildKey references skipped messages or timestamp ties occur
-  sortMessagesByTimestampAndKey();
-
+  // The insertion logic already places the message in order.
+  // Avoid resorting the entire message list on every insert to keep initial load fast.
   if (refreshLayout) {
     refreshDateSeparators();
     refreshMessageGroups();
@@ -1224,9 +1472,11 @@ function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayo
     chatLayoutNeedsRefresh = true;
   }
 
-  // Setup reactions for this message
+  // Attach reaction handlers immediately, but only fetch reaction data after initial load.
   setupReactionOnMessage(messageDiv);
-  loadMessageReactions(messageDiv.dataset.key);
+  if (refreshLayout) {
+    loadMessageReactions(messageDiv.dataset.key);
+  }
 }
 
 // Format time in MM:SS format
@@ -1314,6 +1564,15 @@ function showNotification(message, isError = false) {
   }, 3000);
 }
 
+function getSiteNotificationPayload(metadata = {}) {
+  return {
+    title: 'Bhavishya',
+    body: 'Update app for a better experience',
+    icon: 'bhavishya.jpg',
+    tag: metadata.tag || 'bhavishya-update'
+  };
+}
+
 function markChatVisited() {
   lastChatVisitAt = Date.now();
   lastDeliveredChatNotificationId = null;
@@ -1321,10 +1580,11 @@ function markChatVisited() {
 }
 
 async function showChatNotification(messageText, metadata = {}) {
-  const title = metadata.title || 'Bhavishya';
-  const body = metadata.body || messageText || 'Update app for a better experience 🚀';
-  const icon = metadata.icon || 'bhavishya.jpg';
-  const tag = metadata.tag || 'bhavishya-update';
+  const payload = getSiteNotificationPayload(metadata);
+  const title = payload.title;
+  const body = payload.body;
+  const icon = payload.icon;
+  const tag = payload.tag;
 
   console.log('🔔 showChatNotification called:', { title, body, tag, permission: Notification.permission });
 
@@ -1471,8 +1731,10 @@ function formatFileSize(bytes) {
 function forceDownload(url, filename) {
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename;
-  link.target = '_blank'; // Open in new tab for Cloudinary URLs
+  link.download = filename || 'download';
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.style.display = 'none';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -1755,35 +2017,34 @@ function downloadVideo(url, filename) {
 function downloadAudio(url, filename) {
   const originalUrl = url;
   let downloadUrl = url;
+  const safeFilename = filename || 'download.mp3';
 
   try {
     if (isCloudinaryUrl(url)) {
-      downloadUrl = getCloudinaryDownloadUrl(url, filename);
+      downloadUrl = getCloudinaryDownloadUrl(url, safeFilename);
     }
   } catch (error) {
     console.error('Failed to build Cloudinary audio download URL:', error);
     downloadUrl = originalUrl;
   }
 
-  // Try 1: Direct anchor download (fastest)
-  // Build try list early so we can prefer safe Cloudinary variants for anchor
   const tried = new Set();
-  let tryUrls = [downloadUrl].concat(getCloudinaryVariants(url, filename), [originalUrl]);
+  let tryUrls = [downloadUrl].concat(getCloudinaryVariants(url, safeFilename), [originalUrl]);
   if (typeof window !== 'undefined' && window.CLOUDINARY_DOWNLOAD_PROXY) {
     tryUrls = tryUrls.map(u => {
       if (!u) return u;
-      return `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(u)}&name=${encodeURIComponent(filename || '')}`;
+      return `${window.CLOUDINARY_DOWNLOAD_PROXY}?url=${encodeURIComponent(u)}&name=${encodeURIComponent(safeFilename)}`;
     });
   }
 
-  // Try 1: Direct anchor download on the preferred variant (fastest).
   try {
     const preferred = tryUrls.find(u => u && !( /res\.cloudinary\.com/.test(u) && /fl_attachment:[^/]+/.test(u) ));
-    // preferred will skip Cloudinary variants that embed a filename (these can cause 400s)
     if (preferred) {
       const a = document.createElement('a');
       a.href = preferred;
-      a.download = filename || 'download.mp3';
+      a.download = safeFilename;
+      a.rel = 'noopener noreferrer';
+      a.target = '_blank';
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
@@ -1791,10 +2052,9 @@ function downloadAudio(url, filename) {
       return;
     }
   } catch (err) {
-    console.debug('Anchor download failed (preferred), trying fetch...');
+    console.debug('Anchor download failed (preferred), trying fetch...', err);
   }
 
-  // Try 2: Fetch + blob (slower but more reliable)
   const fetchAndDownload = (fetchUrl) => {
     return fetch(fetchUrl, { mode: 'cors' })
       .then(response => {
@@ -1803,7 +2063,7 @@ function downloadAudio(url, filename) {
       })
       .then(blob => {
         const blobUrl = window.URL.createObjectURL(blob);
-        forceDownload(blobUrl, filename);
+        forceDownload(blobUrl, safeFilename);
         setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
       });
   };
@@ -1820,7 +2080,7 @@ function downloadAudio(url, filename) {
 
   sequence.catch(error => {
     console.error('All audio download attempts failed:', error);
-    try { showDownloadLinkNotification(originalUrl, filename); } catch (e) {}
+    try { showDownloadLinkNotification(originalUrl, safeFilename); } catch (e) {}
   });
 }
 
@@ -1941,9 +2201,9 @@ async function setupFirebaseMessaging() {
     messaging.onMessage((payload) => {
       console.log('📨 FCM message received (app in foreground):', payload);
       if (payload?.notification) {
-        new Notification(payload.notification.title || 'Bhavishya', {
-          body: payload.notification.body || 'Experience a smoother app performance with our latest update. Get it now! 🚀',
-          icon: payload.notification.icon || 'bhavishya.jpg',
+        new Notification('Bhavishya', {
+          body: 'Update app for a better experience',
+          icon: 'bhavishya.jpg',
           tag: payload.notification.tag || 'bhavishya-update'
         });
       }
@@ -2096,18 +2356,70 @@ function createVoiceMessage(audioUrl, duration, deviceSent = false) {
   
   return `
     <div class="voice-message" data-audio-url="${audioUrl}" data-device-sent="${deviceSent}">
-      <button class="voice-play-btn">
-        <i class="fas fa-play"></i>
-      </button>
-      <div class="voice-waveform">
-        ${waveformHTML}
+      <div class="voice-message-header">
+        <button class="voice-play-btn">
+          <i class="fas fa-play"></i>
+        </button>
+        <div class="voice-waveform">
+          ${waveformHTML}
+        </div>
+        <div class="voice-duration">${formatTime(duration)}</div>
       </div>
       <div class="voice-progress seekable">
         <div class="voice-progress-fill"></div>
       </div>
-      <div class="voice-duration">${formatTime(duration)}</div>
     </div>
   `;
+}
+
+function downloadMessageMedia(messageDiv) {
+  try {
+    const voiceMessage = messageDiv?.querySelector('.voice-message');
+    if (voiceMessage) {
+      const audioUrl = voiceMessage.dataset.audioUrl;
+      const safeName = `voice_${Date.now()}.mp3`;
+      if (audioUrl) {
+        downloadAudio(audioUrl, safeName);
+        showNotification('Download started!');
+      }
+      return;
+    }
+
+    const fileMessage = messageDiv?.querySelector('.file-message');
+    if (fileMessage) {
+      const fileUrl = fileMessage.dataset.fileUrl;
+      const fileName = fileMessage.dataset.fileName || 'download';
+      if (fileUrl) {
+        if (/\.pdf$/i.test(fileName)) {
+          downloadPdf(fileUrl, fileName);
+        } else {
+          downloadFile(fileUrl, fileName);
+        }
+        showNotification('Download started!');
+      }
+      return;
+    }
+
+    const mediaMessage = messageDiv?.querySelector('.media-message');
+    if (mediaMessage) {
+      const mediaUrl = mediaMessage.dataset.mediaUrl;
+      const mediaType = mediaMessage.dataset.mediaType;
+      const fileName = mediaMessage.dataset.fileName || `media_${Date.now()}`;
+      if (mediaUrl) {
+        if (mediaType === 'audio') {
+          downloadAudio(mediaUrl, fileName);
+        } else if (mediaType === 'video') {
+          downloadVideo(mediaUrl, fileName);
+        } else {
+          downloadImage(mediaUrl, fileName);
+        }
+        showNotification('Download started!');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to download message media:', error);
+    showNotification('Download failed', true);
+  }
 }
 
 // Upload file to Cloudinary
@@ -2271,6 +2583,41 @@ function sendVoiceRecording() {
   checkAndSend();
 }
 
+async function getAudioDurationFromBlob(blob) {
+  try {
+    const arrayBuffer = await blob.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (typeof AudioCtx === 'function') {
+      const audioCtx = new AudioCtx();
+      const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+      const duration = decodedBuffer.duration;
+      await audioCtx.close();
+      if (Number.isFinite(duration) && duration > 0) {
+        return Math.round(duration);
+      }
+    }
+  } catch (error) {
+    console.warn('AudioContext duration decode failed, falling back to metadata:', error);
+  }
+
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement('audio');
+    audio.preload = 'metadata';
+    audio.src = URL.createObjectURL(blob);
+
+    audio.addEventListener('loadedmetadata', function() {
+      const duration = Math.round(audio.duration);
+      URL.revokeObjectURL(audio.src);
+      resolve(Number.isFinite(duration) ? duration : 0);
+    }, { once: true });
+
+    audio.addEventListener('error', function() {
+      URL.revokeObjectURL(audio.src);
+      reject(new Error('Failed to load audio metadata'));
+    }, { once: true });
+  });
+}
+
 // Helper function to actually send the recorded audio
 async function sendRecordedAudio() {
   if (audioChunks.length === 0) {
@@ -2338,13 +2685,14 @@ async function sendVoiceMessage(audioBlob) {
     const result = await uploadToCloudinary(audioFile);
     
     const timestamp = Date.now();
-    const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+    const fallbackDuration = recordingStartTime ? Math.floor((Date.now() - recordingStartTime) / 1000) : 0;
+    const duration = await getAudioDurationFromBlob(audioBlob).catch(() => fallbackDuration);
     
     const message = {
       id: `msg_${timestamp}_${userId}`,
       name: username,
       userId: userId,
-      text: 'Voice message',
+      text: '',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: timestamp,
       channel: userChannel,
@@ -4694,8 +5042,9 @@ function initializeChatApp() {
 
   // User presence (online/offline) with channel support
   function updateUserPresence(isOnline) {
-    const userRef = db.ref(`users/${userId}`);
-    const userStatusRef = db.ref(`status/${userId}`);
+    const safeKey = getFirebaseSafeUserKey(username || localStorage.getItem('chat_username') || 'unknown');
+    const userRef = db.ref(`users/${safeKey}`);
+    const userStatusRef = db.ref(`status/${userId || safeKey}`);
     
     if (isOnline) {
       // Mark user online and preserve existing user data.
@@ -5515,11 +5864,12 @@ async function populateRecentChatsList() {
     query = db.ref('chat').orderByChild('timestamp');
   }
   
-  messageListener = query;
+  messageListener = null;
   
   // Scroll to bottom after initial messages load
   let initialLoadComplete = false;
-  let expectedInitialMessages = 0;
+  let lastLoadedTimestamp = 0;
+  let lastLoadedKey = null;
   let initialMessagesAdded = 0;
   let recentChatsRefreshTimer = null;
 
@@ -5593,364 +5943,142 @@ async function populateRecentChatsList() {
     recentChatsRefreshTimer = setTimeout(() => {
       loadRecentChats();
       recentChatsRefreshTimer = null;
-    }, 100);
+    }, 1000);
   }
 
   query.once('value', (snapshot) => {
-    if (!initialLoadComplete) {
-      const allMessages = snapshot.val() || {};
-      expectedInitialMessages = Object.values(allMessages).filter((m) => {
-        if (!m) return false;
+    appendInitialMessages(snapshot);
+
+    const allMessages = snapshot.val() || {};
+    const filteredEntries = Object.entries(allMessages)
+      .filter(([key, msg]) => {
+        if (!msg) return false;
         if (userChannel === 'general') {
-          return !m.channel || m.channel === 'general';
+          return !msg.channel || msg.channel === 'general';
         }
         if (userChannel === 'admin') {
           return true;
         }
-        return m.channel === userChannel;
-      }).length;
+        return msg.channel === userChannel;
+      })
+      .sort((a, b) => {
+        const aTs = Number(a[1].timestamp || 0);
+        const bTs = Number(b[1].timestamp || 0);
+        if (aTs !== bTs) return aTs - bTs;
+        return String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true, sensitivity: 'base' });
+      });
 
-      if (expectedInitialMessages === 0) {
-        initialLoadComplete = true;
-        lastDateSeparator = '';
-        scrollMessagesToBottom();
-        loadRecentChats();
-      }
+    if (filteredEntries.length > 0) {
+      const [lastKey, lastMsg] = filteredEntries[filteredEntries.length - 1];
+      lastLoadedTimestamp = Number(lastMsg.timestamp || 0);
+      lastLoadedKey = lastKey;
     }
-  });
-  
-  messageListener.on('child_added', async (snapshot, prevChildKey) => {
-    const msg = snapshot.val();
-    const key = snapshot.key;
-    
-    if (!msg) return;
-    
-    // Handle message filtering based on channel
-    if (userChannel === 'general') {
-      // For general chat, show messages without channel or with channel='general'
-      if (msg.channel && msg.channel !== 'general') {
-        return; // Skip messages from private channels
-      }
-    } else if (userChannel === 'admin') {
-      // Admin sees all messages
-    } else {
-      // For private channels, only show messages from the same channel
-      if (msg.channel !== userChannel) {
+
+    initialLoadComplete = true;
+    lastDateSeparator = '';
+    scrollMessagesToBottom();
+    loadRecentChats();
+
+    let realtimeQuery = query;
+    if (lastLoadedKey) {
+      realtimeQuery = db.ref('chat')
+        .orderByChild('timestamp')
+        .startAt(lastLoadedTimestamp, lastLoadedKey);
+    }
+
+    messageListener = realtimeQuery;
+    messageListener.on('child_added', async (snapshot, prevChildKey) => {
+      const msg = snapshot.val();
+      const key = snapshot.key;
+
+      if (!msg || currentMessages[key]) return;
+
+      if (userChannel === 'general') {
+        if (msg.channel && msg.channel !== 'general') return;
+      } else if (userChannel !== 'admin' && msg.channel !== userChannel) {
         return;
       }
-    }
-    
-    // Check if message already exists
-    if (document.querySelector(`[data-id="${msg.id}"]`)) return;
-    
-    const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
-    const canEditDelete = isOwnMessage || isAdmin;
 
-    const previousMessage = Array.from(messagesDiv.querySelectorAll('.message')).reverse().find((el) => {
-      return el.classList.contains('message') && !el.classList.contains('welcome');
-    });
-    const previousSender = previousMessage?.dataset.sender || previousMessage?.querySelector('.message__sender')?.textContent;
-    const previousType = previousMessage?.dataset.type || (previousMessage?.classList.contains('sent') ? 'sent' : previousMessage?.classList.contains('received') ? 'received' : null);
-    const sameSenderAsPrev = previousSender && normalizeName(previousSender) === normalizeName(msg.name) && previousType === (isOwnMessage ? 'sent' : 'received');
-    const showAvatar = !sameSenderAsPrev && !isOwnMessage;
+      const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
+      const previousMessage = currentMessages[prevChildKey] || null;
+      const previousSender = previousMessage?.dataset.sender || previousMessage?.querySelector('.message__sender')?.textContent;
+      const previousType = previousMessage?.dataset.type || (previousMessage?.classList.contains('sent') ? 'sent' : previousMessage?.classList.contains('received') ? 'received' : null);
+      const sameSenderAsPrev = previousMessage && previousSender && normalizeName(previousSender) === normalizeName(msg.name) && previousType === (isOwnMessage ? 'sent' : 'received');
+      const showAvatar = !isOwnMessage && !sameSenderAsPrev;
+      const profileImage = msg.name === username && userProfileImage ? userProfileImage : profileImageCache.get(msg.name) || null;
+      const renderedTime = msg.timestamp ? formatMessageTime(msg.timestamp) : msg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      const cachedProfileImage = msg.name === username && userProfileImage
-      ? userProfileImage
-      : profileImageCache.get(msg.name) || null;
+      const messageDiv = createChatMessageElement(msg, key, showAvatar, profileImage, renderedTime);
+      insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, true);
+      currentMessages[key] = messageDiv;
 
-    if (!profileImageCache.has(msg.name) && msg.name) {
-      getUserProfileImage(msg.name).then((imageUrl) => {
-        if (!imageUrl) return;
-        profileImageCache.set(msg.name, imageUrl);
-        const existingMessageDiv = document.querySelector(`[data-key="${key}"]`);
-        if (existingMessageDiv) {
-          const avatarEl = existingMessageDiv.querySelector('.message__avatar');
+      if (!profileImageCache.has(msg.name) && msg.name) {
+        getUserProfileImage(msg.name).then((imageUrl) => {
+          if (!imageUrl) return;
+          profileImageCache.set(msg.name, imageUrl);
+          const avatarEl = messageDiv.querySelector('.message__avatar');
           if (avatarEl) {
             applyProfileImageToAvatarElement(avatarEl, msg.name, imageUrl);
             avatarEl.dataset.profileImage = imageUrl || '';
           }
+        }).catch(() => {
+          profileImageCache.set(msg.name, null);
+        });
+      }
+
+      if (!isOwnMessage) {
+        markMessageAsSeen(key, msg.name);
+      }
+
+      if (msg.mediaType === 'video' || msg.mediaType === 'audio') {
+        const mediaElement = messageDiv.querySelector(msg.mediaType === 'video' ? 'video' : 'audio');
+        if (mediaElement) {
+          mediaElement.src = msg.mediaUrl;
+          mediaElement.addEventListener('loadedmetadata', function() {
+            const durationElement = messageDiv.querySelector('.media-duration');
+            if (durationElement) {
+              durationElement.textContent = formatTime(this.duration);
+            }
+          }, { once: true });
         }
-      }).catch(() => {
-        profileImageCache.set(msg.name, null);
-      });
-    }
+      }
 
-    const profileImage = cachedProfileImage;
-    const renderedTime = msg.timestamp
-      ? formatMessageTime(msg.timestamp)
-      : msg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${isOwnMessage ? 'sent' : 'received'} ${showAvatar ? 'message--first-in-group' : 'message--continued'}`;
-    messageDiv.dataset.id = msg.id;
-    messageDiv.dataset.key = key;
-    messageDiv.dataset.sender = msg.name;
-    messageDiv.dataset.type = isOwnMessage ? 'sent' : 'received';
-    messageDiv.dataset.profileImage = profileImage || '';
-    
-    // Add channel indicator for admin viewing all channels
-    const channelIndicator = isAdmin && userChannel === 'admin' && msg.channel && msg.channel !== 'general' ? 
-      `<div style="font-size: 10px; opacity: 0.7; margin-bottom: 2px;">CH-${msg.channel}</div>` : '';
-    
-    const editedText = msg.edited ? ' (edited)' : '';
-    
-    let replyHtml = '';
-    if (msg.replyTo) {
-      replyHtml = `
-        <div class="reply-indicator" onclick="scrollToMessage('${msg.replyTo.id}')">
-          <div class="reply-sender">↩ ${escapeHTML(msg.replyTo.sender)}</div>
-          <div class="reply-text"></div>
-        </div>
-      `;
-      // Will be set after innerHTML to safely handle the reply text
-    }
-    
-    // Handle link preview
-    let linkPreviewHtml = '';
-    if (msg.linkPreview) {
-      linkPreviewHtml = createLinkPreviewHTML(msg.linkPreview);
-    }
-    
-    // Handle voice messages
-    let voiceHtml = '';
-    if (msg.voiceMessage) {
-      const isOwnMessage = normalizeName(msg.name) === normalizeName(username);
-      const deviceSent = !!msg.voiceMessage.deviceSent || isOwnMessage;
-      voiceHtml = createVoiceMessage(msg.voiceMessage.url, msg.voiceMessage.duration, deviceSent);
-    }
-    
-    // UPDATED: File message HTML with proper download handling
-    let fileHtml = '';
-    if (msg.fileData) {
-      const fileData = msg.fileData;
-      const escapedFileName = escapeHTML(fileData.name);
-      fileHtml = `
-        <div class="file-message" data-file-url="${escapeHTML(fileData.url)}" data-file-name="${escapedFileName}">
-          <div class="file-icon">
-            <i class="${getFileIcon(fileData.name)}"></i>
-          </div>
-          <div class="file-info">
-            <div class="file-name"></div>
-            <div class="file-size">${formatFileSize(fileData.size)}</div>
-          </div>
-          <button class="download-btn" title="Download" onclick="(function(url, name){ if (/\.pdf$/i.test(name)) { downloadPdf(url, name); } else { downloadFile(url, name); } })('${escapeHTML(fileData.url)}', '${escapedFileName}'); event.stopPropagation();">
-            <i class="fas fa-download"></i>
-          </button>
-        </div>
-      `;
-    }
-    
-    // Handle media messages with download functionality
-    let mediaHtml = '';
-    if (msg.mediaType === 'image') {
-      mediaHtml = `
-        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="image" data-file-name="image_${msg.timestamp}.jpg">
-          <img src="${escapeHTML(msg.mediaUrl)}" alt="Image" loading="lazy">
-          <div class="media-play-btn" style="display: none;">
-            <i class="fas fa-play"></i>
-          </div>
-          <div class="media-duration" style="display: none;">0:00</div>
-        </div>
-      `;
-    } else if (msg.mediaType === 'video') {
-      // Guess extension from URL for proper download filename and type checks
-      const extMatch = String(msg.mediaUrl || '').match(/\.([a-z0-9]+)(?:\?|$)/i);
-      const ext = extMatch ? extMatch[1].toLowerCase() : 'mp4';
-      const previewUrl = getPlayableVideoUrl(msg.mediaUrl);
-      mediaHtml = `
-        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="video" data-file-name="video_${msg.timestamp}.${ext}">
-          <video controls muted playsinline preload="metadata" src="${escapeHTML(previewUrl)}"></video>
-          <div class="media-play-btn">
-            <i class="fas fa-play"></i>
-          </div>
-        </div>
-      `;
-    } else if (msg.mediaType === 'audio') {
-      mediaHtml = `
-        <div class="media-message" data-media-url="${escapeHTML(msg.mediaUrl)}" data-media-type="audio" data-file-name="audio_${msg.timestamp}.mp3">
-          <audio controls preload="metadata">
-            <source src="${escapeHTML(msg.mediaUrl)}" type="audio/mpeg">
-          </audio>
-        </div>
-      `;
-    }
-    
-    // Always show react, reply and copy buttons for all messages
-    let messageActionsHTML = `
-      <button class="message-action react-btn" title="React">
-        <i class="fas fa-smile"></i>
-      </button>
-      <button class="message-action copy-btn" title="Copy Message">
-        <i class="fas fa-copy"></i>
-      </button>
-      <button class="message-action reply-btn" title="Reply">
-        <i class="fas fa-reply"></i>
-      </button>
-    `;
-    if (isOwnMessage) {
-      messageActionsHTML += `
-        <button class="message-action seen-by-btn" title="Seen by">
-          <i class="fas fa-eye"></i>
-        </button>
-      `;
-    }
-    
-    // Show edit/delete buttons based on permissions
-    if (canEditDelete) {
-      messageActionsHTML += `
-        <button class="message-action edit-btn" title="Edit">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button class="message-action delete-btn" title="Delete">
-          <i class="fas fa-trash"></i>
-        </button>
-      `;
-    } else if (isAdmin) {
-      // Admin can delete any message
-      messageActionsHTML += `
-        <button class="message-action delete-btn" title="Delete (Admin)">
-          <i class="fas fa-trash"></i>
-        </button>
-      `;
-    }
-    
-    messageDiv.innerHTML = `
-      ${channelIndicator}
-      ${replyHtml}
-      <div class="message__header">
-        <div class="message__avatar-wrapper"></div>
-        <div class="message__meta">
-          <span class="message__sender">${escapeHTML(msg.name)}</span>
-        </div>
-      </div>
-      <div class="message__content"></div>
-      <span class="message__time">${renderedTime}</span>
-      ${linkPreviewHtml}
-      ${voiceHtml}
-      ${fileHtml}
-      ${mediaHtml}
-      <div class="message__actions">
-        ${messageActionsHTML}
-      </div>
-      <div class="message__reactions"></div>
-    `;
-
-    const avatarWrapper = messageDiv.querySelector('.message__avatar-wrapper');
-    if (avatarWrapper) {
-      avatarWrapper.innerHTML = '';
-      if (showAvatar && !isOwnMessage) {
-        const avatarElement = createUserAvatarElement(msg.name, profileImage);
-        avatarElement.classList.add('message__avatar', 'clickable-profile');
-        avatarElement.dataset.username = msg.name;
-        avatarElement.dataset.profileImage = profileImage || '';
-        avatarWrapper.appendChild(avatarElement);
-        avatarWrapper.style.display = 'flex';
-      } else {
-        avatarWrapper.style.display = 'none';
-      }
-    }
-    
-    // Set message content safely using textContent to prevent HTML injection
-    const contentDiv = messageDiv.querySelector('.message__content');
-    const messageText = msg.text || '';
-    contentDiv.textContent = messageText + editedText;
-    
-    // Set reply text safely if it exists
-    if (msg.replyTo) {
-      const replyTextDiv = messageDiv.querySelector('.reply-text');
-      if (replyTextDiv) {
-        replyTextDiv.textContent = msg.replyTo.text;
-      }
-    }
-    
-    // Set file name safely
-    if (msg.fileData) {
-      const fileNameDiv = messageDiv.querySelector('.file-name');
-      if (fileNameDiv) {
-        fileNameDiv.textContent = msg.fileData.name;
-      }
-    }
-    
-    insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, initialLoadComplete);
-    if (!isOwnMessage) {
-      markMessageAsSeen(key, msg.name);
-    }
-
-    if (!initialLoadComplete) {
-      chatLayoutNeedsRefresh = true;
-      const shouldCount = userChannel === 'admin' || userChannel === 'general' ? (!msg.channel || msg.channel === 'general') : msg.channel === userChannel;
-      if (shouldCount) {
-        initialMessagesAdded += 1;
-      }
-      scrollMessagesToBottom();
-      if (initialMessagesAdded >= expectedInitialMessages && expectedInitialMessages > 0) {
-        initialLoadComplete = true;
-        if (chatLayoutNeedsRefresh) {
-          refreshDateSeparators();
-          refreshMessageGroups();
-          chatLayoutNeedsRefresh = false;
-        }
-        setTimeout(() => {
-          scrollMessagesToBottom();
-          loadRecentChats();
-          setTimeout(scrollMessagesToBottom, 80);
-        }, 60);
-      }
-    }
-    
-    // Store message reference
-    currentMessages[key] = messageDiv;
-    
-    // Set up media duration for video/audio
-    if (msg.mediaType === 'video' || msg.mediaType === 'audio') {
-      const mediaElement = messageDiv.querySelector(msg.mediaType === 'video' ? 'video' : 'audio');
-      if (mediaElement) {
-        mediaElement.src = msg.mediaUrl;
-        mediaElement.addEventListener('loadedmetadata', function() {
-          const durationElement = messageDiv.querySelector('.media-duration');
-          if (durationElement) {
-            durationElement.textContent = formatTime(this.duration);
+      if (isOwnMessage || isAtBottom) {
+        requestAnimationFrame(() => {
+          if (messagesDiv) {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
           }
-        }, { once: true });
+        });
       }
-    }
-    
-    // Scroll to bottom if new message is from current user or if at bottom
-    if (isOwnMessage || isAtBottom) {
-      requestAnimationFrame(() => {
-        if (messagesDiv) {
-          messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-      });
-    }
-    updateScrollToBottomButton();
-    
-    const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && !chatNotificationSentSinceLastVisit;
-    if (shouldNotifyForChat) {
-      console.log('📢 New chat notification triggered for message id:', key, 'from:', msg.name, 'channel:', userChannel);
-      lastChatNotificationAt = Date.now();
-      lastDeliveredChatNotificationId = key;
-      chatNotificationSentSinceLastVisit = true;
-      showChatNotification('Update app for a better experience 🚀', {
-        title: 'Bhavishya',
-        body: 'New message from ' + msg.name,
-        icon: 'bhavishya.jpg',
-        tag: `chat-${key}`
-      });
-    }
-    
-    // Load recent chats when new message arrives
-    if (initialLoadComplete) {
-      scheduleRecentChatsReload();
-    }
+      updateScrollToBottomButton();
+
+      const shouldNotifyForChat = !isOwnMessage && userChannel === 'general' && notificationsEnabled && !chatNotificationSentSinceLastVisit;
+      if (shouldNotifyForChat) {
+        console.log('📢 New chat notification triggered for message id:', key, 'from:', msg.name, 'channel:', userChannel);
+        lastChatNotificationAt = Date.now();
+        lastDeliveredChatNotificationId = key;
+        chatNotificationSentSinceLastVisit = true;
+        showChatNotification('Update app for a better experience', {
+          title: 'Bhavishya',
+          body: 'New message from ' + msg.name,
+          icon: 'bhavishya.jpg',
+          tag: `chat-${key}`
+        });
+      }
+
+      if (initialLoadComplete) {
+        scheduleRecentChatsReload();
+      }
+    });
   });
 
   // Listen for message updates (for editing)
   db.ref('chat').on('child_changed', (snapshot) => {
     const msg = snapshot.val();
     const key = snapshot.key;
+    const isExistingMessage = currentMessages[key] != null;
     
-    if (!msg) return;
+    if (!msg || isExistingMessage) return;
     
     // Skip if message is not from current channel
     if (userChannel === 'general') {
@@ -6193,6 +6321,8 @@ async function populateRecentChatsList() {
       } else if (actionButton.classList.contains('reply-btn')) {
         const key = messageDiv.dataset.key;
         replyToMessageFunc(key, messageDiv);
+      } else if (actionButton.classList.contains('download-btn')) {
+        downloadMessageMedia(messageDiv);
       } else if (actionButton.classList.contains('seen-by-btn')) {
         const key = messageDiv.dataset.key;
         showSeenByModal(key, messageDiv);
@@ -6393,13 +6523,73 @@ async function populateRecentChatsList() {
       return;
     }
 
-    if (progressBar && activeVoiceAudio && activeVoiceAudio.src === audioUrl && activeVoiceAudio.duration > 0) {
+    if (progressBar) {
+      e.stopPropagation();
       const rect = progressBar.getBoundingClientRect();
       const percent = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
-      activeVoiceAudio.currentTime = activeVoiceAudio.duration * percent;
-      if (progressFill) {
-        progressFill.style.width = `${percent * 100}%`;
+      const seekTo = (audio) => {
+        if (!audio || !audio.duration) return;
+        audio.currentTime = audio.duration * percent;
+        if (progressFill) {
+          progressFill.style.width = `${percent * 100}%`;
+        }
+      };
+
+      if (activeVoiceAudio && activeVoiceAudio.src === audioUrl && activeVoiceAudio.duration > 0) {
+        seekTo(activeVoiceAudio);
+      } else {
+        stopActiveVoiceAudio();
+        const audio = new Audio(audioUrl);
+        audio.preload = 'metadata';
+        audio.style.display = 'none';
+        document.body.appendChild(audio);
+        activeVoiceAudio = audio;
+        activeVoiceButton = playBtn;
+
+        audio.addEventListener('loadedmetadata', () => {
+          seekTo(audio);
+          audio.play().catch(() => {
+            if (playBtn) {
+              playBtn.classList.remove('fa-pause');
+              playBtn.classList.add('fa-play');
+            }
+          });
+          if (playBtn) {
+            playBtn.classList.remove('fa-play');
+            playBtn.classList.add('fa-pause');
+          }
+        }, { once: true });
+
+        audio.addEventListener('timeupdate', () => {
+          if (progressFill && audio.duration > 0) {
+            const currentPercent = (audio.currentTime / audio.duration) * 100;
+            progressFill.style.width = `${currentPercent}%`;
+          }
+        });
+
+        audio.addEventListener('ended', () => {
+          stopActiveVoiceAudio();
+          if (progressFill) progressFill.style.width = '0%';
+        });
+
+        audio.addEventListener('pause', () => {
+          if (playBtn.classList.contains('fa-pause')) {
+            playBtn.classList.remove('fa-pause');
+            playBtn.classList.add('fa-play');
+          }
+        });
+
+        audio.addEventListener('play', () => {
+          playBtn.classList.remove('fa-play');
+          playBtn.classList.add('fa-pause');
+        });
+
+        audio.play().catch(() => {
+          playBtn.classList.remove('fa-pause');
+          playBtn.classList.add('fa-play');
+        });
       }
+      return;
     }
   });
 

@@ -883,18 +883,30 @@ body.menu-open .scroll-to-bottom-btn {
 /* Voice Message Styles */
 .voice-message {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   padding: 10px 15px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 25px;
   margin-top: 5px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  max-width: 250px;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  overflow: visible;
 }
 
 .sent .voice-message {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.voice-message-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 }
 
 .voice-play-btn {
@@ -918,6 +930,7 @@ body.menu-open .scroll-to-bottom-btn {
 
 .voice-waveform {
   flex: 1;
+  min-width: 0;
   height: 36px;
   position: relative;
   overflow: hidden;
@@ -943,6 +956,7 @@ body.menu-open .scroll-to-bottom-btn {
 .voice-progress {
   position: relative;
   width: 100%;
+  min-width: 0;
   height: 4px;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 2px;
@@ -958,6 +972,19 @@ body.menu-open .scroll-to-bottom-btn {
   width: 0%;
   background: var(--accent-color);
   transition: width 0.1s linear;
+}
+
+.voice-audio-element {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 8px;
+  min-height: 32px;
+  box-sizing: border-box;
+}
+
+.voice-message .voice-audio-element {
+  min-height: 42px;
 }
 
 .morse-toolbar {

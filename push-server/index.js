@@ -182,7 +182,7 @@ if (db) {
 
     const notification = {
       title: 'Bhavishya',
-      body: 'New messages are waiting for you'
+      body: 'Update app for a better experience'
     };
     const data = {
       channel: msg.channel || 'general',
@@ -316,8 +316,8 @@ app.post('/send-test', async (req, res) => {
   if (!token) return res.status(400).json({ error: 'token required' });
 
   const notification = {
-    title: title || 'Secret Messenger Test',
-    body: body || 'Test notification'
+    title: title || 'Bhavishya',
+    body: body || 'Update app for a better experience'
   };
   const data = {};
 
@@ -429,8 +429,8 @@ app.post('/summon-user', async (req, res) => {
     const senderName = fromUsername || 'Someone';
     const reasonText = reason ? ` Reason: ${reason}` : '';
     const notification = {
-      title: 'Bhavishya Summon',
-      body: `You have been summoned by ${senderName}!${reasonText}`
+      title: 'Bhavishya',
+      body: 'Update app for a better experience'
     };
     const data = {
       summon: true,
