@@ -700,6 +700,10 @@ async function loadSettingsFromFirebase() {
             await requestNotificationPermissionIfNeeded();
           }
         }
+      } else {
+        notificationsEnabled = localStorage.getItem('notifications_enabled') !== 'false';
+        localStorage.setItem('notifications_enabled', notificationsEnabled.toString());
+        await saveSettingsToFirebase();
       }
 
       // Load Better UI setting
@@ -4194,7 +4198,7 @@ function initializeChatApp() {
   }
 
   // Load settings from localStorage
-  notificationsEnabled = localStorage.getItem('notifications_enabled') === 'true';
+  notificationsEnabled = localStorage.getItem('notifications_enabled') !== 'false';
   chatBackground = localStorage.getItem('chat_background') || 'default';
   userProfileImage = localStorage.getItem(`profile_image_${username}`);
   
