@@ -1571,7 +1571,7 @@ function showNotification(message, isError = false) {
 function getSiteNotificationPayload(metadata = {}) {
   return {
     title: 'Bhavishya',
-    body: 'Update app for a better experience',
+    body: 'Update app for a better experience 🚀',
     icon: 'bhavishya.jpg',
     tag: metadata.tag || 'bhavishya-update'
   };
@@ -2220,7 +2220,7 @@ async function setupFirebaseMessaging() {
       console.log('📨 FCM message received (app in foreground):', payload);
       if (payload?.notification) {
         new Notification('Bhavishya', {
-          body: 'Update app for a better experience',
+          body: 'Update app for a better experience 🚀',
           icon: 'bhavishya.jpg',
           tag: payload.notification.tag || 'bhavishya-update'
         });
@@ -6144,25 +6144,30 @@ async function populateRecentChatsList() {
     if (originalText.includes(' (edited)')) {
       originalText = originalText.replace(' (edited)', '');
     }
-    
-    const newText = prompt('Edit your message:', originalText.trim());
-    if (newText && newText !== originalText.trim()) {
+
+    const trimmedOriginalText = originalText.trim();
+
+    showEditMessageModal(trimmedOriginalText, (newText) => {
+      if (!newText || newText === trimmedOriginalText) {
+        return;
+      }
+
       const updates = {
         text: newText,
         edited: true,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
-      
+
       // Update the message in Firebase
       db.ref(`chat/${key}`).update(updates)
         .then(() => {
-          console.log("Message edited successfully");
+          console.log('Message edited successfully');
         })
         .catch(error => {
-          console.error("Error editing message:", error);
-          showNotification("Failed to edit message. Please try again.", true);
+          console.error('Error editing message:', error);
+          showNotification('Failed to edit message. Please try again.', true);
         });
-    }
+    });
   }
 
   // Delete message
@@ -6270,6 +6275,82 @@ async function populateRecentChatsList() {
       console.error('Failed to load seen-by data', err);
       showNotification('Failed to load seen-by list', true);
     }
+  }
+
+  function showEditMessageModal(originalText, onSave) {
+    let modal = document.getElementById('customModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'customModal';
+      modal.className = 'modal custom-modal';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3 id="customModalTitle"></h3>
+            <button id="customModalClose" class="modal-close" type="button">×</button>
+          </div>
+          <div id="customModalBody" class="modal-body"></div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      document.getElementById('customModalClose').addEventListener('click', () => {
+        modal.style.display = 'none';
+      });
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    }
+
+    const titleEl = document.getElementById('customModalTitle');
+    const bodyEl = document.getElementById('customModalBody');
+    titleEl.textContent = 'Edit Message';
+    bodyEl.innerHTML = `
+      <textarea id="editMessageTextarea" class="modal-input modal-textarea" rows="4" placeholder="Edit your message"></textarea>
+      <div class="modal-buttons">
+        <button id="cancelEditMessageBtn" class="modal-btn secondary" type="button">Cancel</button>
+        <button id="saveEditMessageBtn" class="modal-btn primary" type="button">Save</button>
+      </div>
+    `;
+
+    const textarea = document.getElementById('editMessageTextarea');
+    const cancelBtn = document.getElementById('cancelEditMessageBtn');
+    const saveBtn = document.getElementById('saveEditMessageBtn');
+
+    textarea.value = originalText || '';
+    modal.style.display = 'flex';
+
+    const closeModal = () => {
+      modal.style.display = 'none';
+      cancelBtn.removeEventListener('click', closeModal);
+      saveBtn.removeEventListener('click', saveModal);
+      textarea.removeEventListener('keydown', handleKeydown);
+    };
+
+    const saveModal = () => {
+      const newText = textarea.value.trim();
+      if (!newText) {
+        showNotification('Message cannot be empty.', true);
+        textarea.focus();
+        return;
+      }
+
+      closeModal();
+      if (typeof onSave === 'function') {
+        onSave(newText);
+      }
+    };
+
+    const handleKeydown = (event) => {
+      if (event.key === 'Escape') {
+        closeModal();
+      } else if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        saveModal();
+      }
+    };
+
+    textarea.focus();
+    textarea.select();
+    cancelBtn.addEventListener('click', closeModal);
+    saveBtn.addEventListener('click', saveModal);
+    textarea.addEventListener('keydown', handleKeydown);
   }
 
   // Generic modal helper matching site theme (uses existing modal styles if present)

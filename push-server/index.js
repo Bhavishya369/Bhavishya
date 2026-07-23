@@ -213,7 +213,7 @@ if (db) {
 
     const notification = {
       title: 'Bhavishya',
-      body: 'Update app for a better experience'
+      body: 'Update app for a better experience 🚀'
     };
     const data = {
       channel: msg.channel || 'general',
@@ -353,7 +353,7 @@ app.post('/send-test', async (req, res) => {
 
   const notification = {
     title: title || 'Bhavishya',
-    body: body || 'Update app for a better experience'
+    body: body || 'Update app for a better experience 🚀'
   };
   const data = {};
 
@@ -483,7 +483,7 @@ app.post('/summon-user', async (req, res) => {
     const reasonText = reason ? ` Reason: ${reason}` : '';
     const notification = {
       title: 'Bhavishya',
-      body: 'Update app for a better experience'
+      body: 'Update app for a better experience 🚀'
     };
     const data = {
       summon: true,

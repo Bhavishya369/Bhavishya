@@ -582,6 +582,28 @@ input[type="submit"] {
 }
 #customModal .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 #customModal .modal-close { background: transparent; border: none; color: var(--text-primary); font-size: 20px; cursor: pointer; }
+#customModal .modal-body textarea.modal-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  margin-bottom: 12px;
+}
+#customModal .modal-body .modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+:root.better-ui #customModal .modal-content {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2) !important;
+  border-radius: 18px !important;
+  backdrop-filter: blur(16px) !important;
+  padding: 18px !important;
+}
+:root.better-ui #customModal .modal-close {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
 
 .chat__main {
   flex: 1;
