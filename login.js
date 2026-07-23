@@ -2159,11 +2159,12 @@ async function saveFcmTokenToFirebase(token) {
 
 // Set notifyWhenOffline flag - tells push server to send notifications when user is offline
 async function setUserOfflineStatus(isOffline) {
-  if (!username || !notificationsEnabled) return;
-  
+  if (!username) return;
+
   try {
     const safeKey = getFirebaseSafeUserKey(username);
     await db.ref(`users/${safeKey}/notifyWhenOffline`).set(isOffline);
+    await updateCurrentDeviceOfflineStatus(isOffline);
     console.log(`🔔 notifyWhenOffline set to: ${isOffline}`);
     if (isOffline) {
       console.log('📵 You are now OFFLINE - push server will send notifications to your devices');
@@ -2172,6 +2173,19 @@ async function setUserOfflineStatus(isOffline) {
     }
   } catch (error) {
     console.error('Error setting offline status:', error);
+  }
+}
+
+function sendOfflineBeacon() {
+  if (!username || !PUSH_SERVER_URL || !navigator.sendBeacon) return;
+
+  try {
+    const payload = JSON.stringify({ username, offline: true });
+    const blob = new Blob([payload], { type: 'application/json' });
+    const sent = navigator.sendBeacon(`${PUSH_SERVER_URL}/mark-user-offline`, blob);
+    console.log('📡 Offline beacon sent:', sent);
+  } catch (error) {
+    console.warn('Offline beacon failed:', error);
   }
 }
 
@@ -8300,7 +8314,7 @@ window.addEventListener('beforeunload', () => {
   if (localStorage.getItem('page_reload_in_progress') !== 'true') {
     sessionStorage.removeItem('session_valid');
   }
-  // Don't clear the flag here - it will be cleared after reload completes
+  sendOfflineBeacon();
 });
 
 // Use page visibility API to catch tab switches, but NOT during reloads
@@ -8319,6 +8333,13 @@ document.addEventListener('visibilitychange', () => {
     console.log('👁️ Tab visible - setting online status');
     setUserOfflineStatus(false);
   }
+});
+
+window.addEventListener('pagehide', () => {
+  console.log('📵 Pagehide detected - forcing offline status for push delivery');
+  updateUserPresence(false);
+  setUserOfflineStatus(true);
+  sendOfflineBeacon();
 });
 
 window.addEventListener('focus', () => {

@@ -231,8 +231,8 @@ if (db) {
     usersSnap.forEach(u => {
       const userId = u.key;
       const notifyWhenOffline = u.child('notifyWhenOffline').val() === true;
-      const settings = u.child('settings').val();
-      const notificationsEnabled = settings && settings.notificationsEnabled;
+      const settings = u.child('settings').val() || {};
+      const notificationsEnabled = settings.notificationsEnabled !== false;
       const devices = u.child('devices').val() || {};
       const enabledDeviceIds = [];
 
@@ -415,6 +415,23 @@ app.post('/save-onesignal-id', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('save-onesignal-id error', err);
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+app.post('/mark-user-offline', async (req, res) => {
+  const { username } = req.body || {};
+  if (!username || !db) {
+    return res.json({ ok: true, skipped: true });
+  }
+
+  try {
+    const safeKey = getFirebaseSafeUserKey(username);
+    await db.ref(`users/${safeKey}/notifyWhenOffline`).set(true);
+    await db.ref(`users/${safeKey}/lastSeen`).set(Date.now());
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('mark-user-offline error', err);
     res.status(500).json({ error: err.message || String(err) });
   }
 });
