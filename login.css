@@ -593,6 +593,30 @@ input[type="submit"] {
   justify-content: flex-end;
   gap: 10px;
 }
+.summon-modal-description {
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.summon-modal-description p {
+  margin: 0;
+  line-height: 1.5;
+}
+.summon-reason-note {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(124, 58, 237, 0.08);
+  color: var(--text-primary);
+  font-size: 13px;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+}
+.summon-reason-note .note-tag {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent-color);
+  font-weight: 600;
+}
 :root.better-ui #customModal .modal-content {
   background: rgba(255, 255, 255, 0.09) !important;
   border: 1px solid rgba(255, 255, 255, 0.16) !important;

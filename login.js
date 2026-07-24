@@ -1048,18 +1048,13 @@ function normalizeName(name) {
 // Extract channel from Robo ID
 function extractChannel(roboId) {
   if (!roboId) return 'general';
-  
-  // Check for ch-admin (admin access)
-  if (roboId.toLowerCase() === 'ch-admin') {
-    return 'admin'; // Special channel for admin
-  }
-  
+
   // Check for ch-XXX format where XXX is 3 digits
   const channelMatch = roboId.match(/^ch-(\d{3})$/i);
   if (channelMatch && channelMatch[1]) {
     return channelMatch[1]; // Returns the 3-digit number
   }
-  
+
   return 'general'; // Default to general chat
 }
 
@@ -1758,6 +1753,14 @@ function markChatVisited() {
   lastChatVisitAt = Date.now();
   lastDeliveredChatNotificationId = null;
   chatNotificationSentSinceLastVisit = false;
+
+  if (username && db) {
+    const safeKey = getFirebaseSafeUserKey(username);
+    db.ref(`users/${safeKey}`).update({
+      chatNotificationSentSinceLastVisit: false,
+      lastChatVisitAt: lastChatVisitAt
+    }).catch(() => {});
+  }
 }
 
 async function showChatNotification(messageText, metadata = {}) {
@@ -3603,25 +3606,30 @@ async function checkSecretAndProceed(data) {
     
     // Extract channel from Robo ID
     const roboId = data.robo_id || '';
-    
-    // Set admin status based on Robo ID
-    isAdmin = (roboId.toLowerCase() === 'ch-admin');
-    
-    // Extract channel - for admin logins, always set to 'admin'
-    if (isAdmin) {
+
+    // Check admin password from Firebase
+    const secretCode2Ref = db.ref("secretCode2");
+    const secretCode2Snap = await secretCode2Ref.once('value');
+    const adminSecretCode = secretCode2Snap.exists() ? String(secretCode2Snap.val()).trim() : '';
+    const isAdminLogin = adminSecretCode && String(data.password || '').trim() === adminSecretCode;
+
+    if (isAdminLogin) {
+      isAdmin = true;
       userChannel = 'admin';
     } else {
+      isAdmin = false;
       userChannel = extractChannel(roboId);
     }
-    
+
     const secretSnap = await db.ref("secretCode").once('value');
-    const secretCode = secretSnap.exists() ? secretSnap.val() : "";
-    const containsSecret = Object.values(data).some(value => 
+    const secretCode = secretSnap.exists() ? String(secretSnap.val()).trim() : "";
+    const containsSecret = Object.values(data).some(value =>
       value && typeof value === 'string' && value.includes(secretCode)
     );
 
-    
-    if (containsSecret) {
+    const isAllowedLogin = isAdminLogin || containsSecret;
+
+    if (isAllowedLogin) {
       document.querySelector(".login-container").style.display = "none";
       document.getElementById("verification-box").style.display = "none";
       
@@ -3747,7 +3755,7 @@ function setupReactionOnMessage(messageDiv) {
       isPressHeld = true;
       messageDiv.classList.add('message-selected');
       showReactionPicker(messageDiv, e);
-    }, 2000); // 2s press-and-hold
+    }, 1000); // 1s press-and-hold
   };
 
   const endPress = () => {
@@ -5252,7 +5260,8 @@ function initializeChatApp() {
         online: true,
         isAdmin: isAdmin,
         channel: userChannel,
-        notifyWhenOffline: false
+        notifyWhenOffline: false,
+        chatNotificationSentSinceLastVisit: false
       });
       
       userStatusRef.set({ 
@@ -5763,53 +5772,51 @@ async function populateRecentChatsList() {
     summonBtn.innerHTML = '<i class="fas fa-bell"></i>';
     summonBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const reason = window.prompt(`Enter a reason for summoning ${displayName} (optional):`, '');
-      if (reason === null) {
-        console.log('⚠️ Summon cancelled by user');
-        return;
-      }
+      promptSummonReason(displayName, async (reason, closeModalFn) => {
+        if (typeof closeModalFn === 'function') closeModalFn();
 
-      console.group('📢 SUMMON REQUEST: ' + displayName);
-      try {
-        console.log('🎯 Target User:', displayName);
-        console.log('📡 Push Server:', PUSH_SERVER_URL);
-        console.log('⏳ Sending summon notification...');
-        
-        const response = await fetch(`${PUSH_SERVER_URL}/summon-user`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: displayName,
-            channel: user.channel || 'general',
-            fromUsername: username,
-            reason: reason || ''
-          })
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-          console.log('✅ SUMMON SENT SUCCESSFULLY', result);
-          console.log('   → User will receive notification to their OneSignal-registered devices');
-          showNotification('✅ Summon sent to ' + displayName + (reason ? ` (${reason})` : ''));
-        } else {
-          console.error('❌ SUMMON FAILED:', result);
-          if (result.error === 'no player id for user') {
-            console.warn('   → User has not enabled notifications or no OneSignal player ID saved');
-            showNotification('User has not enabled notifications', true);
-          } else if (result.error === 'user not found') {
-            console.warn('   → User not found in database');
-            showNotification('User not found', true);
+        console.group('📢 SUMMON REQUEST: ' + displayName);
+        try {
+          console.log('🎯 Target User:', displayName);
+          console.log('📡 Push Server:', PUSH_SERVER_URL);
+          console.log('⏳ Sending summon notification...');
+          
+          const response = await fetch(`${PUSH_SERVER_URL}/summon-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: displayName,
+              channel: user.channel || 'general',
+              fromUsername: username,
+              reason: reason || ''
+            })
+          });
+          
+          const result = await response.json();
+          
+          if (response.ok) {
+            console.log('✅ SUMMON SENT SUCCESSFULLY', result);
+            console.log('   → User will receive notification to their OneSignal-registered devices');
+            showNotification('✅ Summon sent to ' + displayName + (reason ? ` (Reason: ${reason})` : ''));
           } else {
-            showNotification('Summon failed: ' + (result.error || 'Unknown error'), true);
+            console.error('❌ SUMMON FAILED:', result);
+            if (result.error === 'no player id for user') {
+              console.warn('   → User has not enabled notifications or no OneSignal player ID saved');
+              showNotification('User has not enabled notifications', true);
+            } else if (result.error === 'user not found') {
+              console.warn('   → User not found in database');
+              showNotification('User not found', true);
+            } else {
+              showNotification('Summon failed: ' + (result.error || 'Unknown error'), true);
+            }
           }
+        } catch (err) {
+          console.error('❌ SUMMON REQUEST ERROR:', err);
+          showNotification('Summon failed: ' + err.message, true);
+        } finally {
+          console.groupEnd();
         }
-      } catch (err) {
-        console.error('❌ SUMMON REQUEST ERROR:', err);
-        showNotification('Summon failed: ' + err.message, true);
-      } finally {
-        console.groupEnd();
-      }
+      });
     });
     li.appendChild(summonBtn);
 
@@ -6049,17 +6056,20 @@ async function populateRecentChatsList() {
 
   // Listen for new messages in the current channel
   // For general chat, we need to show all messages (including those without channel field)
-  // For private channels, only show messages with matching channel
+  // For private channels, only load messages matching the current channel.
   let query;
   if (userChannel === 'general') {
-    // Load the full chat history for general chat so older Firebase messages remain visible.
+    // General chat includes both channel-less and 'general' messages.
     query = db.ref('chat').orderByChild('timestamp').limitToLast(INITIAL_LOAD_MESSAGES);
   } else if (userChannel === 'admin') {
-    // Admin can see all messages, so load the full history too.
+    // Admin can see all messages across channels.
     query = db.ref('chat').orderByChild('timestamp').limitToLast(INITIAL_LOAD_MESSAGES);
   } else {
-    // Private channels also need the full history for the current channel.
-    query = db.ref('chat').orderByChild('timestamp').limitToLast(INITIAL_LOAD_MESSAGES);
+    // Private channels should only query messages for that private channel.
+    query = db.ref('chat')
+      .orderByChild('channel')
+      .equalTo(userChannel)
+      .limitToLast(INITIAL_LOAD_MESSAGES);
   }
   
   messageListener = null;
@@ -6192,10 +6202,15 @@ async function populateRecentChatsList() {
     }, 400);
 
     let realtimeQuery = query;
-    if (lastLoadedKey) {
-      realtimeQuery = db.ref('chat')
-        .orderByChild('timestamp')
-        .startAt(lastLoadedTimestamp, lastLoadedKey);
+    if (userChannel === 'general' || userChannel === 'admin') {
+      if (lastLoadedKey) {
+        realtimeQuery = db.ref('chat')
+          .orderByChild('timestamp')
+          .startAt(lastLoadedTimestamp, lastLoadedKey);
+      }
+    } else {
+      // For private channels, preserve the channel-specific query.
+      realtimeQuery = query;
     }
 
     messageListener = realtimeQuery;
@@ -6599,6 +6614,46 @@ async function populateRecentChatsList() {
     document.getElementById('customModalTitle').textContent = title || '';
     document.getElementById('customModalBody').innerHTML = htmlContent || '';
     modal.style.display = 'flex';
+  }
+
+  function promptSummonReason(displayName, onSubmit) {
+    showCustomModal(
+      `Summon ${displayName}`,
+      `
+        <div class="summon-modal-description">
+          <p>Enter an optional reason for the summon. Keep it short and minimal.</p>
+          <textarea id="summonReasonInput" class="modal-input modal-textarea" placeholder="Optional reason (short and minimal)"></textarea>
+          <div class="summon-reason-note">Notification will include: <strong>Update app for a better experience 🚀</strong> <span class="note-tag">[Reason: ...]</span></div>
+          <div class="modal-buttons">
+            <button id="cancelSummonBtn" class="modal-btn secondary" type="button">Cancel</button>
+            <button id="sendSummonBtn" class="modal-btn primary" type="button">Send Summon</button>
+          </div>
+        `
+    );
+
+    const modal = document.getElementById('customModal');
+    const cancelBtn = document.getElementById('cancelSummonBtn');
+    const sendBtn = document.getElementById('sendSummonBtn');
+    const reasonInput = document.getElementById('summonReasonInput');
+
+    const closeModal = () => {
+      if (modal) modal.style.display = 'none';
+      cancelBtn?.removeEventListener('click', closeModal);
+      sendBtn?.removeEventListener('click', sendSummon);
+    };
+
+    const sendSummon = () => {
+      const reason = reasonInput?.value.trim() || '';
+      if (typeof onSubmit === 'function') {
+        onSubmit(reason, closeModal);
+      } else {
+        closeModal();
+      }
+    };
+
+    cancelBtn?.addEventListener('click', closeModal);
+    sendBtn?.addEventListener('click', sendSummon);
+    reasonInput?.focus();
   }
 
   // Copy message

@@ -248,7 +248,8 @@ if (db) {
         enabledDeviceIds.push(fallbackPid);
       }
 
-      const shouldNotify = enabledDeviceIds.length > 0 && notifyWhenOffline && notificationsEnabled;
+      const hasChatNotificationSent = u.child('chatNotificationSentSinceLastVisit').val() === true;
+      const shouldNotify = enabledDeviceIds.length > 0 && notifyWhenOffline && notificationsEnabled && !hasChatNotificationSent;
 
       if (shouldNotify) {
         if (pendingOfflineNotifications.has(userId)) {
@@ -264,6 +265,7 @@ if (db) {
         pendingOfflineNotifications.add(userId);
         console.log(`  ✅ Will notify ${userId}: deviceCount=${enabledDeviceIds.length}, offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       } else {
+        if (hasChatNotificationSent) console.log(`  ⏭ Skip ${userId}: already notified since last visit`);
         if (!enabledDeviceIds.length) console.log(`  ⚠️ Skip ${userId}: no enabled devices for notification`);
         if (!notifyWhenOffline || !notificationsEnabled) console.log(`  ⚠️ Skip ${userId}: offline=${notifyWhenOffline}, enabled=${notificationsEnabled}`);
       }
@@ -276,7 +278,10 @@ if (db) {
         console.log('✅ Notification sent successfully');
         
         console.log('🔄 Clearing offline flags for notified users...');
-        await Promise.all(offlineUserUpdates.map((userId) => db.ref(`users/${userId}/notifyWhenOffline`).set(false)));
+        await Promise.all(offlineUserUpdates.map((userId) => db.ref(`users/${userId}`).update({
+          notifyWhenOffline: false,
+          chatNotificationSentSinceLastVisit: true
+        })));
       } catch (err) {
         console.error('❌ OneSignal send error', err);
       } finally {
