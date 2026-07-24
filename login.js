@@ -1628,8 +1628,8 @@ function showNotification(message, isError = false) {
 
 let appLoaderProgress = 0;
 let appLoaderAnimationTimer = null;
-let appLoaderAutoTimer = null;
-let appLoaderAutoTimeout = null;
+let appLoaderTargetPercent = 1;
+let appLoaderFinalizing = false;
 let startupMessageRenderIndex = 0;
 let startupMessageRenderTotal = 0;
 
@@ -1679,6 +1679,8 @@ function updateAppLoaderProgress(percent, label) {
   const fill = document.getElementById('appLoaderProgressFill');
   const text = document.getElementById('appLoaderProgressText');
   const target = Math.min(100, Math.max(0, Number(percent) || 0));
+  appLoaderTargetPercent = target < 100 ? Math.min(98, target) : 100;
+  appLoaderFinalizing = target >= 100;
 
   // Clear any previous animation
   if (appLoaderAnimationTimer) {
@@ -1686,48 +1688,33 @@ function updateAppLoaderProgress(percent, label) {
     appLoaderAnimationTimer = null;
   }
 
-  // Smoothly move appLoaderProgress toward target by 1% steps
-  appLoaderAnimationTimer = setInterval(() => {
-    if (appLoaderProgress < target) {
-      appLoaderProgress = Math.min(target, appLoaderProgress + 1);
-    } else if (appLoaderProgress > target) {
-      appLoaderProgress = Math.max(target, appLoaderProgress - 1);
-    } else {
-      // Reached explicit target — stop animation
-      clearInterval(appLoaderAnimationTimer);
-      appLoaderAnimationTimer = null;
+  const renderLoader = () => {
+    if (fill) fill.style.width = `${appLoaderProgress}%`;
+    if (text) text.textContent = label ? `${appLoaderProgress}% • ${label}` : `${appLoaderProgress}%`;
+  };
 
-      // After a short pause, slowly auto-increment a bit to keep the UI feeling alive
-      if (appLoaderAutoTimeout) {
-        clearTimeout(appLoaderAutoTimeout);
-        appLoaderAutoTimeout = null;
-      }
-      // Only start auto-increment if target is below 95
-      if (target < 95) {
-        const softCap = Math.min(95, target + 10);
-        appLoaderAutoTimeout = setTimeout(() => {
-          if (appLoaderAutoTimer) {
-            clearInterval(appLoaderAutoTimer);
-            appLoaderAutoTimer = null;
-          }
-          appLoaderAutoTimer = setInterval(() => {
-            if (appLoaderProgress < softCap) {
-              appLoaderProgress += 1;
-              if (fill) fill.style.width = `${appLoaderProgress}%`;
-              if (text) text.textContent = label ? `${appLoaderProgress}% • ${label}` : `${appLoaderProgress}%`;
-            } else {
-              clearInterval(appLoaderAutoTimer);
-              appLoaderAutoTimer = null;
-            }
-          }, 400); // slow 1% updates while waiting
-        }, 700); // wait 700ms before auto-incrementing
+  renderLoader();
+
+  appLoaderAnimationTimer = setInterval(() => {
+    if (appLoaderFinalizing) {
+      if (appLoaderProgress < 100) {
+        appLoaderProgress = Math.min(100, appLoaderProgress + 2);
+        renderLoader();
+      } else {
+        clearInterval(appLoaderAnimationTimer);
+        appLoaderAnimationTimer = null;
       }
       return;
     }
 
-    if (fill) fill.style.width = `${appLoaderProgress}%`;
-    if (text) text.textContent = label ? `${appLoaderProgress}% • ${label}` : `${appLoaderProgress}%`;
-  }, 12); // 12ms per 1% — smooth and fast
+    if (appLoaderProgress < appLoaderTargetPercent) {
+      appLoaderProgress = Math.min(appLoaderTargetPercent, appLoaderProgress + 2);
+    } else if (appLoaderProgress < 98) {
+      appLoaderProgress = Math.min(98, appLoaderProgress + 2);
+    }
+
+    renderLoader();
+  }, 35);
 }
 
 function hideAppLoader() {
@@ -1737,14 +1724,6 @@ function hideAppLoader() {
   if (appLoaderAnimationTimer) {
     clearInterval(appLoaderAnimationTimer);
     appLoaderAnimationTimer = null;
-  }
-  if (appLoaderAutoTimer) {
-    clearInterval(appLoaderAutoTimer);
-    appLoaderAutoTimer = null;
-  }
-  if (appLoaderAutoTimeout) {
-    clearTimeout(appLoaderAutoTimeout);
-    appLoaderAutoTimeout = null;
   }
   overlay.style.opacity = '0';
   overlay.style.pointerEvents = 'none';
