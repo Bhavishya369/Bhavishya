@@ -8838,5 +8838,3 @@ window.addEventListener("DOMContentLoaded", () => {
   localStorage.removeItem('page_reload_in_progress');
 });
 
-
-
