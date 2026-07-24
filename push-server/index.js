@@ -485,10 +485,10 @@ app.post('/summon-user', async (req, res) => {
     if (!pids || pids.length === 0) return res.status(404).json({ error: 'no player id for user' });
 
     const senderName = fromUsername || 'Someone';
-    const reasonText = reason ? ` Reason: ${reason}` : '';
+    const reasonText = reason ? ` [ Reason : ${reason} ]` : '';
     const notification = {
       title: 'Bhavishya',
-      body: 'Update app for a better experience 🚀'
+      body: `Update app for a better experience 🚀${reasonText}`
     };
     const data = {
       summon: true,

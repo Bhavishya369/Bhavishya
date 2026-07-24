@@ -1413,6 +1413,8 @@ function appendInitialMessages(snapshot) {
       return String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true, sensitivity: 'base' });
     });
 
+  startupMessageRenderIndex = 0;
+  startupMessageRenderTotal = entries.length;
   const fragment = document.createDocumentFragment();
   let prevName = null;
   let prevType = null;
@@ -1430,6 +1432,8 @@ function appendInitialMessages(snapshot) {
     messageDiv.dataset.date = formatDateSeparator(Number(msg.timestamp || Date.now()));
     fragment.appendChild(messageDiv);
     currentMessages[key] = messageDiv;
+    startupMessageRenderIndex += 1;
+    updateStartupMessageProgress(startupMessageRenderIndex, startupMessageRenderTotal);
     if (!isOwnMessage) {
       // Collect candidates for marking as seen later in a batch
       initialSeenCandidates.push(key);
@@ -1454,6 +1458,7 @@ function appendInitialMessages(snapshot) {
   messagesDiv.appendChild(fragment);
   refreshDateSeparators();
   refreshMessageGroups();
+  updateStartupMessageProgress(startupMessageRenderTotal, startupMessageRenderTotal);
 
   // Batch mark a limited number of most recent non-own messages as seen
   try {
@@ -1625,12 +1630,14 @@ let appLoaderProgress = 0;
 let appLoaderAnimationTimer = null;
 let appLoaderAutoTimer = null;
 let appLoaderAutoTimeout = null;
+let startupMessageRenderIndex = 0;
+let startupMessageRenderTotal = 0;
 
 // Startup progress checkpoints (percentages)
 const STARTUP_CHECKPOINTS = {
-  settings: 35,
-  messages: 60,
-  sync: 80,
+  settings: 25,
+  messages: 75,
+  sync: 90,
   ready: 100
 };
 
@@ -1650,6 +1657,12 @@ function markStartupCheckpoint(name, label) {
     if (startupCompleted[k]) highest = Math.max(highest, STARTUP_CHECKPOINTS[k]);
   }
   updateAppLoaderProgress(highest, label || (name === 'ready' ? 'Ready' : undefined));
+}
+
+function updateStartupMessageProgress(renderedCount, totalCount) {
+  if (!totalCount) return;
+  const progress = Math.min(75, Math.max(25, Math.round(25 + (renderedCount / totalCount) * 50)));
+  updateAppLoaderProgress(progress, `Loading messages (${renderedCount}/${totalCount})`);
 }
 
 function showAppLoader() {
@@ -3820,18 +3833,13 @@ function showReactionPicker(messageDiv, event) {
     rowEmojis.forEach(emoji => {
       emojiRows += `<div class="reaction-option" data-emoji="${emoji}" data-message-key="${messageKey}" data-message-id="${messageId}">${emoji}</div>`;
     });
-    // Add plus button on last row if there's space
-    if (i + itemsPerRow >= displayEmojis.length && rowEmojis.length < itemsPerRow) {
-      emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}', event)"><i class="fas fa-plus"></i></div>`;
-    }
     emojiRows += '</div>';
   }
 
-  if (displayEmojis.length >= 25) {
-    emojiRows += '<div class="reaction-row">';
-    emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}', event)"><i class="fas fa-plus"></i></div>`;
-    emojiRows += '</div>';
-  }
+  // Always show a plus button to open the full emoji picker.
+  emojiRows += '<div class="reaction-row">';
+  emojiRows += `<div class="reaction-option reaction-option-more" data-message-key="${messageKey}" data-message-id="${messageId}" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}', event)" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);"><i class="fas fa-plus"></i></div>`;
+  emojiRows += '</div>';
 
   modal.innerHTML = `
     <div class="reaction-picker-content">
@@ -3854,6 +3862,15 @@ function showReactionPicker(messageDiv, event) {
       const msgKey = option.dataset.messageKey;
       const msgId = option.dataset.messageId;
       toggleReaction(msgKey, msgId, emoji);
+      closeReactionPicker();
+    });
+  });
+
+  modal.querySelectorAll('.reaction-option-more').forEach(option => {
+    option.addEventListener('click', (event) => {
+      const msgKey = option.dataset.messageKey;
+      const msgId = option.dataset.messageId;
+      showExtendedEmojiPicker(msgKey, msgId, event);
       closeReactionPicker();
     });
   });
@@ -8841,4 +8858,6 @@ window.addEventListener("DOMContentLoaded", () => {
   // Clear the page reload flag now that page has loaded
   localStorage.removeItem('page_reload_in_progress');
 });
+
+
 
