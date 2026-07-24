@@ -49,6 +49,8 @@ let currentMessages = {};
 let isAdmin = false;
 
 const MAX_CHAT_MESSAGES = 200;
+// Number of messages to load initially for faster startup
+const INITIAL_LOAD_MESSAGES = 60;
 const profileImageCache = new Map();
 
 // URL of your push server (Render, Heroku, etc.).
@@ -100,6 +102,7 @@ let emojiMode = 'Emoji';
 let activeEmojiGroup = 'Smileys & Emotion';
 let emojiData = [];
 let emojiSearchTimeout = null;
+let reactionTarget = null;
 let giphyCurrentQuery = '';
 let giphyOffset = 0;
 let giphyIsLoading = false;
@@ -489,22 +492,38 @@ async function subscribeOneSignal() {
     }
 
     const OneSignal = await setupOneSignal();
-    const enabled = OneSignal?.User?.PushSubscription?.optedIn || false;
-    if (!enabled) {
-      if (Notification.permission === 'default') {
-        if (notificationPromptInProgress) return;
-        notificationPromptInProgress = true;
-        try {
+    if (!OneSignal) {
+      showNotification('OneSignal is not initialized', true);
+      return;
+    }
+
+    if (notificationPromptInProgress) {
+      console.log('⏳ OneSignal prompt already in progress');
+    } else {
+      notificationPromptInProgress = true;
+      try {
+        if (typeof OneSignal.Notifications?.showNativePrompt === 'function') {
+          await OneSignal.Notifications.showNativePrompt();
+        } else if (typeof OneSignal.Notifications?.requestPermission === 'function') {
           await OneSignal.Notifications.requestPermission();
-        } catch (err) {
-          console.warn('OneSignal showNativePrompt failed', err);
-        } finally {
-          notificationPromptInProgress = false;
+        } else if (Notification.permission === 'default') {
+          await Notification.requestPermission();
         }
+      } catch (err) {
+        console.warn('OneSignal notification prompt failed', err);
+        if (Notification.permission === 'default') {
+          try {
+            await Notification.requestPermission();
+          } catch (innerErr) {
+            console.warn('Fallback browser notification request failed', innerErr);
+          }
+        }
+      } finally {
+        notificationPromptInProgress = false;
       }
     }
 
-    const playerId = OneSignal?.User?.PushSubscription?.id;
+    const playerId = OneSignal?.User?.PushSubscription?.id || (typeof OneSignal.getUserId === 'function' ? await OneSignal.getUserId() : null);
     if (playerId) {
       await saveOneSignalPlayerId(playerId);
       showNotification('OneSignal subscribed successfully');
@@ -1188,7 +1207,7 @@ function createChatMessageElement(msg, key, showAvatar, profileImage, renderedTi
   
   const channelIndicator = isAdmin && userChannel === 'admin' && msg.channel && msg.channel !== 'general' ? 
     `<div style="font-size: 10px; opacity: 0.7; margin-bottom: 2px;">CH-${msg.channel}</div>` : '';
-  const editedText = msg.edited ? ' (edited)' : '';
+  const editedText = '';
   let replyHtml = '';
   if (msg.replyTo) {
     replyHtml = `
@@ -1316,7 +1335,9 @@ function createChatMessageElement(msg, key, showAvatar, profileImage, renderedTi
       </div>
     </div>
     <div class="message__content"></div>
-    <span class="message__time">${renderedTime}</span>
+    <div class="message__metadata-row">
+      <span class="message__time">${renderedTime}</span>
+    </div>
     ${linkPreviewHtml}
     ${voiceHtml}
     ${fileHtml}
@@ -1344,7 +1365,18 @@ function createChatMessageElement(msg, key, showAvatar, profileImage, renderedTi
 
   const contentDiv = messageDiv.querySelector('.message__content');
   const messageText = msg.text || '';
-  contentDiv.textContent = messageText + editedText;
+  contentDiv.textContent = messageText;
+  
+  // Add edited badge if message was edited
+  if (msg.edited) {
+    const editedBadge = document.createElement('span');
+    editedBadge.className = 'message__edited-badge';
+    editedBadge.textContent = 'edited';
+    const metadataRow = messageDiv.querySelector('.message__metadata-row');
+    if (metadataRow) {
+      metadataRow.insertAdjacentElement('beforeend', editedBadge);
+    }
+  }
   if (msg.replyTo) {
     const replyTextDiv = messageDiv.querySelector('.reply-text');
     if (replyTextDiv) {
@@ -1364,6 +1396,7 @@ function createChatMessageElement(msg, key, showAvatar, profileImage, renderedTi
 
 function appendInitialMessages(snapshot) {
   if (!messagesDiv) return;
+  const initialSeenCandidates = [];
   const allMessages = snapshot.val() || {};
   const entries = Object.entries(allMessages)
     .filter(([key, msg]) => {
@@ -1402,6 +1435,10 @@ function appendInitialMessages(snapshot) {
     messageDiv.dataset.date = formatDateSeparator(Number(msg.timestamp || Date.now()));
     fragment.appendChild(messageDiv);
     currentMessages[key] = messageDiv;
+    if (!isOwnMessage) {
+      // Collect candidates for marking as seen later in a batch
+      initialSeenCandidates.push(key);
+    }
     if (!profileImageCache.has(msg.name) && msg.name) {
       getUserProfileImage(msg.name).then((imageUrl) => {
         if (!imageUrl) return;
@@ -1422,6 +1459,27 @@ function appendInitialMessages(snapshot) {
   messagesDiv.appendChild(fragment);
   refreshDateSeparators();
   refreshMessageGroups();
+
+  // Batch mark a limited number of most recent non-own messages as seen
+  try {
+    const toMark = initialSeenCandidates.slice(-20); // mark last 20
+    if (toMark.length > 0) {
+      const updates = {};
+      const safeKey = getFirebaseSafeUserKey(username);
+      const now = Date.now();
+      toMark.forEach(k => {
+        if (!seenMessagesMarked.has(k)) {
+          seenMessagesMarked.add(k);
+          updates[`chat/${k}/seenBy/${safeKey}`] = { name: username, seenAt: now };
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        db.ref().update(updates).catch(err => console.warn('Batch mark seen failed', err));
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to batch mark messages as seen', e);
+  }
 }
 
 function insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, refreshLayout = true) {
@@ -1566,6 +1624,125 @@ function showNotification(message, isError = false) {
   setTimeout(() => {
     notification.remove();
   }, 3000);
+}
+
+let appLoaderProgress = 0;
+let appLoaderAnimationTimer = null;
+let appLoaderAutoTimer = null;
+let appLoaderAutoTimeout = null;
+
+// Startup progress checkpoints (percentages)
+const STARTUP_CHECKPOINTS = {
+  settings: 35,
+  messages: 60,
+  sync: 80,
+  ready: 100
+};
+
+const startupCompleted = {
+  settings: false,
+  messages: false,
+  sync: false,
+  ready: false
+};
+
+function markStartupCheckpoint(name, label) {
+  if (!STARTUP_CHECKPOINTS[name]) return;
+  startupCompleted[name] = true;
+  // Determine highest completed percentage
+  let highest = 0;
+  for (const k of Object.keys(startupCompleted)) {
+    if (startupCompleted[k]) highest = Math.max(highest, STARTUP_CHECKPOINTS[k]);
+  }
+  updateAppLoaderProgress(highest, label || (name === 'ready' ? 'Ready' : undefined));
+}
+
+function showAppLoader() {
+  const overlay = document.getElementById('appLoaderOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  overlay.style.pointerEvents = 'auto';
+  overlay.style.opacity = '1';
+  // Start from 1% for a progressive feel
+  updateAppLoaderProgress(1, 'Starting messenger');
+}
+
+function updateAppLoaderProgress(percent, label) {
+  const fill = document.getElementById('appLoaderProgressFill');
+  const text = document.getElementById('appLoaderProgressText');
+  const target = Math.min(100, Math.max(0, Number(percent) || 0));
+
+  // Clear any previous animation
+  if (appLoaderAnimationTimer) {
+    clearInterval(appLoaderAnimationTimer);
+    appLoaderAnimationTimer = null;
+  }
+
+  // Smoothly move appLoaderProgress toward target by 1% steps
+  appLoaderAnimationTimer = setInterval(() => {
+    if (appLoaderProgress < target) {
+      appLoaderProgress = Math.min(target, appLoaderProgress + 1);
+    } else if (appLoaderProgress > target) {
+      appLoaderProgress = Math.max(target, appLoaderProgress - 1);
+    } else {
+      // Reached explicit target — stop animation
+      clearInterval(appLoaderAnimationTimer);
+      appLoaderAnimationTimer = null;
+
+      // After a short pause, slowly auto-increment a bit to keep the UI feeling alive
+      if (appLoaderAutoTimeout) {
+        clearTimeout(appLoaderAutoTimeout);
+        appLoaderAutoTimeout = null;
+      }
+      // Only start auto-increment if target is below 95
+      if (target < 95) {
+        const softCap = Math.min(95, target + 10);
+        appLoaderAutoTimeout = setTimeout(() => {
+          if (appLoaderAutoTimer) {
+            clearInterval(appLoaderAutoTimer);
+            appLoaderAutoTimer = null;
+          }
+          appLoaderAutoTimer = setInterval(() => {
+            if (appLoaderProgress < softCap) {
+              appLoaderProgress += 1;
+              if (fill) fill.style.width = `${appLoaderProgress}%`;
+              if (text) text.textContent = label ? `${appLoaderProgress}% • ${label}` : `${appLoaderProgress}%`;
+            } else {
+              clearInterval(appLoaderAutoTimer);
+              appLoaderAutoTimer = null;
+            }
+          }, 400); // slow 1% updates while waiting
+        }, 700); // wait 700ms before auto-incrementing
+      }
+      return;
+    }
+
+    if (fill) fill.style.width = `${appLoaderProgress}%`;
+    if (text) text.textContent = label ? `${appLoaderProgress}% • ${label}` : `${appLoaderProgress}%`;
+  }, 12); // 12ms per 1% — smooth and fast
+}
+
+function hideAppLoader() {
+  const overlay = document.getElementById('appLoaderOverlay');
+  if (!overlay) return;
+  // Stop any running animation
+  if (appLoaderAnimationTimer) {
+    clearInterval(appLoaderAnimationTimer);
+    appLoaderAnimationTimer = null;
+  }
+  if (appLoaderAutoTimer) {
+    clearInterval(appLoaderAutoTimer);
+    appLoaderAutoTimer = null;
+  }
+  if (appLoaderAutoTimeout) {
+    clearTimeout(appLoaderAutoTimeout);
+    appLoaderAutoTimeout = null;
+  }
+  overlay.style.opacity = '0';
+  overlay.style.pointerEvents = 'none';
+  setTimeout(() => {
+    overlay.style.display = 'none';
+  }, 300);
 }
 
 function getSiteNotificationPayload(metadata = {}) {
@@ -3476,9 +3653,9 @@ async function checkSecretAndProceed(data) {
       localStorage.setItem('user_channel', userChannel);
       localStorage.setItem('user_is_admin', isAdmin);
       
-      // Show the chat app
-      document.getElementById("chat-app").style.display = "flex";
+      // Show loader and initialize app; keep chat UI hidden until messages load completes
       markSessionValid(); // Mark login as valid session
+      showAppLoader();
       initializeChatApp();
     } else {
       document.getElementById("verification-box").style.display = "block";
@@ -3594,7 +3771,13 @@ function setupReactionOnMessage(messageDiv) {
 // Show reaction picker modal
 function showReactionPicker(messageDiv, event) {
   const messageKey = messageDiv.dataset.key;
-  const messageId = messageDiv.dataset.id;
+  let messageId = messageDiv.dataset.id;
+
+  // Generate ID if not present (for older messages)
+  if (!messageId && messageKey) {
+    messageId = `msg_${messageKey}`;
+    messageDiv.dataset.id = messageId;
+  }
 
   if (!messageKey || !messageId) return;
 
@@ -3608,10 +3791,17 @@ function showReactionPicker(messageDiv, event) {
   }
 
   const recent = getRecentReactions();
-  const mostUsedEmojis = recent.length > 0 ? recent.slice(0, 5) : basicReactions.slice(0, 5);
+  const preferredGroup = activeEmojiGroup || 'Smileys & Emotion';
+  const groupEmojis = (emojiData && emojiData.length > 0)
+    ? getEmojiDataForGroup(preferredGroup, '').slice(0, 20).map(item => item.char)
+    : basicReactions;
+  const fallbackEmojis = (emojiData && emojiData.length > 0 && groupEmojis.length === 0)
+    ? emojiData.slice(0, 20).map(item => item.char)
+    : groupEmojis;
+  const mostUsedEmojis = recent.length > 0 ? recent.slice(0, 5) : fallbackEmojis.slice(0, 5);
   
-  // Combine most-used with all basic reactions, avoiding duplicates
-  const displayEmojis = [...new Set([...mostUsedEmojis, ...basicReactions])].slice(0, 25);
+  // Combine most-used with group emojis from the emoji API, avoiding duplicates
+  const displayEmojis = [...new Set([...mostUsedEmojis, ...fallbackEmojis])].slice(0, 25);
   
   // Create rows (5 items per row)
   let emojiRows = '';
@@ -3624,15 +3814,14 @@ function showReactionPicker(messageDiv, event) {
     });
     // Add plus button on last row if there's space
     if (i + itemsPerRow >= displayEmojis.length && rowEmojis.length < itemsPerRow) {
-      emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}')"><i class="fas fa-plus"></i></div>`;
+      emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}', event)"><i class="fas fa-plus"></i></div>`;
     }
     emojiRows += '</div>';
   }
-  
-  // Add plus row if we have 25 emojis already
+
   if (displayEmojis.length >= 25) {
     emojiRows += '<div class="reaction-row">';
-    emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}')"><i class="fas fa-plus"></i></div>`;
+    emojiRows += `<div class="reaction-option" style="background: rgba(124, 58, 237, 0.15); border: 1px solid rgba(124, 58, 237, 0.3); color: var(--accent-color);" onclick="showExtendedEmojiPicker('${messageKey}', '${messageId}', event)"><i class="fas fa-plus"></i></div>`;
     emojiRows += '</div>';
   }
 
@@ -3673,92 +3862,43 @@ function showReactionPicker(messageDiv, event) {
 }
 
 // Show extended emoji picker
-function showExtendedEmojiPicker(messageKey, messageId) {
-  let modal = document.getElementById('extendedEmojiPickerModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'extendedEmojiPickerModal';
-    modal.className = 'reaction-picker-modal';
-    document.body.appendChild(modal);
+async function showExtendedEmojiPicker(messageKey, messageId, event) {
+  if (!messageKey || !messageId) return;
+
+  reactionTarget = { messageKey, messageId };
+  emojiMode = 'Emoji';
+
+  const emojiPicker = document.getElementById('emojiPicker');
+  const titleEl = document.getElementById('emojiPickerTitle');
+  const searchInput = document.getElementById('emojiSearchInput');
+
+  if (titleEl) {
+    titleEl.textContent = 'React to message';
   }
-
-  const commonEmojis = ['👍', '❤️', '😂', '😢', '😮', '🔥', '👏', '🙏', '👌', '💯', '🎉', '😍', '😭', '😡', '😜', '🤔', '👀', '💪', '🚀', '⭐', '😎', '🤝', '💝', '🎊', '😘', '😳', '😴', '😷', '🤒', '😤', '😈', '👿', '💀', '☠️'];
-
-  let emojiRows = '';
-  const itemsPerRow = 5;
-  
-  for (let i = 0; i < commonEmojis.length; i += itemsPerRow) {
-    const rowEmojis = commonEmojis.slice(i, i + itemsPerRow);
-    emojiRows += '<div class="reaction-row">';
-    rowEmojis.forEach(emoji => {
-      emojiRows += `<div class="reaction-option" data-emoji="${emoji}" data-message-key="${messageKey}" data-message-id="${messageId}">${emoji}</div>`;
-    });
-    emojiRows += '</div>';
-  }
-
-  modal.innerHTML = `
-    <div class="reaction-picker-content">
-      <div class="reaction-picker-header">
-        <div class="reaction-picker-title">More reactions</div>
-        <button class="reaction-picker-close" onclick="closeExtendedEmojiPicker()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <input type="text" class="reaction-search-input" id="emojiSearchInput" placeholder="Search emoji...">
-      <div class="reaction-picker-emojis">
-        ${emojiRows}
-      </div>
-    </div>
-  `;
-
-  modal.classList.add('show');
-
-  // Add click handlers for emoji options
-  modal.querySelectorAll('.reaction-option[data-emoji]').forEach(option => {
-    option.addEventListener('click', () => {
-      const emoji = option.dataset.emoji;
-      const msgKey = option.dataset.messageKey;
-      const msgId = option.dataset.messageId;
-      toggleReaction(msgKey, msgId, emoji);
-      closeExtendedEmojiPicker();
-    });
-  });
-
-  // Search functionality
-  const searchInput = modal.querySelector('#emojiSearchInput');
   if (searchInput) {
-    searchInput.addEventListener('input', (e) => {
-      const query = e.target.value.toLowerCase();
-      const options = modal.querySelectorAll('.reaction-option[data-emoji]');
-      options.forEach(option => {
-        const emoji = option.dataset.emoji;
-        // Simple emoji name matching
-        const emojiNames = {
-          '👍': 'thumbsup like good', '❤️': 'heart love red', '😂': 'laugh funny haha',
-          '😢': 'sad cry tear', '😮': 'shock surprised wow', '🔥': 'fire hot burn',
-          '👏': 'clap applause', '🙏': 'pray thanks', '👌': 'ok okay perfect',
-          '💯': 'hundred perfect', '🎉': 'party celebrate', '😍': 'love heart eyes',
-          '😭': 'cry sad tears', '😡': 'angry mad', '😜': 'tongue silly',
-          '🤔': 'thinking hmm', '👀': 'eyes look', '💪': 'muscle strong',
-          '🚀': 'rocket space', '⭐': 'star', '😎': 'cool sunglasses',
-          '🤝': 'handshake partner', '💝': 'gift present', '🎊': 'party',
-          '😘': 'kiss lips', '😳': 'embarrassed blush', '😴': 'sleep tired',
-          '😷': 'sick mask', '🤒': 'sick fever', '😤': 'frustrated annoyed',
-          '😈': 'evil devil', '👿': 'devil', '💀': 'skull dead',
-          '☠️': 'skull death'
-        };
-        const matches = (emojiNames[emoji] || emoji).includes(query);
-        option.style.display = matches || query === '' ? 'flex' : 'none';
-      });
-    });
+    searchInput.placeholder = 'Search emoji for reaction...';
+    searchInput.value = '';
   }
 
-  // Close on outside click
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeExtendedEmojiPicker();
-    }
+  document.querySelectorAll('.emoji-tab').forEach((tab) => {
+    const isEmojiTab = tab.dataset.category === 'Emoji';
+    tab.classList.toggle('active', isEmojiTab);
   });
+
+  if (emojiPicker) {
+    emojiPicker.classList.add('show');
+  }
+
+  renderEmojiPicker('');
+  closeReactionPicker();
+  event?.stopPropagation?.();
+}
+
+// Helper function to decode HTML entities
+function decodeHTML(html) {
+  const txt = document.createElement('textarea');
+  txt.innerHTML = html;
+  return txt.value;
 }
 
 function closeReactionPicker() {
@@ -3770,6 +3910,24 @@ function closeReactionPicker() {
   document.querySelectorAll('.message-selected').forEach(msg => {
     msg.classList.remove('message-selected');
   });
+}
+
+function closeEmojiPicker() {
+  const emojiPicker = document.getElementById('emojiPicker');
+  const titleEl = document.getElementById('emojiPickerTitle');
+  const searchInput = document.getElementById('emojiSearchInput');
+
+  if (emojiPicker) {
+    emojiPicker.classList.remove('show');
+  }
+  if (titleEl) {
+    titleEl.textContent = 'Emoji';
+  }
+  if (searchInput) {
+    searchInput.placeholder = 'Search emoji, GIFs, stickers...';
+    searchInput.value = '';
+  }
+  reactionTarget = null;
 }
 
 function closeExtendedEmojiPicker() {
@@ -4000,6 +4158,17 @@ function loadMessageReactions(messageKey) {
   }, 100);
 }
 
+// Get emoji data for a specific group - used by reaction picker
+function getEmojiDataForGroup(group, searchTerm) {
+  if (emojiData && emojiData.length > 0) {
+    const matches = emojiData.filter(item => item.group === group);
+    if (!searchTerm) return matches;
+    const query = searchTerm.toLowerCase();
+    return matches.filter(item => item.name.toLowerCase().includes(query) || item.char === searchTerm);
+  }
+  return [];
+}
+
 function initializeChatApp() {
   // DOM Elements for chat - get references FIRST before resetting
   const chatInput = document.getElementById('chatInput');
@@ -4049,6 +4218,7 @@ function initializeChatApp() {
   // Load cross-device settings from Firebase and setup sync listener
   // AFTER DOM is cleared, so new settings apply cleanly
   loadSettingsFromFirebase().then((settingsLoaded) => {
+    markStartupCheckpoint('settings', 'Loading settings');
     // If no settings found in Firebase, migrate existing localStorage settings
     if (!settingsLoaded) {
       migrateSettingsToFirebase();
@@ -4728,6 +4898,11 @@ function initializeChatApp() {
       }, 250);
     });
 
+    const emojiPicker = document.getElementById('emojiPicker');
+    if (emojiPicker && emojiPicker.parentElement !== document.body) {
+      document.body.appendChild(emojiPicker);
+    }
+
     renderEmojiPicker();
   }
 
@@ -4743,6 +4918,13 @@ function initializeChatApp() {
         emojiItem.textContent = char;
         emojiItem.title = name;
         emojiItem.addEventListener('click', () => {
+          if (reactionTarget) {
+            toggleReaction(reactionTarget.messageKey, reactionTarget.messageId, char);
+            reactionTarget = null;
+            closeEmojiPicker();
+            return;
+          }
+
           chatInput.value += char;
           chatInput.focus();
           autoResizeTextarea();
@@ -4750,6 +4932,12 @@ function initializeChatApp() {
         emojiGridEl.appendChild(emojiItem);
       });
     } else {
+      if (reactionTarget) {
+        emojiGridEl.innerHTML = '<div class="emoji-loading">Reaction mode supports only emoji.</div>';
+        removeEmojiLoadMoreButton();
+        return;
+      }
+
       giphyCurrentQuery = searchTerm;
       giphyOffset = 0;
       emojiGridEl.innerHTML = '<div class="emoji-loading">Loading...</div>';
@@ -4788,15 +4976,7 @@ function initializeChatApp() {
     }
   }
 
-  function getEmojiDataForGroup(group, searchTerm) {
-    if (emojiData && emojiData.length > 0) {
-      const matches = emojiData.filter(item => item.group === group);
-      if (!searchTerm) return matches;
-      const query = searchTerm.toLowerCase();
-      return matches.filter(item => item.name.toLowerCase().includes(query) || item.char === searchTerm);
-    }
-    return [];
-  }
+  window.renderEmojiPicker = renderEmojiPicker;
 
   function createEmojiLoadMoreButton() {
     let loadMore = document.getElementById('emojiLoadMoreButton');
@@ -5873,13 +6053,13 @@ async function populateRecentChatsList() {
   let query;
   if (userChannel === 'general') {
     // Load the full chat history for general chat so older Firebase messages remain visible.
-    query = db.ref('chat').orderByChild('timestamp');
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(INITIAL_LOAD_MESSAGES);
   } else if (userChannel === 'admin') {
     // Admin can see all messages, so load the full history too.
-    query = db.ref('chat').orderByChild('timestamp');
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(INITIAL_LOAD_MESSAGES);
   } else {
     // Private channels also need the full history for the current channel.
-    query = db.ref('chat').orderByChild('timestamp');
+    query = db.ref('chat').orderByChild('timestamp').limitToLast(INITIAL_LOAD_MESSAGES);
   }
   
   messageListener = null;
@@ -5966,6 +6146,12 @@ async function populateRecentChatsList() {
 
   query.once('value', (snapshot) => {
     appendInitialMessages(snapshot);
+    // Reveal chat UI once initial messages are rendered so loader accurately reflects readiness
+    try {
+      const chatAppEl = document.getElementById('chat-app');
+      if (chatAppEl) chatAppEl.style.display = 'flex';
+    } catch (e) {}
+    markStartupCheckpoint('messages', 'Loading messages');
 
     const allMessages = snapshot.val() || {};
     const filteredEntries = Object.entries(allMessages)
@@ -5995,7 +6181,15 @@ async function populateRecentChatsList() {
     initialLoadComplete = true;
     lastDateSeparator = '';
     scrollMessagesToBottom();
+    markStartupCheckpoint('sync', 'Syncing chat');
     loadRecentChats();
+    markStartupCheckpoint('ready', 'Ready');
+    setTimeout(hideAppLoader, 300);
+
+    // Load emoji library in background after initial UI is ready
+    setTimeout(() => {
+      loadEmojiData().then(() => renderEmojiPicker()).catch(() => {});
+    }, 400);
 
     let realtimeQuery = query;
     if (lastLoadedKey) {
@@ -6094,20 +6288,16 @@ async function populateRecentChatsList() {
   db.ref('chat').on('child_changed', (snapshot) => {
     const msg = snapshot.val();
     const key = snapshot.key;
-    const isExistingMessage = currentMessages[key] != null;
-    
-    if (!msg || isExistingMessage) return;
+    if (!msg) return;
     
     // Skip if message is not from current channel
     if (userChannel === 'general') {
-      // For general chat, show messages without channel or with channel='general'
       if (msg.channel && msg.channel !== 'general') {
         return;
       }
     } else if (userChannel === 'admin') {
       // Admin sees all messages
     } else {
-      // For private channels, only show messages from the same channel
       if (msg.channel !== userChannel) {
         return;
       }
@@ -6116,12 +6306,23 @@ async function populateRecentChatsList() {
     const messageDiv = document.querySelector(`[data-key="${key}"]`);
     if (messageDiv) {
       const contentDiv = messageDiv.querySelector('.message__content');
-      const editedText = msg.edited ? ' (edited)' : '';
-      contentDiv.textContent = msg.text + editedText;
-      
+      if (contentDiv) {
+        contentDiv.textContent = msg.text;
+      }
       const timeSpan = messageDiv.querySelector('.message__time');
       if (timeSpan) {
         timeSpan.textContent = msg.time;
+      }
+      // Handle edited badge
+      const existingEditedBadge = messageDiv.querySelector('.message__edited-badge');
+      const metadataRow = messageDiv.querySelector('.message__metadata-row');
+      if (msg.edited && !existingEditedBadge && metadataRow) {
+        const badge = document.createElement('span');
+        badge.className = 'message__edited-badge';
+        badge.textContent = 'edited';
+        metadataRow.insertAdjacentElement('beforeend', badge);
+      } else if (!msg.edited && existingEditedBadge) {
+        existingEditedBadge.remove();
       }
     }
   });
@@ -6162,6 +6363,24 @@ async function populateRecentChatsList() {
       db.ref(`chat/${key}`).update(updates)
         .then(() => {
           console.log('Message edited successfully');
+          const contentDiv = messageDiv.querySelector('.message__content');
+          const timeSpan = messageDiv.querySelector('.message__time');
+          if (contentDiv) {
+            contentDiv.textContent = newText;
+          }
+          if (timeSpan) {
+            timeSpan.textContent = updates.time;
+          }
+          // Add edited badge if not already present
+          const metadataRow = messageDiv.querySelector('.message__metadata-row');
+          let editedBadge = messageDiv.querySelector('.message__edited-badge');
+          if (!editedBadge && metadataRow) {
+            editedBadge = document.createElement('span');
+            editedBadge.className = 'message__edited-badge';
+            editedBadge.textContent = 'edited';
+            metadataRow.insertAdjacentElement('beforeend', editedBadge);
+          }
+          showNotification('Message updated');
         })
         .catch(error => {
           console.error('Error editing message:', error);
@@ -6417,6 +6636,13 @@ async function populateRecentChatsList() {
       const messageDiv = actionButton.closest('.message');
       if (actionButton.classList.contains('copy-btn')) {
         copyMessage(messageDiv);
+      } else if (actionButton.classList.contains('react-btn')) {
+        // Open reaction picker on click
+        try {
+          showReactionPicker(messageDiv, e);
+        } catch (err) {
+          console.error('Failed to open reaction picker:', err);
+        }
       } else if (actionButton.classList.contains('reply-btn')) {
         const key = messageDiv.dataset.key;
         replyToMessageFunc(key, messageDiv);
@@ -7485,11 +7711,7 @@ async function populateRecentChatsList() {
     menuCurrentDeviceNotificationToggle.addEventListener('change', async (e) => {
       const isEnabled = e.target.checked;
       if (isEnabled) {
-        if (Notification.permission === 'granted') {
-          await subscribeOneSignal();
-        } else if (Notification.permission === 'default') {
-          await requestNotificationPermissionIfNeeded();
-        }
+        await subscribeOneSignal();
       } else {
         await unsubscribeOneSignal();
       }
@@ -7810,11 +8032,7 @@ async function populateRecentChatsList() {
     currentDeviceNotificationToggle.addEventListener('change', async (e) => {
       const isEnabled = e.target.checked;
       if (isEnabled) {
-        if (Notification.permission === 'granted') {
-          await subscribeOneSignal();
-        } else if (Notification.permission === 'default') {
-          await requestNotificationPermissionIfNeeded();
-        }
+        await subscribeOneSignal();
       } else {
         await unsubscribeOneSignal();
       }
@@ -8332,9 +8550,7 @@ async function populateRecentChatsList() {
   // Initialize the app
   async function initApp() {
     initEmojiPicker();
-    loadEmojiData()
-      .then(() => renderEmojiPicker())
-      .catch(() => {});
+    // Defer loading the large emoji library until after chat UI is ready
     updateUserPresence(true);
     cleanRecentChatVisits();
     
@@ -8509,6 +8725,7 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("verification-box").style.display = "none";
     document.getElementById("chat-app").style.display = "flex";
     
+    showAppLoader();
     // Initialize chat app
     initializeChatApp();
     markSessionValid(); // Mark this restored session as valid
