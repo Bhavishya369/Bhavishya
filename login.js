@@ -49,8 +49,8 @@ let currentMessages = {};
 let isAdmin = false;
 
 const MAX_CHAT_MESSAGES = 200;
-// Number of messages to load initially for faster startup
-const INITIAL_LOAD_MESSAGES = 60;
+// Load the full available history for the current channel on startup
+const INITIAL_LOAD_MESSAGES = 2000;
 const profileImageCache = new Map();
 
 // URL of your push server (Render, Heroku, etc.).
