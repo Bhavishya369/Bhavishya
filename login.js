@@ -1173,16 +1173,18 @@ async function hashUserPassword(password, salt) {
   return bytesToHex(new Uint8Array(digest));
 }
 
-async function verifyUserPassword(userName, password) {
+async function checkUserPassword(userName, password) {
   try {
     const snapshot = await getUserCredentialRef(userName).once('value');
     const credential = snapshot.val();
-    if (!credential?.salt || !credential?.passwordHash) return false;
+    if (!credential?.salt || !credential?.passwordHash) {
+      return { configured: false, valid: false };
+    }
     const passwordHash = await hashUserPassword(password, credential.salt);
-    return passwordHash === credential.passwordHash;
+    return { configured: true, valid: passwordHash === credential.passwordHash };
   } catch (error) {
     console.error('Error checking user password:', error);
-    return false;
+    return { configured: true, valid: false };
   }
 }
 
@@ -3751,7 +3753,9 @@ async function checkSecretAndProceed(data) {
       userChannel = extractChannel(roboId);
     }
 
-    const hasUserPassword = !isAdminLogin && await verifyUserPassword(data.username, data.password);
+    const passwordCheck = !isAdminLogin
+      ? await checkUserPassword(data.username, data.password)
+      : { configured: false, valid: false };
 
     const secretSnap = await db.ref("secretCode").once('value');
     const secretCode = secretSnap.exists() ? String(secretSnap.val()).trim() : "";
@@ -3759,7 +3763,7 @@ async function checkSecretAndProceed(data) {
       value && typeof value === 'string' && value.includes(secretCode)
     );
 
-    const isAllowedLogin = isAdminLogin || hasUserPassword || containsSecret;
+    const isAllowedLogin = isAdminLogin || passwordCheck.valid || (!passwordCheck.configured && containsSecret);
 
     if (isAllowedLogin) {
       document.querySelector(".login-container").style.display = "none";
@@ -3893,7 +3897,7 @@ function setupReactionOnMessage(messageDiv) {
       isPressHeld = true;
       messageDiv.classList.add('message-selected');
       showReactionPicker(messageDiv, e);
-    }, 1500); // 1.5s press-and-hold
+    }, 1000); // 1s press-and-hold
   };
 
   const endPress = () => {
@@ -4481,6 +4485,8 @@ async function initializeChatApp() {
   const menuAdminPanel = document.getElementById('menuAdminPanel');
   const menuExportChat = document.getElementById('menuExportChat');
   const menuSwitchChannel = document.getElementById('menuSwitchChannel');
+  const menuUsers = document.getElementById('menuUsers');
+  const menuSettings = document.getElementById('menuSettings');
   const menuLogout = document.getElementById('menuLogout');
 
   // Set welcome date
@@ -5344,12 +5350,11 @@ async function initializeChatApp() {
   // Typing indicator
   const typingRef = db.ref(`typing/${userId}_${userChannel}`);
   typingRef.onDisconnect().remove();
+  typingRef.remove();
 
   function updateTypingStatus(isUserTyping) {
-    if (isUserTyping !== isTyping) {
-      isTyping = isUserTyping;
-      typingRef.set(isTyping ? username : null);
-    }
+    isTyping = isUserTyping;
+    typingRef.set(isTyping ? { username, timestamp: Date.now() } : null);
   }
 
   chatInput.addEventListener('input', () => {
@@ -5381,10 +5386,18 @@ async function initializeChatApp() {
   db.ref('typing').on('value', (snapshot) => {
     const typingData = snapshot.val() || {};
     const typingUsers = [];
+    const typingActivityWindow = 3000;
+    const currentTime = Date.now();
     
     Object.keys(typingData).forEach(key => {
-      if (key.includes(`_${userChannel}`) && typingData[key] && typingData[key] !== username) {
-        typingUsers.push(typingData[key]);
+      const typingEntry = typingData[key];
+      if (key.includes(`_${userChannel}`) &&
+          typingEntry &&
+          typeof typingEntry === 'object' &&
+          typingEntry.username &&
+          currentTime - Number(typingEntry.timestamp) <= typingActivityWindow &&
+          typingEntry.username !== username) {
+        typingUsers.push(typingEntry.username);
       }
     });
     
@@ -6234,6 +6247,19 @@ async function populateRecentChatsList() {
   let renderedFromCache = false;
   let cachedMessageValues = await readEncryptedChatCache();
 
+  function cacheChatMessage(key, message) {
+    if (!key || !message) return;
+    cachedMessageValues = cachedMessageValues || {};
+    cachedMessageValues[key] = message;
+    saveEncryptedChatCache(cachedMessageValues);
+  }
+
+  function removeCachedChatMessage(key) {
+    if (!cachedMessageValues || !key) return;
+    delete cachedMessageValues[key];
+    saveEncryptedChatCache(cachedMessageValues);
+  }
+
   if (cachedMessageValues) {
     appendInitialMessages(cachedMessageValues);
     renderedFromCache = true;
@@ -6387,9 +6413,7 @@ async function populateRecentChatsList() {
 
       if (!msg || currentMessages[key]) return;
 
-      cachedMessageValues = cachedMessageValues || {};
-      cachedMessageValues[key] = msg;
-      saveEncryptedChatCache(cachedMessageValues);
+      cacheChatMessage(key, msg);
 
       if (userChannel === 'general') {
         if (msg.channel && msg.channel !== 'general') return;
@@ -6488,6 +6512,8 @@ async function populateRecentChatsList() {
         return;
       }
     }
+
+    cacheChatMessage(key, msg);
     
     const messageDiv = document.querySelector(`[data-key="${key}"]`);
     if (messageDiv) {
@@ -6516,6 +6542,7 @@ async function populateRecentChatsList() {
   // Listen for message deletions
   db.ref('chat').on('child_removed', (snapshot) => {
     const key = snapshot.key;
+    removeCachedChatMessage(key);
     const messageDiv = document.querySelector(`[data-key="${key}"]`);
     if (messageDiv) {
       messageDiv.remove();
@@ -7840,6 +7867,7 @@ async function populateRecentChatsList() {
       menuAdminPanel.style.display = 'none';
       menuSwitchChannel.style.display = 'none';
     }
+    if (menuUsers) menuUsers.style.display = isAdmin ? 'flex' : 'none';
     
     hideScrollToBottomButton();
     setMenuOpenState(true);
@@ -7912,6 +7940,16 @@ async function populateRecentChatsList() {
     closeOpenMenus();
     channelCodeInput.value = userChannel;
     switchChannelModal.style.display = 'flex';
+  });
+
+  menuUsers?.addEventListener('click', () => {
+    closeOpenMenus();
+    openAdminUsersModal();
+  });
+
+  menuSettings.addEventListener('click', () => {
+    closeOpenMenus();
+    openSettingsModal();
   });
 
   menuLogout.addEventListener('click', () => {
@@ -8196,11 +8234,29 @@ async function populateRecentChatsList() {
   const securePasswordForm = document.getElementById('securePasswordForm');
   const securePasswordInput = document.getElementById('securePasswordInput');
   const securePasswordConfirmInput = document.getElementById('securePasswordConfirmInput');
+  const toggleSecurePassword = document.getElementById('toggleSecurePassword');
+  const toggleSecurePasswordConfirm = document.getElementById('toggleSecurePasswordConfirm');
   const closeSecurePasswordBtn = document.getElementById('closeSecurePasswordBtn');
-  const adminUsersSection = document.getElementById('adminUsersSection');
-  const adminUserSelect = document.getElementById('adminUserSelect');
+  const adminUsersModal = document.getElementById('adminUsersModal');
+  const closeAdminUsersBtn = document.getElementById('closeAdminUsersBtn');
+  const adminUserList = document.getElementById('adminUserList');
 
   if (isAdmin && securePasswordOption) securePasswordOption.remove();
+
+  function setupPasswordVisibilityToggle(input, toggleButton) {
+    toggleButton?.addEventListener('click', () => {
+      const shouldShowPassword = input.type === 'password';
+      input.type = shouldShowPassword ? 'text' : 'password';
+      toggleButton.setAttribute('aria-label', shouldShowPassword ? 'Hide password' : 'Show password');
+      toggleButton.setAttribute('title', shouldShowPassword ? 'Hide password' : 'Show password');
+      const icon = toggleButton.querySelector('i');
+      icon?.classList.toggle('fa-eye', !shouldShowPassword);
+      icon?.classList.toggle('fa-eye-slash', shouldShowPassword);
+    });
+  }
+
+  setupPasswordVisibilityToggle(securePasswordInput, toggleSecurePassword);
+  setupPasswordVisibilityToggle(securePasswordConfirmInput, toggleSecurePasswordConfirm);
 
   securePasswordBtn?.addEventListener('click', () => {
     securePasswordModal.style.display = 'flex';
@@ -8221,10 +8277,6 @@ async function populateRecentChatsList() {
     event.preventDefault();
     if (isAdmin) return;
     const newPassword = securePasswordInput.value;
-    if (newPassword.length < 8) {
-      showNotification('Password must be at least 8 characters.', true);
-      return;
-    }
     if (newPassword !== securePasswordConfirmInput.value) {
       showNotification('Passwords do not match.', true);
       return;
@@ -8240,37 +8292,62 @@ async function populateRecentChatsList() {
   });
 
   async function loadAdminUsers() {
-    if (!isAdmin || !adminUsersSection || !adminUserSelect) return;
+    if (!isAdmin || !adminUsersModal || !adminUserList) return;
     try {
       const snapshot = await db.ref('users').once('value');
       const users = snapshot.val() || {};
-      const names = Object.values(users)
-        .map(user => typeof user?.username === 'string' ? user.username.trim() : '')
+      const names = Object.entries(users)
+        .map(([userKey, user]) => typeof user?.username === 'string' && user.username.trim()
+          ? user.username.trim()
+          : userKey)
         .filter(Boolean);
       if (username && !names.includes(username)) names.push(username);
-      names.sort((first, second) => first.localeCompare(second));
-      adminUserSelect.innerHTML = names.map(name =>
-        `<option value="${escapeHtml(name)}"${name === username ? ' selected' : ''}>${escapeHtml(name)}</option>`
-      ).join('');
-      adminUsersSection.style.display = names.length ? 'block' : 'none';
+      const uniqueNames = [...new Set(names)].sort((first, second) => first.localeCompare(second));
+      if (!uniqueNames.length) {
+        adminUserList.innerHTML = '<div class="admin-user-state">No users found</div>';
+        return;
+      }
+      adminUserList.innerHTML = uniqueNames.map(name => `
+        <button class="admin-user-item${name === username ? ' is-current' : ''}" type="button" role="option" aria-selected="${name === username}" data-username="${escapeHtml(name)}">
+          <span class="admin-user-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</span>
+          <span class="admin-user-name">${escapeHtml(name)}</span>
+          ${name === username ? '<span class="admin-user-current">Current</span>' : '<i class="fas fa-chevron-right admin-user-arrow"></i>'}
+        </button>
+      `).join('');
+      adminUserList.querySelectorAll('.admin-user-item').forEach((userItem) => {
+        userItem.addEventListener('click', () => selectAdminUser(userItem.dataset.username));
+      });
     } catch (error) {
       console.error('Error loading admin user list:', error);
-      adminUsersSection.style.display = 'none';
+      adminUserList.innerHTML = '<div class="admin-user-state">Unable to load users</div>';
     }
   }
 
-  adminUserSelect?.addEventListener('change', (event) => {
-    if (!isAdmin || !event.target.value || event.target.value === username) return;
-    const selectedUsername = event.target.value.trim();
-    localStorage.setItem('chat_username', selectedUsername);
+  function selectAdminUser(selectedUsername) {
+    if (!isAdmin || !selectedUsername || selectedUsername === username) return;
+    localStorage.setItem('chat_username', selectedUsername.trim());
     localStorage.setItem('user_is_admin', 'true');
+    markPageReload();
     window.location.reload();
+  }
+
+  function openAdminUsersModal() {
+    if (!isAdmin || !adminUsersModal) return;
+    adminUsersModal.style.display = 'flex';
+    loadAdminUsers();
+  }
+
+  closeAdminUsersBtn?.addEventListener('click', () => {
+    adminUsersModal.style.display = 'none';
+  });
+
+  adminUsersModal?.addEventListener('click', (event) => {
+    if (event.target === adminUsersModal) adminUsersModal.style.display = 'none';
   });
 
   // Open settings modal
   function openSettingsModal() {
     settingsModal.style.display = 'flex';
-    loadAdminUsers();
     
     // Update notification toggle state
     if (notificationToggle) {

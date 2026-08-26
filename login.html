@@ -529,6 +529,14 @@
         <i class="fas fa-exchange-alt"></i>
         <span>Switch Channel</span>
       </div>
+      <div class="menu-item" id="menuUsers" style="display: none;">
+        <i class="fas fa-users"></i>
+        <span>Users</span>
+      </div>
+      <div class="menu-item" id="menuSettings">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+      </div>
       <div class="menu-item danger" id="menuLogout">
         <i class="fas fa-sign-out-alt"></i>
         <span>Logout</span>
@@ -731,17 +739,6 @@
             </div>
           </div>
 
-          <div class="settings-section" id="adminUsersSection" style="display: none;">
-            <div class="settings-section-title">Users</div>
-            <div class="settings-option">
-              <div class="settings-option-label">
-                <span>Login as user</span>
-                <p class="settings-option-desc">Select a username to open the messenger as that user. Admin access remains enabled.</p>
-              </div>
-              <select class="settings-select" id="adminUserSelect" aria-label="Select user"></select>
-            </div>
-          </div>
-
           <!-- Chat Background Section -->
           <div class="settings-section">
             <div class="settings-section-title">Chat Background</div>
@@ -792,16 +789,44 @@
           <div class="settings-section">
             <div class="settings-section-title">Account Password</div>
             <label for="securePasswordInput">New password</label>
-            <input class="settings-text-input" id="securePasswordInput" type="password" minlength="8" autocomplete="new-password" required>
+            <div class="settings-password-field">
+              <input class="settings-text-input" id="securePasswordInput" type="password" autocomplete="new-password" required>
+              <button class="password-visibility-btn" id="toggleSecurePassword" type="button" aria-label="Show password" title="Show password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
             <label for="securePasswordConfirmInput">Confirm password</label>
-            <input class="settings-text-input" id="securePasswordConfirmInput" type="password" minlength="8" autocomplete="new-password" required>
-            <p class="settings-option-desc">This does not change the admin login password.</p>
+            <div class="settings-password-field">
+              <input class="settings-text-input" id="securePasswordConfirmInput" type="password" autocomplete="new-password" required>
+              <button class="password-visibility-btn" id="toggleSecurePasswordConfirm" type="button" aria-label="Show password" title="Show password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
           </div>
           <div class="modal-buttons">
             <button class="modal-btn secondary" id="closeSecurePasswordBtn" type="button">Cancel</button>
             <button class="modal-btn primary" type="submit">Save Password</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="adminUsersModal">
+      <div class="modal settings-modal admin-users-modal">
+        <div class="modal-header">Users</div>
+        <div class="modal-body settings-body admin-users-body">
+          <div class="admin-users-intro">
+            <div class="settings-section-title">Messenger Users</div>
+            <p class="settings-option-desc">Select a user to open the messenger as that user.</p>
+          </div>
+          <div class="admin-user-list-label">Select user</div>
+          <div class="admin-user-list" id="adminUserList" role="listbox" aria-label="Select user">
+            <div class="admin-user-state">Loading users...</div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeAdminUsersBtn" type="button">Close</button>
+        </div>
       </div>
     </div>
 
