@@ -52,6 +52,107 @@ const MAX_CHAT_MESSAGES = 200;
 // Load the full available history for the current channel on startup
 const INITIAL_LOAD_MESSAGES = 2000;
 const profileImageCache = new Map();
+const CHAT_CACHE_PREFIX = 'bhavishya_chat_cache_v1';
+let chatCacheKey = null;
+let chatCacheWriteQueue = Promise.resolve();
+
+function getChatCacheStorageKey() {
+  return `${CHAT_CACHE_PREFIX}:${encodeURIComponent(username)}:${encodeURIComponent(userChannel)}`;
+}
+
+function getChatCacheSessionKey() {
+  return `${CHAT_CACHE_PREFIX}:session:${encodeURIComponent(username)}`;
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function deriveChatCacheKey(password) {
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: new TextEncoder().encode(`bhavishya-chat-cache:${username}`),
+      iterations: 120000,
+      hash: 'SHA-256'
+    },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function prepareChatCacheKey(password) {
+  if (!password || !window.crypto?.subtle) return;
+  chatCacheKey = await deriveChatCacheKey(password);
+  const rawKey = await crypto.subtle.exportKey('raw', chatCacheKey);
+  sessionStorage.setItem(getChatCacheSessionKey(), bytesToBase64(new Uint8Array(rawKey)));
+}
+
+async function restoreChatCacheKey() {
+  if (chatCacheKey || !window.crypto?.subtle || !username) return;
+  try {
+    const encodedKey = sessionStorage.getItem(getChatCacheSessionKey());
+    if (encodedKey) {
+      chatCacheKey = await crypto.subtle.importKey('raw', base64ToBytes(encodedKey), { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+    }
+  } catch (error) {
+    chatCacheKey = null;
+    sessionStorage.removeItem(getChatCacheSessionKey());
+  }
+}
+
+async function readEncryptedChatCache() {
+  await restoreChatCacheKey();
+  if (!chatCacheKey) return null;
+  try {
+    const stored = localStorage.getItem(getChatCacheStorageKey());
+    if (!stored) return null;
+    const payload = JSON.parse(stored);
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes(payload.iv) },
+      chatCacheKey,
+      base64ToBytes(payload.data)
+    );
+    return JSON.parse(new TextDecoder().decode(plaintext)).messages || null;
+  } catch (error) {
+    console.warn('Encrypted chat cache unavailable; loading from Firebase.', error);
+    return null;
+  }
+}
+
+function saveEncryptedChatCache(messages) {
+  if (!chatCacheKey || !messages) return;
+  chatCacheWriteQueue = chatCacheWriteQueue.then(async () => {
+    try {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const plaintext = new TextEncoder().encode(JSON.stringify({ version: 1, messages }));
+      const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chatCacheKey, plaintext);
+      localStorage.setItem(getChatCacheStorageKey(), JSON.stringify({
+        version: 1,
+        iv: bytesToBase64(iv),
+        data: bytesToBase64(new Uint8Array(encrypted))
+      }));
+    } catch (error) {
+      console.warn('Unable to save encrypted chat cache.', error);
+    }
+  }).catch(() => {});
+}
 
 // URL of your push server (Render, Heroku, etc.).
 // Use the deployed push server URL or override it by setting window.PUSH_SERVER_URL before login.js loads.
@@ -1392,7 +1493,7 @@ function createChatMessageElement(msg, key, showAvatar, profileImage, renderedTi
 function appendInitialMessages(snapshot) {
   if (!messagesDiv) return;
   const initialSeenCandidates = [];
-  const allMessages = snapshot.val() || {};
+  const allMessages = typeof snapshot?.val === 'function' ? snapshot.val() || {} : snapshot || {};
   const entries = Object.entries(allMessages)
     .filter(([key, msg]) => {
       if (!msg) return false;
@@ -3648,6 +3749,12 @@ async function checkSecretAndProceed(data) {
         userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         localStorage.setItem(`chat_userId_${username}`, userId);
       }
+
+      try {
+        await prepareChatCacheKey(data.password || '');
+      } catch (error) {
+        console.warn('Encrypted chat cache key could not be prepared.', error);
+      }
       
       // Store user channel and admin status for session persistence
       localStorage.setItem('user_channel', userChannel);
@@ -4173,7 +4280,7 @@ function getEmojiDataForGroup(group, searchTerm) {
   return [];
 }
 
-function initializeChatApp() {
+async function initializeChatApp() {
   // DOM Elements for chat - get references FIRST before resetting
   const chatInput = document.getElementById('chatInput');
   const sendBtn = document.getElementById('sendBtn');
@@ -6076,6 +6183,15 @@ async function populateRecentChatsList() {
   let lastLoadedKey = null;
   let initialMessagesAdded = 0;
   let recentChatsRefreshTimer = null;
+  let renderedFromCache = false;
+  let cachedMessageValues = await readEncryptedChatCache();
+
+  if (cachedMessageValues) {
+    appendInitialMessages(cachedMessageValues);
+    renderedFromCache = true;
+    const cachedChatApp = document.getElementById('chat-app');
+    if (cachedChatApp) cachedChatApp.style.display = 'flex';
+  }
 
   function setMenuOpenState(enabled) {
     if (enabled) {
@@ -6151,7 +6267,14 @@ async function populateRecentChatsList() {
   }
 
   query.once('value', (snapshot) => {
+    if (renderedFromCache && messagesDiv) {
+      messagesDiv.querySelectorAll('.message:not(.welcome), .date-separator').forEach((element) => element.remove());
+      currentMessages = {};
+      lastDateSeparator = '';
+    }
     appendInitialMessages(snapshot);
+    cachedMessageValues = snapshot.val() || {};
+    saveEncryptedChatCache(cachedMessageValues);
     // Reveal chat UI once initial messages are rendered so loader accurately reflects readiness
     try {
       const chatAppEl = document.getElementById('chat-app');
@@ -6215,6 +6338,10 @@ async function populateRecentChatsList() {
       const key = snapshot.key;
 
       if (!msg || currentMessages[key]) return;
+
+      cachedMessageValues = cachedMessageValues || {};
+      cachedMessageValues[key] = msg;
+      saveEncryptedChatCache(cachedMessageValues);
 
       if (userChannel === 'general') {
         if (msg.channel && msg.channel !== 'general') return;
@@ -8556,6 +8683,9 @@ async function populateRecentChatsList() {
       messageListener.off();
       messageListener = null;
     }
+
+    sessionStorage.removeItem(getChatCacheSessionKey());
+    chatCacheKey = null;
 
     // Clear session when going back to login
     localStorage.removeItem('chat_username');
