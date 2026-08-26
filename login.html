@@ -717,6 +717,20 @@
             </div>
           </div>
 
+          <div class="settings-section">
+            <div class="settings-section-title">Security</div>
+            <div class="settings-option" id="securePasswordOption">
+              <div class="settings-option-label">
+                <span>Add Secure Password</span>
+                <p class="settings-option-desc">Set a password for your account in general chat and channels.</p>
+              </div>
+              <button class="settings-btn" id="securePasswordBtn" type="button">
+                <i class="fas fa-lock"></i>
+                <span>Change</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Chat Background Section -->
           <div class="settings-section">
             <div class="settings-section-title">Chat Background</div>
@@ -757,6 +771,26 @@
         <div class="modal-buttons">
           <button class="modal-btn primary" id="closeSettingsBtn">Close</button>
         </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="securePasswordModal">
+      <div class="modal settings-modal">
+        <div class="modal-header">Add Secure Password</div>
+        <form class="modal-body settings-body" id="securePasswordForm">
+          <div class="settings-section">
+            <div class="settings-section-title">Account Password</div>
+            <label for="securePasswordInput">New password</label>
+            <input class="settings-text-input" id="securePasswordInput" type="password" minlength="8" autocomplete="new-password" required>
+            <label for="securePasswordConfirmInput">Confirm password</label>
+            <input class="settings-text-input" id="securePasswordConfirmInput" type="password" minlength="8" autocomplete="new-password" required>
+            <p class="settings-option-desc">This does not change the admin login password.</p>
+          </div>
+          <div class="modal-buttons">
+            <button class="modal-btn secondary" id="closeSecurePasswordBtn" type="button">Cancel</button>
+            <button class="modal-btn primary" type="submit">Save Password</button>
+          </div>
+        </form>
       </div>
     </div>
 

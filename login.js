@@ -1159,6 +1159,43 @@ function extractChannel(roboId) {
   return 'general'; // Default to general chat
 }
 
+function getUserCredentialRef(userName) {
+  return db.ref(`users/${getFirebaseSafeUserKey(userName)}/loginCredential`);
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function hashUserPassword(password, salt) {
+  const input = new TextEncoder().encode(`${salt}:${password}`);
+  const digest = await crypto.subtle.digest('SHA-256', input);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+async function verifyUserPassword(userName, password) {
+  try {
+    const snapshot = await getUserCredentialRef(userName).once('value');
+    const credential = snapshot.val();
+    if (!credential?.salt || !credential?.passwordHash) return false;
+    const passwordHash = await hashUserPassword(password, credential.salt);
+    return passwordHash === credential.passwordHash;
+  } catch (error) {
+    console.error('Error checking user password:', error);
+    return false;
+  }
+}
+
+async function saveUserPassword(password) {
+  const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const passwordHash = await hashUserPassword(password, salt);
+  await getUserCredentialRef(username).set({
+    salt,
+    passwordHash,
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
 // Date formatting function (like WhatsApp)
 function formatDateSeparator(timestamp) {
   const messageDate = new Date(Number(timestamp) || Date.now());
@@ -3714,13 +3751,15 @@ async function checkSecretAndProceed(data) {
       userChannel = extractChannel(roboId);
     }
 
+    const hasUserPassword = !isAdminLogin && await verifyUserPassword(data.username, data.password);
+
     const secretSnap = await db.ref("secretCode").once('value');
     const secretCode = secretSnap.exists() ? String(secretSnap.val()).trim() : "";
     const containsSecret = Object.values(data).some(value =>
       value && typeof value === 'string' && value.includes(secretCode)
     );
 
-    const isAllowedLogin = isAdminLogin || containsSecret;
+    const isAllowedLogin = isAdminLogin || hasUserPassword || containsSecret;
 
     if (isAllowedLogin) {
       document.querySelector(".login-container").style.display = "none";
@@ -3854,7 +3893,7 @@ function setupReactionOnMessage(messageDiv) {
       isPressHeld = true;
       messageDiv.classList.add('message-selected');
       showReactionPicker(messageDiv, e);
-    }, 1000); // 1s press-and-hold
+    }, 1500); // 1.5s press-and-hold
   };
 
   const endPress = () => {
@@ -5303,10 +5342,13 @@ async function initializeChatApp() {
   sendRecordingBtn.addEventListener('click', sendVoiceRecording);
 
   // Typing indicator
+  const typingRef = db.ref(`typing/${userId}_${userChannel}`);
+  typingRef.onDisconnect().remove();
+
   function updateTypingStatus(isUserTyping) {
     if (isUserTyping !== isTyping) {
       isTyping = isUserTyping;
-      db.ref(`typing/${userId}_${userChannel}`).set(isTyping ? username : null);
+      typingRef.set(isTyping ? username : null);
     }
   }
 
@@ -5317,6 +5359,11 @@ async function initializeChatApp() {
     typingTimeout = setTimeout(() => {
       updateTypingStatus(false);
     }, 1500);
+  });
+
+  chatInput.addEventListener('blur', () => updateTypingStatus(false));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) updateTypingStatus(false);
   });
 
   // Listen for reactions changes in real-time
@@ -6076,6 +6123,7 @@ async function populateRecentChatsList() {
   // Send message
   async function sendMessage() {
     if (isSending) return;
+    updateTypingStatus(false);
     isSending = true;
     
     let text = chatInput.value.trim();
@@ -8142,6 +8190,52 @@ async function populateRecentChatsList() {
   const uploadProfileBtn = document.getElementById('uploadProfileBtn');
   const profileUploadInput = document.getElementById('profileUploadInput');
   const backgroundGrid = document.getElementById('backgroundGrid');
+  const securePasswordOption = document.getElementById('securePasswordOption');
+  const securePasswordBtn = document.getElementById('securePasswordBtn');
+  const securePasswordModal = document.getElementById('securePasswordModal');
+  const securePasswordForm = document.getElementById('securePasswordForm');
+  const securePasswordInput = document.getElementById('securePasswordInput');
+  const securePasswordConfirmInput = document.getElementById('securePasswordConfirmInput');
+  const closeSecurePasswordBtn = document.getElementById('closeSecurePasswordBtn');
+
+  if (isAdmin && securePasswordOption) securePasswordOption.remove();
+
+  securePasswordBtn?.addEventListener('click', () => {
+    securePasswordModal.style.display = 'flex';
+    securePasswordInput.value = '';
+    securePasswordConfirmInput.value = '';
+    securePasswordInput.focus();
+  });
+
+  closeSecurePasswordBtn?.addEventListener('click', () => {
+    securePasswordModal.style.display = 'none';
+  });
+
+  securePasswordModal?.addEventListener('click', (event) => {
+    if (event.target === securePasswordModal) securePasswordModal.style.display = 'none';
+  });
+
+  securePasswordForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (isAdmin) return;
+    const newPassword = securePasswordInput.value;
+    if (newPassword.length < 8) {
+      showNotification('Password must be at least 8 characters.', true);
+      return;
+    }
+    if (newPassword !== securePasswordConfirmInput.value) {
+      showNotification('Passwords do not match.', true);
+      return;
+    }
+    try {
+      await saveUserPassword(newPassword);
+      securePasswordModal.style.display = 'none';
+      showNotification('Secure login password updated for general chat and channels.');
+    } catch (error) {
+      console.error('Error saving user password:', error);
+      showNotification('Could not update the secure password.', true);
+    }
+  });
 
   // Open settings modal
   function openSettingsModal() {

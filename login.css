@@ -2139,6 +2139,23 @@ body.menu-open .scroll-to-bottom-btn {
   gap: 3px;
 }
 
+.settings-text-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--search-input-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.settings-text-input:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
 .typing-dots span {
   width: 6px;
   height: 6px;
