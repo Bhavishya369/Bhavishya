@@ -2156,6 +2156,16 @@ body.menu-open .scroll-to-bottom-btn {
   outline-offset: 1px;
 }
 
+.settings-select {
+  max-width: 180px;
+  padding: 9px 30px 9px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--search-input-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+
 .typing-dots span {
   width: 6px;
   height: 6px;

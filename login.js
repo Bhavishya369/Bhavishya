@@ -8197,6 +8197,8 @@ async function populateRecentChatsList() {
   const securePasswordInput = document.getElementById('securePasswordInput');
   const securePasswordConfirmInput = document.getElementById('securePasswordConfirmInput');
   const closeSecurePasswordBtn = document.getElementById('closeSecurePasswordBtn');
+  const adminUsersSection = document.getElementById('adminUsersSection');
+  const adminUserSelect = document.getElementById('adminUserSelect');
 
   if (isAdmin && securePasswordOption) securePasswordOption.remove();
 
@@ -8237,9 +8239,38 @@ async function populateRecentChatsList() {
     }
   });
 
+  async function loadAdminUsers() {
+    if (!isAdmin || !adminUsersSection || !adminUserSelect) return;
+    try {
+      const snapshot = await db.ref('users').once('value');
+      const users = snapshot.val() || {};
+      const names = Object.values(users)
+        .map(user => typeof user?.username === 'string' ? user.username.trim() : '')
+        .filter(Boolean);
+      if (username && !names.includes(username)) names.push(username);
+      names.sort((first, second) => first.localeCompare(second));
+      adminUserSelect.innerHTML = names.map(name =>
+        `<option value="${escapeHtml(name)}"${name === username ? ' selected' : ''}>${escapeHtml(name)}</option>`
+      ).join('');
+      adminUsersSection.style.display = names.length ? 'block' : 'none';
+    } catch (error) {
+      console.error('Error loading admin user list:', error);
+      adminUsersSection.style.display = 'none';
+    }
+  }
+
+  adminUserSelect?.addEventListener('change', (event) => {
+    if (!isAdmin || !event.target.value || event.target.value === username) return;
+    const selectedUsername = event.target.value.trim();
+    localStorage.setItem('chat_username', selectedUsername);
+    localStorage.setItem('user_is_admin', 'true');
+    window.location.reload();
+  });
+
   // Open settings modal
   function openSettingsModal() {
     settingsModal.style.display = 'flex';
+    loadAdminUsers();
     
     // Update notification toggle state
     if (notificationToggle) {
