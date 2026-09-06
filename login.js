@@ -47,6 +47,11 @@ let recentChatUsers = {};
 const seenMessagesMarked = new Set();
 let currentMessages = {};
 let isAdmin = false;
+let activitySessionRef = null;
+let activitySessionId = '';
+let activityQueue = [];
+let activityFlushTimer = null;
+let activitySessionFinalized = false;
 
 const MAX_CHAT_MESSAGES = 200;
 // Load the full available history for the current channel on startup
@@ -1048,6 +1053,124 @@ function getFirebaseSafeUserKey(username) {
     .replace(/[#$\[\]]/g, '_')  // Replace invalid Firebase chars with _
     .replace(/\s+/g, '_')  // Replace spaces with _
     .substring(0, 100);  // Limit length
+}
+
+function getActivityTargetDetails(target) {
+  if (!target || !(target instanceof Element)) return {};
+  const text = (target.innerText || target.getAttribute('aria-label') || target.title || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 160);
+
+  return {
+    tag: target.tagName.toLowerCase(),
+    id: target.id || '',
+    classes: typeof target.className === 'string' ? target.className.substring(0, 160) : '',
+    text,
+    href: target instanceof HTMLAnchorElement ? target.href : '',
+    x: Math.round(target.getBoundingClientRect().left),
+    y: Math.round(target.getBoundingClientRect().top)
+  };
+}
+
+function queueActivity(type, details = {}) {
+  if (!activitySessionRef || activitySessionFinalized) return;
+  activityQueue.push({
+    type,
+    details,
+    clientTime: Date.now(),
+    timeReadable: new Date().toLocaleString(),
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+async function flushActivityQueue() {
+  if (!activitySessionRef || !activityQueue.length) return;
+  const queuedActivities = activityQueue.splice(0, activityQueue.length);
+  const updates = {};
+
+  queuedActivities.forEach((activity) => {
+    const activityKey = activitySessionRef.child('activities').push().key;
+    updates[`register/${getFirebaseSafeUserKey(username)}/${activitySessionId}/activities/${activityKey}`] = activity;
+  });
+
+  try {
+    await db.ref().update(updates);
+  } catch (error) {
+    activityQueue.unshift(...queuedActivities);
+    console.warn('Unable to save activity registration:', error);
+  }
+}
+
+function finalizeActivityRegistration() {
+  if (!activitySessionRef || activitySessionFinalized) return;
+  queueActivity('session_left', { page: window.location.href });
+  activitySessionFinalized = true;
+  clearInterval(activityFlushTimer);
+  flushActivityQueue();
+  activitySessionRef.update({
+    leftTime: firebase.database.ServerValue.TIMESTAMP,
+    leftTimeClient: Date.now(),
+    leftTimeReadable: new Date().toLocaleString(),
+    status: 'left'
+  }).catch(() => {});
+}
+
+function startActivityRegistration() {
+  if (!db || !username || activitySessionRef) return;
+
+  activitySessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  activitySessionRef = db.ref(`register/${getFirebaseSafeUserKey(username)}/${activitySessionId}`);
+  activitySessionFinalized = false;
+  const entryTimeClient = Date.now();
+
+  activitySessionRef.set({
+    username,
+    userId,
+    page: window.location.href,
+    entryTime: firebase.database.ServerValue.TIMESTAMP,
+    entryTimeClient,
+    entryTimeReadable: new Date(entryTimeClient).toLocaleString(),
+    leftTime: null,
+    status: 'active',
+    userAgent: navigator.userAgent.substring(0, 500),
+    viewport: { width: window.innerWidth, height: window.innerHeight }
+  }).catch((error) => console.warn('Unable to start activity registration:', error));
+
+  activitySessionRef.onDisconnect().update({
+    leftTime: firebase.database.ServerValue.TIMESTAMP,
+    leftTimeClient: Date.now(),
+    status: 'left'
+  }).catch(() => {});
+
+  document.addEventListener('click', (event) => {
+    queueActivity('click', getActivityTargetDetails(event.target));
+  }, true);
+
+  let lastScrollLog = 0;
+  window.addEventListener('scroll', () => {
+    const now = Date.now();
+    if (now - lastScrollLog < 250) return;
+    lastScrollLog = now;
+    const documentHeight = Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight || 0);
+    queueActivity('scroll', {
+      x: Math.round(window.scrollX),
+      y: Math.round(window.scrollY),
+      viewportHeight: window.innerHeight,
+      documentHeight,
+      percent: documentHeight > window.innerHeight
+        ? Math.round((window.scrollY / (documentHeight - window.innerHeight)) * 100)
+        : 0
+    });
+  }, { passive: true });
+
+  window.addEventListener('resize', () => {
+    queueActivity('resize', { width: window.innerWidth, height: window.innerHeight });
+  }, { passive: true });
+
+  activityFlushTimer = setInterval(flushActivityQueue, 2000);
+  queueActivity('session_started', { page: window.location.href });
+  flushActivityQueue();
 }
 
 // Diagnostic function to check notification and summon system status
@@ -4536,6 +4659,8 @@ async function initializeChatApp() {
       localStorage.setItem(`chat_userId_${username}`, userId);
     }
   }
+
+  startActivityRegistration();
 
   // Load settings from localStorage
   notificationsEnabled = localStorage.getItem('notifications_enabled') !== 'false';
@@ -8880,6 +9005,7 @@ async function populateRecentChatsList() {
 
   // Back to login function
   function backToLogin() {
+    finalizeActivityRegistration();
     updateUserPresence(false);
     if (messageListener) {
       messageListener.off();
@@ -8994,6 +9120,7 @@ window.addEventListener('beforeunload', () => {
   if (localStorage.getItem('page_reload_in_progress') !== 'true') {
     sessionStorage.removeItem('session_valid');
   }
+  finalizeActivityRegistration();
   sendOfflineBeacon();
 });
 
