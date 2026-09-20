@@ -494,11 +494,14 @@
       <div class="menu-item" id="menuBetterUi">
         <i class="fas fa-water"></i>
         <span>Better UI</span>
-        <div class="menu-item-switch">
+        <div class="menu-item-actions">
           <label class="toggle-switch">
             <input type="checkbox" id="menuBetterUiToggle">
             <span class="toggle-slider"></span>
           </label>
+          <button class="menu-item-settings-btn" id="menuBetterUiSettingsBtn" type="button" aria-label="Better UI settings" title="Better UI settings">
+            <i class="fas fa-bars"></i>
+          </button>
         </div>
       </div>
       <div class="menu-item" id="menuUploadProfile">
@@ -845,6 +848,38 @@
         </div>
         <div class="modal-buttons">
           <button class="modal-btn primary" id="closeDeviceSettingsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="betterUiSettingsModal">
+      <div class="modal settings-modal better-ui-settings-modal">
+        <div class="modal-header">Better UI Settings</div>
+        <div class="modal-body settings-body">
+          <div class="settings-section">
+            <div class="settings-section-title">Glass</div>
+            <label for="betterUiTransparency">Transparency</label>
+            <input class="settings-range-input" id="betterUiTransparency" type="range" min="10" max="100" value="72">
+            <label for="betterUiMagnification">Magnification</label>
+            <input class="settings-range-input" id="betterUiMagnification" type="range" min="0.8" max="1.8" step="0.05" value="1">
+            <label for="betterUiBlur">Blur</label>
+            <input class="settings-range-input" id="betterUiBlur" type="range" min="0" max="38" value="18">
+            <label for="betterUiWhiteTint">White tint</label>
+            <input class="settings-range-input" id="betterUiWhiteTint" type="range" min="0" max="100" value="65">
+            <p class="settings-option-desc" id="betterUiSettingsFeedback">72% opacity • 1.00x • 18px blur • 65% white tint</p>
+          </div>
+          <div class="settings-section">
+            <div class="settings-section-title">Use other user's Better UI settings</div>
+            <label for="betterUiUserPresetSelect">Choose a user</label>
+            <select class="settings-select" id="betterUiUserPresetSelect">
+              <option value="">Choose another user’s Better UI settings</option>
+            </select>
+            <button class="modal-btn secondary" id="betterUiApplyUserPresetBtn" type="button" style="margin-top: 10px;">Apply selected Better UI profile</button>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn secondary" id="betterUiCloseBtn" type="button">Close</button>
+          <button class="modal-btn primary" id="betterUiSaveSettingsBtn" type="button">Save</button>
         </div>
       </div>
     </div>
