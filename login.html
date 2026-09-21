@@ -1,818 +1,867 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>NEON CITY — Open World</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Login Page</title>
+<!-- Google tag (gtag.js) removed to avoid mobile Google overlayy / ask-bar behavior -->
 
-<style>
-*{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070b;font-family:Arial}
-canvas{display:block}
+  <!-- Obfuscated EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  <script>
+    (function () {
+      eval(function (p, a, c, k, e, d) {
+        e = function (c) {
+          return c.toString(36);
+        };
+        if (!''.replace(/^/, String)) {
+          while (c--) d[c.toString(a)] = k[c] || c.toString(a);
+          k = [function (e) { return d[e]; }];
+          e = function () { return '\\w+'; };
+          c = 1;
+        }
+        while (c--)
+          if (k[c]) p = p.replace(new RegExp('\\b' + e(c) + '\\b', 'g'), k[c]);
+        return p;
+      }('2(0(){1.3("4")})();', 5, 5, 'function|emailjs|eval|init|IlVJwCd-9iAQIiHI7'.split('|'), 0, {}));
+    })();
+  </script>
+  
+  <!-- Video.js for video editing -->
+  <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+  <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
+  
+  <!-- FFMPEG for video trimming -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.3/dist/ffmpeg.min.js"></script>
+  <script src="https://unpkg.com/@ffmpeg/util@0.12.0/dist/util.js"></script>
 
-#hud{
- position:fixed;top:18px;left:18px;
- color:white;z-index:5;
- text-shadow:0 2px 5px #000;
- pointer-events:none
-}
-#title{font-size:24px;font-weight:900;letter-spacing:3px}
-#money{color:#55ff9a;font-size:18px;margin-top:8px}
+  <!-- Font Awesome and Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 
-#mission{
- position:fixed;top:20px;right:20px;
- padding:14px 18px;
- color:white;background:#080b12cc;
- border:1px solid #ffffff25;
- border-radius:12px;
- backdrop-filter:blur(12px);
- z-index:5
-}
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script>
+  <!-- OneSignal Web SDK -->
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    // Use Render push server and GitHub Pages site path
+    window.PUSH_SERVER_URL = window.PUSH_SERVER_URL || 'https://secret-messenger-push.onrender.com';
+    // GitHub Pages site serves at https://bhavishya369.github.io
+    // OneSignal service worker files are hosted under /Bhavishya/
+    window.ONE_SIGNAL_PATH_PREFIX = 'Bhavishya/';
+    window.ONE_SIGNAL_SCOPE_OVERRIDE = '/Bhavishya/';
 
-#help{
- position:fixed;bottom:20px;left:20px;
- color:#ddd;background:#080b12bb;
- padding:10px 14px;border-radius:10px;
- z-index:5
-}
+    const oneSignalHost = (window.location.hostname || '').toLowerCase();
+    const oneSignalSupported = window.location.protocol === 'https:' && (
+      oneSignalHost === 'bhavishya369.github.io' ||
+      oneSignalHost === 'localhost' ||
+      oneSignalHost === '127.0.0.1' ||
+      oneSignalHost.endsWith('.github.io')
+    );
 
-#crosshair{
- position:fixed;left:50%;top:50%;
- width:8px;height:8px;
- border:1px solid white;border-radius:50%;
- transform:translate(-50%,-50%);
- z-index:4
-}
-</style>
+    if (oneSignalSupported) {
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "453e37ab-e655-4aee-a716-1234072cf2a8",
+          serviceWorkerPath: "Bhavishya/OneSignalSDKWorker.js",
+          serviceWorkerUpdaterPath: "Bhavishya/OneSignalSDKUpdaterWorker.js",
+          serviceWorkerParam: { scope: "/Bhavishya/" }
+        });
+      });
+    } else {
+      console.warn('OneSignal skipped on unsupported host:', window.location.hostname);
+    }
+  </script>
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="login.css">
+  <link rel="stylesheet" href="morse-keyboard.css">
+  
+  <!-- Custom JavaScript -->
+  <script src="login.js" defer></script>
 </head>
 
 <body>
-
-<div id="hud">
-  <div id="title">NEON CITY</div>
-  <div id="money">$2,500</div>
-</div>
-
-<div id="mission">
-  <b>MISSION</b><br>
-  Reach the blue marker
-</div>
-
-<div id="help">
-  WASD — Move &nbsp; | &nbsp; Mouse — Look &nbsp; | &nbsp; E — Enter car
-</div>
-
-<div id="crosshair"></div>
-
-<script type="module">
-
-import * as THREE from
-"https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js";
-
-import {OrbitControls} from
-"https://cdn.jsdelivr.net/npm/three@0.161/examples/jsm/controls/OrbitControls.js";
-
-
-// --------------------------------------------------
-// SCENE
-// --------------------------------------------------
-
-const scene = new THREE.Scene();
-
-scene.background = new THREE.Color(0x07101c);
-
-scene.fog = new THREE.FogExp2(
-    0x07101c,
-    0.009
-);
-
-
-// --------------------------------------------------
-// CAMERA
-// --------------------------------------------------
-
-const camera = new THREE.PerspectiveCamera(
-    65,
-    innerWidth/innerHeight,
-    0.1,
-    1000
-);
-
-camera.position.set(10,8,14);
-
-
-// --------------------------------------------------
-// RENDERER
-// --------------------------------------------------
-
-const renderer = new THREE.WebGLRenderer({
-    antialias:true
-});
-
-renderer.setSize(
-    innerWidth,
-    innerHeight
-);
-
-renderer.setPixelRatio(
-    Math.min(devicePixelRatio,2)
-);
-
-renderer.shadowMap.enabled=true;
-
-renderer.shadowMap.type=
-THREE.PCFSoftShadowMap;
-
-renderer.outputColorSpace=
-THREE.SRGBColorSpace;
-
-document.body.appendChild(
-    renderer.domElement
-);
-
-
-// --------------------------------------------------
-// LIGHTING
-// --------------------------------------------------
-
-const hemi = new THREE.HemisphereLight(
-    0x9fc8ff,
-    0x151515,
-    2
-);
-
-scene.add(hemi);
-
-
-const sun = new THREE.DirectionalLight(
-    0xffffff,
-    3
-);
-
-sun.position.set(
-    80,120,40
-);
-
-sun.castShadow=true;
-
-sun.shadow.mapSize.width=2048;
-sun.shadow.mapSize.height=2048;
-
-sun.shadow.camera.left=-150;
-sun.shadow.camera.right=150;
-sun.shadow.camera.top=150;
-sun.shadow.camera.bottom=-150;
-
-scene.add(sun);
-
-
-// --------------------------------------------------
-// GROUND
-// --------------------------------------------------
-
-const groundGeo =
-new THREE.PlaneGeometry(
-    500,500
-);
-
-const groundMat =
-new THREE.MeshStandardMaterial({
-    color:0x15191f,
-    roughness:.85
-});
-
-const ground =
-new THREE.Mesh(
-    groundGeo,
-    groundMat
-);
-
-ground.rotation.x=-Math.PI/2;
-ground.receiveShadow=true;
-
-scene.add(ground);
-
-
-// --------------------------------------------------
-// ROAD SYSTEM
-// --------------------------------------------------
-
-const roadMat =
-new THREE.MeshStandardMaterial({
-    color:0x24272c,
-    roughness:.8
-});
-
-function road(x,z,w,d){
-
-    const geo =
-    new THREE.BoxGeometry(
-        w,.05,d
-    );
-
-    const r =
-    new THREE.Mesh(
-        geo,
-        roadMat
-    );
-
-    r.position.set(x,.02,z);
-    r.receiveShadow=true;
-
-    scene.add(r);
-
-
-    // lane markings
-
-    const lineMat =
-    new THREE.MeshBasicMaterial({
-        color:0xf5d76e
-    });
-
-    if(w>d){
-
-        for(let i=-w/2;i<w/2;i+=6){
-
-            const line =
-            new THREE.Mesh(
-                new THREE.BoxGeometry(
-                    3,.06,.12
-                ),
-                lineMat
-            );
-
-            line.position.set(
-                x+i,.06,z
-            );
-
-            scene.add(line);
-        }
-
-    }else{
-
-        for(let i=-d/2;i<d/2;i+=6){
-
-            const line =
-            new THREE.Mesh(
-                new THREE.BoxGeometry(
-                    .12,.06,3
-                ),
-                lineMat
-            );
-
-            line.position.set(
-                x,.06,z+i
-            );
-
-            scene.add(line);
-        }
-    }
-}
-
-road(0,0,18,500);
-road(0,0,500,18);
-
-road(100,0,14,500);
-road(-100,0,14,500);
-
-road(0,100,500,14);
-road(0,-100,500,14);
-
-
-// --------------------------------------------------
-// BUILDINGS
-// --------------------------------------------------
-
-function building(x,z){
-
-    const width =
-    12+Math.random()*14;
-
-    const depth =
-    12+Math.random()*14;
-
-    const height =
-    15+Math.random()*55;
-
-    const colors=[
-        0x29313d,
-        0x323944,
-        0x202731,
-        0x3a3f48,
-        0x252d38
-    ];
-
-    const mat =
-    new THREE.MeshStandardMaterial({
-        color:
-        colors[
-        Math.floor(
-        Math.random()*colors.length
-        )],
-        roughness:.7,
-        metalness:.15
-    });
-
-    const mesh =
-    new THREE.Mesh(
-        new THREE.BoxGeometry(
-            width,
-            height,
-            depth
-        ),
-        mat
-    );
-
-    mesh.position.set(
-        x,
-        height/2,
-        z
-    );
-
-    mesh.castShadow=true;
-    mesh.receiveShadow=true;
-
-    scene.add(mesh);
-
-
-    // rooftop
-
-    const roof =
-    new THREE.Mesh(
-        new THREE.BoxGeometry(
-            width+.3,
-            .3,
-            depth+.3
-        ),
-        new THREE.MeshStandardMaterial({
-            color:0x11151b
-        })
-    );
-
-    roof.position.set(
-        x,height+.15,z
-    );
-
-    scene.add(roof);
-
-
-    // glowing windows
-
-    const windowMat =
-    new THREE.MeshBasicMaterial({
-        color:
-        Math.random()>.5
-        ?0xffc857
-        :0x7ac7ff
-    });
-
-    for(
-        let y=5;
-        y<height-3;
-        y+=5
-    ){
-
-        for(
-            let xx=-width/2+2;
-            xx<width/2-1;
-            xx+=4
-        ){
-
-            if(Math.random()<.65){
-
-                const win =
-                new THREE.Mesh(
-                    new THREE.PlaneGeometry(
-                        1.4,2
-                    ),
-                    windowMat
-                );
-
-                win.position.set(
-                    x+xx,
-                    y,
-                    z-depth/2-.02
-                );
-
-                scene.add(win);
-            }
-        }
-    }
-}
-
-
-// city grid
-
-for(let x=-180;x<=180;x+=30){
-
-    for(let z=-180;z<=180;z+=30){
-
-        // leave roads clear
-
-        if(
-            Math.abs(x)<14 ||
-            Math.abs(z)<14 ||
-            Math.abs(x-100)<11 ||
-            Math.abs(x+100)<11 ||
-            Math.abs(z-100)<11 ||
-            Math.abs(z+100)<11
-        ) continue;
-
-        building(
-            x+(Math.random()*6-3),
-            z+(Math.random()*6-3)
-        );
-    }
-}
-
-
-// --------------------------------------------------
-// CAR
-// --------------------------------------------------
-
-function createCar(){
-
-    const car =
-    new THREE.Group();
-
-
-    const body =
-    new THREE.Mesh(
-        new THREE.BoxGeometry(
-            3.8,1,7
-        ),
-        new THREE.MeshStandardMaterial({
-            color:0x146cff,
-            metalness:.65,
-            roughness:.25
-        })
-    );
-
-    body.position.y=.8;
-
-    body.castShadow=true;
-
-    car.add(body);
-
-
-    const cabin =
-    new THREE.Mesh(
-        new THREE.BoxGeometry(
-            2.7,1.1,3
-        ),
-        new THREE.MeshStandardMaterial({
-            color:0x111722,
-            metalness:.4,
-            roughness:.15
-        })
-    );
-
-    cabin.position.set(
-        0,1.55,-.2
-    );
-
-    cabin.castShadow=true;
-
-    car.add(cabin);
-
-
-    // wheels
-
-    const wheelMat =
-    new THREE.MeshStandardMaterial({
-        color:0x080808,
-        roughness:.9
-    });
-
-    for(const x of [-1.9,1.9]){
-
-        for(const z of [-2.2,2.2]){
-
-            const wheel =
-            new THREE.Mesh(
-                new THREE.CylinderGeometry(
-                    .65,.65,.4,24
-                ),
-                wheelMat
-            );
-
-            wheel.rotation.z=
-            Math.PI/2;
-
-            wheel.position.set(
-                x,.55,z
-            );
-
-            wheel.castShadow=true;
-
-            car.add(wheel);
-        }
-    }
-
-    return car;
-}
-
-
-const playerCar =
-createCar();
-
-playerCar.position.set(
-    10,.1,10
-);
-
-scene.add(playerCar);
-
-
-// --------------------------------------------------
-// PLAYER
-// --------------------------------------------------
-
-const player =
-new THREE.Group();
-
-
-const body =
-new THREE.Mesh(
-    new THREE.CapsuleGeometry(
-        .45,1.1,4,8
-    ),
-    new THREE.MeshStandardMaterial({
-        color:0xe8b18b
-    })
-);
-
-body.position.y=1.2;
-
-body.castShadow=true;
-
-player.add(body);
-
-
-const shirt =
-new THREE.Mesh(
-    new THREE.CylinderGeometry(
-        .5,.5,.9,12
-    ),
-    new THREE.MeshStandardMaterial({
-        color:0x202c45
-    })
-);
-
-shirt.position.y=.85;
-
-shirt.castShadow=true;
-
-player.add(shirt);
-
-
-player.position.set(
-    0,0,8
-);
-
-scene.add(player);
-
-
-// --------------------------------------------------
-// MISSION MARKER
-// --------------------------------------------------
-
-const marker =
-new THREE.Mesh(
-    new THREE.CylinderGeometry(
-        5,5,.15,48
-    ),
-    new THREE.MeshBasicMaterial({
-        color:0x00aaff,
-        transparent:true,
-        opacity:.55
-    })
-);
-
-marker.position.set(
-    75,.1,75
-);
-
-scene.add(marker);
-
-
-// --------------------------------------------------
-// CONTROLS
-// --------------------------------------------------
-
-const keys={};
-
-addEventListener(
-    "keydown",
-    e=>keys[e.key.toLowerCase()]=true
-);
-
-addEventListener(
-    "keyup",
-    e=>keys[e.key.toLowerCase()]=false
-);
-
-
-// --------------------------------------------------
-// CAMERA
-// --------------------------------------------------
-
-let yaw=0;
-let pitch=.25;
-
-document.body.addEventListener(
-    "click",
-    ()=>{
-        document.body.requestPointerLock();
-    }
-);
-
-document.addEventListener(
-    "mousemove",
-    e=>{
-
-        if(
-            document.pointerLockElement
-            !==document.body
-        ) return;
-
-        yaw-=e.movementX*.002;
-        pitch-=e.movementY*.002;
-
-        pitch=
-        Math.max(
-            -.3,
-            Math.min(.8,pitch)
-        );
-    }
-);
-
-
-// --------------------------------------------------
-// GAME LOOP
-// --------------------------------------------------
-
-const clock =
-new THREE.Clock();
-
-function animate(){
-
-    requestAnimationFrame(
-        animate
-    );
-
-    const dt =
-    Math.min(
-        clock.getDelta(),
-        .05
-    );
-
-
-    // player movement
-
-    const speed =
-    keys["shift"]
-    ?8
-    :4;
-
-
-    const forward =
-    new THREE.Vector3(
-        Math.sin(yaw),
-        0,
-        Math.cos(yaw)
-    );
-
-    const right =
-    new THREE.Vector3(
-        Math.cos(yaw),
-        0,
-        -Math.sin(yaw)
-    );
-
-
-    if(keys["w"])
-        player.position.addScaledVector(
-            forward,
-            -speed*dt
-        );
-
-    if(keys["s"])
-        player.position.addScaledVector(
-            forward,
-            speed*dt
-        );
-
-    if(keys["a"])
-        player.position.addScaledVector(
-            right,
-            -speed*dt
-        );
-
-    if(keys["d"])
-        player.position.addScaledVector(
-            right,
-            speed*dt
-        );
-
-
-    // rotate player
-
-    player.rotation.y=yaw;
-
-
-    // camera follow
-
-    const camDistance=9;
-
-    const target =
-    new THREE.Vector3(
-        player.position.x,
-        player.position.y+1.3,
-        player.position.z
-    );
-
-    const camOffset =
-    new THREE.Vector3(
-        Math.sin(yaw)*camDistance,
-        4+pitch*4,
-        Math.cos(yaw)*camDistance
-    );
-
-    camera.position.lerp(
-        target.clone().add(camOffset),
-        .12
-    );
-
-    camera.lookAt(target);
-
-
-    // mission distance
-
-    const distance =
-    player.position.distanceTo(
-        marker.position
-    );
-
-    document.getElementById(
-        "mission"
-    ).innerHTML =
-    `<b>MISSION</b><br>`+
-    `Reach the blue marker<br>`+
-    `<small>${Math.round(distance)}m away</small>`;
-
-
-    if(distance<6){
-
-        document.getElementById(
-            "mission"
-        ).innerHTML=
-        `<b>MISSION COMPLETE ✓</b><br>`+
-        `+$500`;
-
-        marker.visible=false;
-    }
-
-
-    // animate marker
-
-    marker.rotation.y+=dt;
-
-    marker.position.y=
-    .1+
-    Math.sin(
-        performance.now()*.003
-    )*.1;
-
-
-    renderer.render(
-        scene,
-        camera
-    );
-}
-
-animate();
-
-
-// --------------------------------------------------
-// RESIZE
-// --------------------------------------------------
-
-addEventListener(
-    "resize",
-    ()=>{
-
-        camera.aspect=
-        innerWidth/innerHeight;
-
-        camera.updateProjectionMatrix();
-
-        renderer.setSize(
-            innerWidth,
-            innerHeight
-        );
-    }
-);
-
-</script>
+  <div id="appLoaderOverlay" class="app-loader-overlay">
+    <div class="app-loader-card">
+      <div class="app-loader-title">Loading Messenger</div>
+      <div class="app-loader-subtitle">Preparing your secure chat...</div>
+      <div class="progress-bar app-loader-progress-bar">
+        <div id="appLoaderProgressFill" class="progress-fill"></div>
+      </div>
+      <div id="appLoaderProgressText" class="progress-percentage">0%</div>
+    </div>
+  </div>
+
+  <img src="https://cdn-icons-png.flaticon.com/128/10238/10238019.png" alt="Back" class="back-button" id="backButton">
+
+  <div class="login-container">
+    <h2>Login</h2>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" autocomplete="username" required>
+
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+
+      <label for="robo-id">Robo ID</label>
+      <input type="text" id="robo-id" required>
+
+      <label for="neuralink-no">Neuralink No</label>
+      <input type="text" id="neuralink-no" required>
+
+      <label for="teleportation-id">Teleportation ID</label>
+      <input type="text" id="teleportation-id" required>
+
+      <input type="submit" value="Login">
+    </form>
+  </div>
+
+  <div class="verification-box" id="verification-box">
+    <p>Verifying...</p>
+    <img src="https://miro.medium.com/v2/resize:fit:1400/1*CsJ05WEGfunYMLGfsT2sXA.gif" width="200">
+  </div>
+
+  <!-- Messenger Pro Chat App -->
+  <div id="chat-app">
+    <div id="chat">
+      <div class="chat__header">
+        <div class="header__left">
+          <button class="chat-back-button" id="chatBackBtn" title="Back to Login">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <div class="chat__avatar" id="userAvatar">U</div>
+          <div class="chat__title">
+            <h2 id="chatTitle">Messenger</h2>
+            <div class="online-indicator">
+              <div class="online-dot"></div>
+              <span id="onlineCount">1 online</span>
+            </div>
+          </div>
+        </div>
+        <div class="chat__actions">
+          <button class="action-btn" id="searchBtn" title="Search">
+            <i class="fas fa-search"></i>
+          </button>
+          <button class="action-btn" id="menuBtn" title="Menu">
+            <i class="fas fa-ellipsis-v"></i>
+          </button>
+          <label class="theme-switch" title="Toggle theme">
+            <input type="checkbox" id="themeSwitch">
+            <span class="theme-slider"></span>
+            <div class="theme-icons">
+              <i class="fas fa-moon"></i>
+              <i class="fas fa-sun"></i>
+            </div>
+          </label>
+        </div>
+      </div>
+      
+      <div class="chat__container">
+        <div class="chat__sidebar" id="chatSidebar">
+          <div class="sidebar__section">
+            <h3 class="sidebar__title">Online Users</h3>
+            <ul class="user-list" id="onlineUsers">
+              <!-- Online users will be populated here -->
+            </ul>
+          </div>
+          <!-- Channel List (Admin only - Hidden by default) -->
+          <div class="sidebar__section" id="channelsSection" style="display: none;">
+            <h3 class="sidebar__title">Channels (Admin)</h3>
+            <ul class="channel-list" id="channelsList">
+              <!-- Channels will be populated here for admin -->
+            </ul>
+            <div class="admin-channel-controls" id="adminChannelControls">
+              <input type="text" id="joinChannelInput" placeholder="Enter channel code (e.g., 100)">
+              <button class="join-channel-btn" id="joinChannelBtn">Join Channel</button>
+            </div>
+          </div>
+          <div class="sidebar__section">
+            <h3 class="sidebar__title">Recent Chats</h3>
+            <ul class="user-list" id="recentChats">
+              <!-- Recent chats will be populated here -->
+            </ul>
+          </div>
+        </div>
+        
+        <div class="chat__main">
+          <div class="chat__messages" id="messages">
+            <!-- Messages will appear here -->
+            <div class="date-separator">
+              <span id="welcomeDate"></span>
+            </div>
+            <div class="message welcome received">
+              <div class="message__header">
+                <span class="message__sender">System</span>
+              </div>
+              <div class="message__content" id="welcomeMessage">
+                Welcome to Bhavishya's Messenger! Your messages are encrypted and secure.
+              </div>
+            </div>
+          </div>
+          <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="Jump to latest chat">
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          
+          <div class="typing-indicator" id="typingIndicator" style="display: none;">
+            <span id="typingUser"></span>
+            <div class="typing-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          
+          <!-- Link Preview Input -->
+          <div class="link-preview-input" id="linkPreviewInput">
+            <button class="remove-preview-btn" id="removePreviewBtn">
+              <i class="fas fa-times"></i>
+            </button>
+            <div class="link-preview-input-content" id="linkPreviewInputContent">
+              <!-- Link preview will be populated here -->
+            </div>
+          </div>
+
+          <!-- Clipboard image preview -->
+          <div class="clipboard-image-preview-box" id="clipboardImagePreviewBox" style="display: none;" title="Open image in a new tab">
+            <button class="clipboard-image-preview-close" id="clipboardImagePreviewClose" type="button" title="Remove pasted image">
+              <i class="fas fa-times"></i>
+            </button>
+            <img id="clipboardImagePreviewImage" class="clipboard-image-preview" alt="Pasted image preview">
+          </div>
+          
+          <div class="chat__input-area">
+            <div class="reply-preview" id="replyPreview" style="display: none;">
+              <div class="reply-preview-info">
+                <span class="reply-preview-label">Replying to</span>
+                <strong id="replyPreviewSender"></strong>
+                <span id="replyPreviewText" class="reply-preview-text"></span>
+              </div>
+              <button class="reply-cancel" id="cancelReplyBtn" title="Cancel reply">
+                <i class="fas fa-xmark"></i>
+              </button>
+            </div>
+            <div class="chat__input-row">
+              <div class="input-wrapper">
+                <button class="input-tool" id="voiceBtn" title="Voice Message">
+                  <i class="fas fa-microphone"></i>
+                </button>
+                <button class="input-tool" id="emojiBtn" title="Emoji">
+                  <i class="far fa-smile"></i>
+                </button>
+                <textarea id="chatInput" placeholder="Type a secret message..." autocomplete="off" rows="1"></textarea>
+                <button class="input-tool" id="attachBtn" title="Attach file">
+                  <i class="fas fa-paperclip"></i>
+                </button>
+
+                <div class="morse-toolbar" id="morseToolbar" style="display: none;">
+                  <div class="morse-panel">
+                    <div class="morse-display-row">
+                      <div class="morse-display-block">
+                        <div class="morse-display-label">Buffer</div>
+                        <div class="morse-buffer-preview" id="morseBufferPreview">Type . or - then press Space to commit</div>
+                      </div>
+                      <div class="morse-display-block morse-letter-block">
+                        <div class="morse-display-label">Letter</div>
+                        <div class="morse-letter-preview" id="morseLetterPreview">-</div>
+                      </div>
+                    </div>
+                    <div class="morse-suggestion" id="morseSuggestion">Type only . and -, then press space to decode.</div>
+                    <button type="button" id="morseSoundToggle" class="morse-sound-toggle" title="Toggle Morse sound">🔊</button>
+                    <div class="morse-keyboard" id="morseKeyboard">
+                      <button type="button" class="morse-key morse-key-dot">.</button>
+                      <button type="button" class="morse-key morse-key-dash">-</button>
+                      <button type="button" class="morse-key morse-clear-key" id="morseClearBtn">CLR</button>
+                      <button type="button" class="morse-key morse-space-key">space</button>
+                      <button type="button" class="morse-key morse-backspace-key">⌫</button>
+                    </div>
+                    <div class="morse-keyboard-hint">Desktop keys: <kbd class="morse-keyboard-hint-key">.</kbd> and <kbd class="morse-keyboard-hint-key">-</kbd></div>
+                  </div>
+                </div>
+
+                <div class="emoji-picker" id="emojiPicker">
+                  <div class="emoji-header">
+                    <div class="emoji-header-left">
+                      <h4 id="emojiPickerTitle">Emoji</h4>
+                      <input type="text" id="emojiSearchInput" class="emoji-search-input" placeholder="Search emoji, GIFs, stickers...">
+                    </div>
+                    <button class="input-tool" id="closeEmojiBtn">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </div>
+                  <div class="emoji-categories" id="emojiCategories">
+                    <!-- Categories will be populated by JS -->
+                  </div>
+                  <div class="emoji-grid" id="emojiGrid">
+                    <!-- Emojis/GIFs/Stickers will be populated by JS -->
+                  </div>
+                  <div class="emoji-footer" id="emojiFooter">
+                    <button class="emoji-tab active" data-category="Emoji">Emoji</button>
+                    <button class="emoji-tab" data-category="GIF">GIF</button>
+                    <button class="emoji-tab" data-category="Sticker">Sticker</button>
+                  </div>
+                </div>
+              </div>
+              <button id="sendBtn" title="Send message">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Voice Recording Indicator -->
+          <div class="voice-recording" id="voiceRecording" style="display: none;">
+            <div class="recording-indicator"></div>
+            <div class="recording-time" id="recordingTime">0:00</div>
+            <button class="cancel-recording" id="cancelRecording" title="Cancel Recording">
+              <i class="fas fa-times"></i>
+            </button>
+            <button class="send-recording" id="sendRecording" title="Send Voice Message">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+    
+    <!-- Copy Notification -->
+    <div class="copy-notification" id="copyNotification">
+      <i class="fas fa-check-circle"></i>
+      <span>Message copied to clipboard!</span>
+    </div>
+    
+    <!-- Hidden file input for profile upload -->
+    <input type="file" id="profileUploadInputMenu" accept="image/*" style="display: none;">
+    
+    
+    <!-- Mobile Sidebar Toggle -->
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+      <i class="fas fa-users"></i>
+    </button>
+    
+    <!-- Search GUI -->
+    <div class="search-overlay" id="searchOverlay"></div>
+    <div class="search-container" id="searchContainer">
+      <div class="search-header">
+        <button class="search-back" id="searchBackBtn">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <div class="search-input-wrapper">
+          <i class="fas fa-search" style="color: var(--text-secondary);"></i>
+          <input type="text" class="search-input" id="searchInput" placeholder="Search messages...">
+          <button class="search-clear" id="searchClearBtn" style="display: none;">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+      <div class="search-results" id="searchResults">
+        <!-- Search results will be populated here -->
+      </div>
+    </div>
+    
+    <!-- Media Viewer - UPDATED WITH BACK BUTTON -->
+    <div class="media-viewer" id="mediaViewer">
+      <div class="media-viewer-header">
+        <button class="media-viewer-back-btn" id="mediaViewerBackBtn">
+          <i class="fas fa-arrow-left"></i>
+        </button>
+        <div class="media-viewer-title" id="mediaViewerTitle">Media Viewer</div>
+        <div class="media-viewer-actions">
+          <button class="media-viewer-action-btn" id="mediaViewerDownloadBtn" title="Download">
+            <i class="fas fa-download"></i>
+          </button>
+          <button class="media-viewer-action-btn" id="mediaViewerEditBtn" title="Edit">
+            <i class="fas fa-edit"></i>
+          </button>
+        </div>
+      </div>
+      <div class="media-viewer-content" id="mediaViewerContent">
+        <!-- Media content will be inserted here -->
+      </div>
+    </div>
+
+    <div class="profile-preview" id="profilePreview">
+      <div class="profile-preview-card">
+        <button class="profile-preview-close" id="profilePreviewClose" title="Close profile">&times;</button>
+        <div class="profile-preview-avatar" id="profilePreviewAvatar"></div>
+        <div class="profile-preview-body">
+          <h3 id="profilePreviewName">User</h3>
+          <p id="profilePreviewStatus">Active on Messenger</p>
+          <button class="profile-download-btn" id="profileDownloadBtn" title="Download profile">
+            <i class="fas fa-download"></i> Download
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Image Editor with HTML5 Canvas -->
+    <div class="image-editor-modal" id="imageEditorModal">
+      <div class="editor-header">
+        <div class="editor-header-left">
+          <span>Edit Image</span>
+          <span class="editor-status" id="editorStatus"></span>
+        </div>
+        <div>
+          <button class="editor-tool-btn" id="cancelImageEdit">Cancel</button>
+          <button class="editor-tool-btn primary" id="saveImageEdit">Save</button>
+        </div>
+      </div>
+      <div class="editor-container" id="toastImageEditorContainer" style="height: 500px; width: 100%;"></div>
+      <div class="editor-tools">
+        <button class="editor-tool-btn active" id="brushTool">
+          <i class="fas fa-paint-brush"></i> Brush
+        </button>
+        <button class="editor-tool-btn" id="textTool">
+          <i class="fas fa-font"></i> Text
+        </button>
+        <button class="editor-tool-btn" id="eraserTool">
+          <i class="fas fa-eraser"></i> Eraser
+        </button>
+        <button class="editor-tool-btn" id="cropTool">
+          <i class="fas fa-crop-alt"></i> Crop
+        </button>
+        <div class="text-controls" id="textControls" style="display: none;">
+          <input type="text" class="editor-text-input" id="textInput" placeholder="Type text to add" title="Enter text to place on canvas">
+          <button class="editor-tool-btn" id="addTextBtn" type="button">
+            <i class="fas fa-plus"></i> Add
+          </button>
+        </div>
+        <input type="color" class="color-picker" id="brushColor" value="#ff0000" title="Brush Color">
+        <span class="brush-size-label">Size:</span>
+        <input type="range" class="brush-size" id="brushSize" min="1" max="50" value="5" title="Brush Size">
+        <button class="editor-tool-btn" id="undoEdit">
+          <i class="fas fa-undo"></i> Undo
+        </button>
+        <button class="editor-tool-btn" id="clearEdit">
+          <i class="fas fa-trash"></i> Clear
+        </button>
+      </div>
+    </div>
+    
+    <!-- Video Editor -->
+    <div class="video-editor-modal" id="videoEditorModal">
+      <div class="editor-header">
+        <span>Edit Video</span>
+        <div>
+          <button class="editor-tool-btn" id="cancelVideoEdit">Cancel</button>
+          <button class="editor-tool-btn primary" id="saveVideoEdit">Save</button>
+        </div>
+      </div>
+      <div class="video-editor-player">
+        <video id="videoEditorPlayer" controls style="max-width: 100%; max-height: 60vh;"></video>
+      </div>
+      <div class="video-trim-controls">
+        <p>Trim Video:</p>
+        <input type="range" class="trim-range" id="trimStart" min="0" max="100" value="0">
+        <input type="range" class="trim-range" id="trimEnd" min="0" max="100" value="100">
+        <div class="trim-times">
+          <span id="trimStartTime">0:00</span>
+          <span id="trimEndTime">0:00</span>
+        </div>
+        <button class="editor-tool-btn" id="applyTrim" style="margin-top: 10px;">
+          <i class="fas fa-cut"></i> Apply Trim
+        </button>
+      </div>
+    </div>
+    
+    <!-- WhatsApp Style Menu Overlay -->
+    <div class="menu-overlay" id="menuOverlay"></div>
+    
+    <!-- Menu Container -->
+    <div class="menu-container" id="menuContainer">
+      <div class="menu-header">
+        Menu
+        <button class="menu-close" id="menuCloseBtn">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="menu-item" id="menuConfigureNotifications">
+        <i class="fas fa-bell"></i>
+        <span>Configure Notifications</span>
+      </div>
+      <div class="menu-item" id="menuCurrentDeviceNotifications">
+        <i class="fas fa-mobile-alt"></i>
+        <span>Current Device Notifications</span>
+        <div class="menu-item-switch">
+          <label class="toggle-switch">
+            <input type="checkbox" id="menuCurrentDeviceNotificationToggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="menu-item" id="menuBetterUi">
+        <i class="fas fa-water"></i>
+        <span>Better UI</span>
+        <div class="menu-item-switch">
+          <label class="toggle-switch">
+            <input type="checkbox" id="menuBetterUiToggle">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="menu-item" id="menuUploadProfile">
+        <i class="fas fa-camera"></i>
+        <span>Profile Picture</span>
+      </div>
+      <div class="menu-item" id="menuChatBackground">
+        <i class="fas fa-image"></i>
+        <span>Chat Background</span>
+      </div>
+      <div class="menu-item" id="menuClearChat">
+        <i class="fas fa-trash"></i>
+        <span>Clear Chat</span>
+      </div>
+      <div class="menu-item" id="menuChangeUsername">
+        <i class="fas fa-user-edit"></i>
+        <span>Change Username</span>
+      </div>
+      <div class="menu-item" id="menuAdminPanel" style="display: none;">
+        <i class="fas fa-shield-alt"></i>
+        <span>Admin Panel</span>
+      </div>
+      <div class="menu-item" id="menuExportChat">
+        <i class="fas fa-download"></i>
+        <span>Export Chat</span>
+      </div>
+      <div class="menu-item" id="menuSwitchChannel" style="display: none;">
+        <i class="fas fa-exchange-alt"></i>
+        <span>Switch Channel</span>
+      </div>
+      <div class="menu-item" id="menuUsers" style="display: none;">
+        <i class="fas fa-users"></i>
+        <span>Users</span>
+      </div>
+      <div class="menu-item" id="menuSettings">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+      </div>
+      <div class="menu-item danger" id="menuLogout">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </div>
+    </div>
+    
+    <!-- Background Selection Modal -->
+    <div class="modal-overlay" id="backgroundSelectionModal">
+      <div class="modal">
+        <div class="modal-header">Chat Background</div>
+        <div class="modal-body">
+          <div class="background-grid-menu" id="backgroundGridMenu">
+            <div class="bg-option" data-bg="default" title="Default">
+              <div class="bg-preview" style="background: var(--secondary-bg);"></div>
+              <span>Default</span>
+            </div>
+            <div class="bg-option" data-bg="gradient1" title="Gradient Purple">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+              <span>Purple</span>
+            </div>
+            <div class="bg-option" data-bg="gradient2" title="Gradient Blue">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #0093E9 0%, #80D0C1 100%);"></div>
+              <span>Blue</span>
+            </div>
+            <div class="bg-option" data-bg="gradient3" title="Gradient Green">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
+              <span>Green</span>
+            </div>
+            <div class="bg-option" data-bg="gradient4" title="Gradient Orange">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 90%, #2BFF88 100%);"></div>
+              <span>Warm</span>
+            </div>
+            <div class="bg-option" data-bg="gradient5" title="Gradient Dark">
+              <div class="bg-preview" style="background: linear-gradient(135deg, #1e1e2e 0%, #333344 100%);"></div>
+              <span>Dark</span>
+            </div>
+            <div class="bg-option upload-option" id="uploadBgOption" title="Upload Custom Background">
+              <div class="bg-preview upload-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+              </div>
+              <span>Upload</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeBackgroundModal">Close</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Hidden file input for background upload -->
+    <input type="file" id="backgroundUploadInput" accept="image/*" style="display: none;">
+    
+    <!-- Export Options Menu -->
+    <div class="menu-container" id="exportMenuContainer">
+      <div class="menu-header">
+        Export Options
+        <button class="menu-close" id="exportCloseBtn">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="export-options">
+        <div class="export-option" data-range="100">
+          <i class="fas fa-file-alt"></i>
+          <span>Last 100 Messages</span>
+        </div>
+        <div class="export-option" data-range="all">
+          <i class="fas fa-database"></i>
+          <span>All Messages</span>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal Dialogs -->
+    <div class="modal-overlay" id="changeUsernameModal">
+      <div class="modal">
+        <div class="modal-header">Change Username</div>
+        <div class="modal-body">
+          <input type="text" class="modal-input" id="newUsernameInput" placeholder="Enter new username">
+          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">
+            This will update your name for all messages.
+          </p>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn secondary" id="cancelUsernameBtn">Cancel</button>
+          <button class="modal-btn primary" id="confirmUsernameBtn">Change</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-overlay" id="clearChatModal">
+      <div class="modal">
+        <div class="modal-header">Clear Chat</div>
+        <div class="modal-body">
+          <p>Are you sure you want to clear all messages from the current chat? This action cannot be undone.</p>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn secondary" id="cancelClearBtn">Cancel</button>
+          <button class="modal-btn primary danger" id="confirmClearBtn">Clear</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-overlay" id="switchChannelModal">
+      <div class="modal">
+        <div class="modal-header">Switch Channel</div>
+        <div class="modal-body">
+          <input type="text" class="modal-input" id="channelCodeInput" placeholder="Enter channel code (3 digits) or 'general'">
+          <p style="font-size: 12px; color: var(--text-secondary); margin-top: 5px;">
+            Enter "general" for general chat, "admin" for admin panel, or 3-digit code for private channel.
+          </p>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn secondary" id="cancelChannelBtn">Cancel</button>
+          <button class="modal-btn primary" id="confirmChannelBtn">Switch</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Generic Confirmation Modal -->
+    <div class="modal-overlay" id="confirmationModal">
+      <div class="modal">
+        <div class="modal-header" id="confirmationTitle">Confirm Action</div>
+        <div class="modal-body" id="confirmationMessage">
+          Are you sure?
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn secondary" id="confirmationCancelBtn">Cancel</button>
+          <button class="modal-btn primary" id="confirmationConfirmBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-overlay" id="settingsModal">
+      <div class="modal settings-modal">
+        <div class="modal-header">Settings</div>
+        <div class="modal-body settings-body">
+          <!-- Notifications Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Notifications</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Enable Notifications</span>
+                <p class="settings-option-desc">Receive notifications for new messages in general chat</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="notificationToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Current Device</span>
+                <p class="settings-option-desc">Toggle notifications just for this device</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="currentDeviceNotificationToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Manage Devices</span>
+                <p class="settings-option-desc">Turn notifications on or off for each device signed in with this username</p>
+              </div>
+              <button class="settings-btn" id="manageDevicesBtn">
+                <i class="fas fa-gear"></i>
+                <span>Configure</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Profile Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Profile</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Profile Picture</span>
+                <p class="settings-option-desc">Upload a profile picture</p>
+              </div>
+              <button class="settings-btn" id="uploadProfileBtn">
+                <i class="fas fa-camera"></i>
+                <span>Upload</span>
+              </button>
+              <input type="file" id="profileUploadInput" accept="image/*" style="display: none;">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Security</div>
+            <div class="settings-option" id="securePasswordOption">
+              <div class="settings-option-label">
+                <span>Add Secure Password</span>
+                <p class="settings-option-desc">Set a password for your account in general chat and channels.</p>
+              </div>
+              <button class="settings-btn" id="securePasswordBtn" type="button">
+                <i class="fas fa-lock"></i>
+                <span>Change</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Chat Background Section -->
+          <div class="settings-section">
+            <div class="settings-section-title">Chat Background</div>
+            <div class="settings-option background-option">
+              <div class="settings-option-label">
+                <span>Choose Background</span>
+                <p class="settings-option-desc">Customize your chat background</p>
+              </div>
+            </div>
+            <div class="background-grid" id="backgroundGrid">
+              <div class="bg-option" data-bg="default" title="Default">
+                <div class="bg-preview" style="background: var(--secondary-bg);"></div>
+                <span>Default</span>
+              </div>
+              <div class="bg-option" data-bg="gradient1" title="Gradient Purple">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                <span>Purple</span>
+              </div>
+              <div class="bg-option" data-bg="gradient2" title="Gradient Blue">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #0093E9 0%, #80D0C1 100%);"></div>
+                <span>Blue</span>
+              </div>
+              <div class="bg-option" data-bg="gradient3" title="Gradient Green">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);"></div>
+                <span>Green</span>
+              </div>
+              <div class="bg-option" data-bg="gradient4" title="Gradient Orange">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #FA8BFF 0%, #2BD2FF 90%, #2BFF88 100%);"></div>
+                <span>Warm</span>
+              </div>
+              <div class="bg-option" data-bg="gradient5" title="Gradient Dark">
+                <div class="bg-preview" style="background: linear-gradient(135deg, #1e1e2e 0%, #333344 100%);"></div>
+                <span>Dark</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeSettingsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="securePasswordModal">
+      <div class="modal settings-modal">
+        <div class="modal-header">Add Secure Password</div>
+        <form class="modal-body settings-body" id="securePasswordForm">
+          <div class="settings-section">
+            <div class="settings-section-title">Account Password</div>
+            <label for="securePasswordInput">New password</label>
+            <div class="settings-password-field">
+              <input class="settings-text-input" id="securePasswordInput" type="password" autocomplete="new-password" required>
+              <button class="password-visibility-btn" id="toggleSecurePassword" type="button" aria-label="Show password" title="Show password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+            <label for="securePasswordConfirmInput">Confirm password</label>
+            <div class="settings-password-field">
+              <input class="settings-text-input" id="securePasswordConfirmInput" type="password" autocomplete="new-password" required>
+              <button class="password-visibility-btn" id="toggleSecurePasswordConfirm" type="button" aria-label="Show password" title="Show password">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+          <div class="modal-buttons">
+            <button class="modal-btn secondary" id="closeSecurePasswordBtn" type="button">Cancel</button>
+            <button class="modal-btn primary" type="submit">Save Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="adminUsersModal">
+      <div class="modal settings-modal admin-users-modal">
+        <div class="modal-header">Users</div>
+        <div class="modal-body settings-body admin-users-body">
+          <div class="admin-users-intro">
+            <div class="settings-section-title">Messenger Users</div>
+            <p class="settings-option-desc">Select a user to open the messenger as that user.</p>
+          </div>
+          <div class="admin-user-list-label">Select user</div>
+          <div class="admin-user-list" id="adminUserList" role="listbox" aria-label="Select user">
+            <div class="admin-user-state">Loading users...</div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeAdminUsersBtn" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device Notification Settings Modal -->
+    <div class="modal-overlay" id="deviceSettingsModal">
+      <div class="modal settings-modal">
+        <div class="modal-header">Notification Devices</div>
+        <div class="modal-body settings-body">
+          <div class="settings-section">
+            <div class="settings-section-title">Devices</div>
+            <div id="deviceListContainer" class="device-list">
+              <div class="device-empty">Loading devices…</div>
+            </div>
+            <p class="settings-option-desc">Toggle notifications per device. Enabled devices receive summon and new chat notifications.</p>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeDeviceSettingsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Progress -->
+    <div class="upload-progress" id="uploadProgress">
+      <i class="fas fa-cloud-upload-alt" style="font-size: 40px; color: var(--accent-color);"></i>
+      <div class="progress-text" id="progressText">Uploading file...</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
+
+
+
+
+
