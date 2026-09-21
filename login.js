@@ -656,7 +656,6 @@ async function unsubscribeOneSignal() {
 // Settings variables
 let notificationsEnabled = false;
 let betterUiEnabled = false;
-let betterUiSettings = getDefaultBetterUiSettings();
 let secretNotificationSent = false;
 let userProfileImage = null;
 let chatBackground = 'default';
@@ -746,92 +745,6 @@ function getCurrentDeviceEnabledState() {
   return Boolean(localStorage.getItem(`device_enabled_${getFirebaseSafeUserKey(username)}_${deviceId}`) !== 'false');
 }
 
-function getDefaultBetterUiSettings() {
-  return {
-    enabled: false,
-    transparency: 72,
-    magnification: 1,
-    blur: 18,
-    whiteTint: 65,
-    mode: 'dark'
-  };
-}
-
-function sanitizeBetterUiSettings(settings = {}) {
-  const defaults = getDefaultBetterUiSettings();
-  const value = { ...defaults, ...(settings || {}) };
-  value.enabled = Boolean(value.enabled);
-  value.transparency = Math.min(100, Math.max(10, Number(value.transparency) || defaults.transparency));
-  value.magnification = Math.min(1.8, Math.max(0.8, Number(value.magnification) || defaults.magnification));
-  value.blur = Math.min(38, Math.max(0, Number(value.blur) || defaults.blur));
-  value.whiteTint = Math.min(100, Math.max(0, Number(value.whiteTint) || defaults.whiteTint));
-  value.mode = value.mode === 'light' ? 'light' : 'dark';
-  return value;
-}
-
-function colorToRgb(hexColor) {
-  const value = (hexColor || '#ffffff').trim();
-  const normalized = value.startsWith('#') ? value : `#${value}`;
-  const full = normalized.length === 4 ? normalized.split('').map((char, index) => index === 0 ? char : char + char).join('') : normalized;
-  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(full);
-  if (!match) return '255, 255, 255';
-  return `${parseInt(match[1], 16)}, ${parseInt(match[2], 16)}, ${parseInt(match[3], 16)}`;
-}
-
-function applyBetterUiSettingsVisuals() {
-  const settings = sanitizeBetterUiSettings(betterUiSettings);
-  const root = document.documentElement;
-  const mode = settings.mode || 'dark';
-  const surface = mode === 'light' ? '#ffffff' : '#0f172a';
-  const strongestSurface = mode === 'light' ? 'rgba(255, 255, 255, 0.72)' : 'rgba(15, 23, 42, 0.78)';
-  const borderColor = mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : 'rgba(255, 255, 255, 0.12)';
-  const textColor = mode === 'light' ? '#1f2937' : '#f8fafc';
-
-  root.style.setProperty('--better-ui-transparency', String(settings.transparency / 100));
-  root.style.setProperty('--better-ui-blur', `${settings.blur}px`);
-  root.style.setProperty('--better-ui-magnification', settings.magnification.toFixed(2));
-  root.style.setProperty('--better-ui-white-tint', String(settings.whiteTint));
-  root.style.setProperty('--better-ui-tint-rgb', '255, 255, 255');
-  root.style.setProperty('--better-ui-surface', strongestSurface);
-  root.style.setProperty('--better-ui-surface-alt', surface);
-  root.style.setProperty('--better-ui-border', borderColor);
-  root.style.setProperty('--better-ui-text', textColor);
-  root.dataset.betterUiMode = mode;
-
-  const whiteAlpha = (settings.whiteTint / 100) * 0.6 + (settings.transparency / 100) * 0.4;
-  root.style.setProperty('--better-ui-glass', `rgba(255, 255, 255, ${whiteAlpha})`);
-  root.style.setProperty('--better-ui-glass-strong', `rgba(255, 255, 255, ${Math.min(0.9, whiteAlpha + 0.18)})`);
-  root.style.setProperty('--better-ui-shadow', mode === 'light' ? '0 18px 45px rgba(15, 23, 42, 0.14)' : '0 18px 45px rgba(0, 0, 0, 0.22)');
-}
-
-function getStoredBetterUiSettings() {
-  try {
-    const raw = localStorage.getItem('better_ui_settings');
-    if (!raw) return getDefaultBetterUiSettings();
-    return sanitizeBetterUiSettings(JSON.parse(raw));
-  } catch (error) {
-    return getDefaultBetterUiSettings();
-  }
-}
-
-function saveBetterUiSettingsLocally() {
-  localStorage.setItem('better_ui_settings', JSON.stringify(sanitizeBetterUiSettings(betterUiSettings)));
-  localStorage.setItem('better_ui_enabled', String(Boolean(betterUiEnabled)));
-}
-
-function applyBetterUi(enabled) {
-  betterUiEnabled = Boolean(enabled);
-  betterUiSettings = sanitizeBetterUiSettings(betterUiSettings);
-  betterUiSettings.enabled = betterUiEnabled;
-  applyBetterUiSettingsVisuals();
-  if (betterUiEnabled) {
-    document.documentElement.classList.add('better-ui');
-  } else {
-    document.documentElement.classList.remove('better-ui');
-  }
-  saveBetterUiSettingsLocally();
-}
-
 // Navigation history variables
 let navigationHistory = []; // Track navigation history [{ type: 'login' | 'admin' | 'channel', channel?: string }]
 let previousPage = 'login'; // Default to login as the previous page
@@ -850,7 +763,6 @@ async function saveSettingsToFirebase() {
       chatBackgroundCustom: localStorage.getItem('chat_background_custom') || '',
       notificationsEnabled: notificationsEnabled,
       betterUiEnabled: betterUiEnabled,
-      betterUiSettings: sanitizeBetterUiSettings(betterUiSettings),
       theme: localStorage.getItem('theme') || 'dark',
       lastUpdated: firebase.database.ServerValue.TIMESTAMP
     };
@@ -920,26 +832,21 @@ async function loadSettingsFromFirebase() {
       }
 
       // Load Better UI setting
-      if (settings.hasOwnProperty('betterUiSettings')) {
-        betterUiSettings = sanitizeBetterUiSettings(settings.betterUiSettings);
-        localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
-      } else {
-        betterUiSettings = getStoredBetterUiSettings();
-      }
-
       if (settings.hasOwnProperty('betterUiEnabled')) {
-        betterUiEnabled = Boolean(settings.betterUiEnabled);
+        betterUiEnabled = settings.betterUiEnabled;
+        localStorage.setItem('better_ui_enabled', betterUiEnabled.toString());
+        const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
+        if (menuBetterUiToggle) {
+          menuBetterUiToggle.checked = betterUiEnabled;
+        }
+        applyBetterUi(betterUiEnabled);
       } else {
         const storedBetterUi = localStorage.getItem('better_ui_enabled');
-        betterUiEnabled = storedBetterUi === 'true';
+        if (storedBetterUi !== null) {
+          betterUiEnabled = storedBetterUi === 'true';
+          applyBetterUi(betterUiEnabled);
+        }
       }
-      betterUiSettings.enabled = betterUiEnabled;
-      localStorage.setItem('better_ui_enabled', betterUiEnabled.toString());
-      const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
-      if (menuBetterUiToggle) {
-        menuBetterUiToggle.checked = betterUiEnabled;
-      }
-      applyBetterUi(betterUiEnabled);
       
       // Load theme
       if (settings.theme) {
@@ -4512,124 +4419,12 @@ function closeReactionUsersModal() {
   }
 }
 
-async function openBetterUiSettingsModal() {
-  const modal = document.getElementById('betterUiSettingsModal');
-  const transparency = document.getElementById('betterUiTransparency');
-  const magnification = document.getElementById('betterUiMagnification');
-  const blur = document.getElementById('betterUiBlur');
-  const whiteTint = document.getElementById('betterUiWhiteTint');
-  const feedback = document.getElementById('betterUiSettingsFeedback');
-
-  if (!modal) return;
-
-  const settings = sanitizeBetterUiSettings(betterUiSettings);
-  if (transparency) transparency.value = settings.transparency;
-  if (magnification) magnification.value = settings.magnification;
-  if (blur) blur.value = settings.blur;
-  if (whiteTint) whiteTint.value = settings.whiteTint;
-  if (feedback) feedback.textContent = `${settings.transparency}% opacity • ${settings.magnification.toFixed(2)}x • ${settings.blur}px blur • ${settings.whiteTint}% white tint`;
-
-  await loadBetterUiImportOptions();
-  modal.style.display = 'block';
-  setTimeout(() => modal.classList.add('show'), 10);
-}
-
-function closeBetterUiSettingsModal() {
-  const modal = document.getElementById('betterUiSettingsModal');
-  if (!modal) return;
-  modal.classList.remove('show');
-  setTimeout(() => {
-    modal.style.display = 'none';
-  }, 180);
-}
-
-function syncBetterUiControlValues() {
-  const transparency = document.getElementById('betterUiTransparency');
-  const magnification = document.getElementById('betterUiMagnification');
-  const blur = document.getElementById('betterUiBlur');
-  const whiteTint = document.getElementById('betterUiWhiteTint');
-  const feedback = document.getElementById('betterUiSettingsFeedback');
-
-  if (!transparency && !magnification && !blur && !whiteTint) return;
-
-  betterUiSettings = sanitizeBetterUiSettings({
-    ...betterUiSettings,
-    transparency: Number(transparency?.value || betterUiSettings.transparency),
-    magnification: Number(magnification?.value || betterUiSettings.magnification),
-    blur: Number(blur?.value || betterUiSettings.blur),
-    whiteTint: Number(whiteTint?.value || betterUiSettings.whiteTint),
-    mode: betterUiSettings.mode || (localStorage.getItem('theme') || 'dark'),
-    enabled: betterUiEnabled
-  });
-
-  applyBetterUi(betterUiEnabled);
-  if (feedback) {
-    feedback.textContent = `${betterUiSettings.transparency}% opacity • ${betterUiSettings.magnification.toFixed(2)}x • ${betterUiSettings.blur}px blur • ${betterUiSettings.whiteTint}% white tint`;
-  }
-}
-
-async function loadBetterUiImportOptions() {
-  const select = document.getElementById('betterUiUserPresetSelect');
-  if (!select) return;
-
-  try {
-    const snapshot = await db.ref('users').once('value');
-    const users = snapshot.val() || {};
-    const options = [];
-
-    Object.entries(users).forEach(([key, value]) => {
-      const candidate = value && value.settings && value.settings.betterUiSettings ? sanitizeBetterUiSettings(value.settings.betterUiSettings) : null;
-      if (!candidate || key === getFirebaseSafeUserKey(username || '')) {
-        return;
-      }
-      options.push({ key, label: key.replace(/_/g, ' '), settings: candidate });
-    });
-
-    select.innerHTML = '<option value="">Choose another user’s Better UI settings</option>' +
-      options.map(option => `<option value="${option.key}">${option.label}</option>`).join('');
-  } catch (error) {
-    console.error('Error loading Better UI profiles:', error);
-    select.innerHTML = '<option value="">No Better UI profiles found</option>';
-  }
-}
-
-async function applyImportedBetterUiSettings() {
-  const select = document.getElementById('betterUiUserPresetSelect');
-  if (!select || !select.value) {
-    showNotification('Choose a user first.', true);
-    return;
-  }
-
-  try {
-    const snapshot = await db.ref(`users/${select.value}/settings`).once('value');
-    const userSettings = snapshot.val() || {};
-    const importedSettings = userSettings.betterUiSettings;
-    if (!importedSettings) {
-      showNotification('That user has no Better UI settings saved.', true);
-      return;
-    }
-
-    betterUiSettings = sanitizeBetterUiSettings(importedSettings);
-    betterUiSettings.enabled = betterUiEnabled;
-    betterUiSettings.mode = localStorage.getItem('theme') || betterUiSettings.mode || 'dark';
-    applyBetterUi(betterUiEnabled);
-    await saveSettingsToFirebase();
-    if (document.getElementById('betterUiTransparency')) {
-      document.getElementById('betterUiTransparency').value = betterUiSettings.transparency;
-    }
-    if (document.getElementById('betterUiMagnification')) {
-      document.getElementById('betterUiMagnification').value = betterUiSettings.magnification;
-    }
-    if (document.getElementById('betterUiBlur')) {
-      document.getElementById('betterUiBlur').value = betterUiSettings.blur;
-    }
-    if (document.getElementById('betterUiWhiteTint')) {
-      document.getElementById('betterUiWhiteTint').value = betterUiSettings.whiteTint;
-    }
-    showNotification('Imported another user’s Better UI settings');
-  } catch (error) {
-    console.error('Error importing Better UI profile:', error);
-    showNotification('Could not import Better UI profile.', true);
+function applyBetterUi(enabled) {
+  betterUiEnabled = enabled;
+  if (enabled) {
+    document.documentElement.classList.add('better-ui');
+  } else {
+    document.documentElement.classList.remove('better-ui');
   }
 }
 
@@ -4919,9 +4714,6 @@ async function initializeChatApp() {
   // Theme management
   const savedTheme = localStorage.getItem('theme') || 'dark';
   document.documentElement.classList.add(`--${savedTheme}-theme`);
-  betterUiSettings = getStoredBetterUiSettings();
-  betterUiSettings.enabled = betterUiEnabled;
-  applyBetterUiSettingsVisuals();
   if (betterUiEnabled) {
     document.documentElement.classList.add('better-ui');
   }
@@ -4931,9 +4723,6 @@ async function initializeChatApp() {
     const newTheme = themeSwitch.checked ? 'dark' : 'light';
     document.documentElement.classList.remove('--dark-theme', '--light-theme');
     document.documentElement.classList.add(`--${newTheme}-theme`);
-    betterUiSettings.mode = newTheme;
-    betterUiSettings.enabled = betterUiEnabled;
-    applyBetterUiSettingsVisuals();
     if (betterUiEnabled) {
       document.documentElement.classList.add('better-ui');
     }
@@ -8298,15 +8087,6 @@ async function populateRecentChatsList() {
   const menuConfigureNotifications = document.getElementById('menuConfigureNotifications');
   const menuCurrentDeviceNotificationToggle = document.getElementById('menuCurrentDeviceNotificationToggle');
   const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
-  const menuBetterUiSettingsBtn = document.getElementById('menuBetterUiSettingsBtn');
-  const betterUiSettingsModal = document.getElementById('betterUiSettingsModal');
-  const betterUiSaveSettingsBtn = document.getElementById('betterUiSaveSettingsBtn');
-  const betterUiApplyUserPresetBtn = document.getElementById('betterUiApplyUserPresetBtn');
-  const betterUiTransparency = document.getElementById('betterUiTransparency');
-  const betterUiMagnification = document.getElementById('betterUiMagnification');
-  const betterUiBlur = document.getElementById('betterUiBlur');
-  const betterUiWhiteTint = document.getElementById('betterUiWhiteTint');
-  const betterUiCloseBtn = document.getElementById('betterUiCloseBtn');
 
   if (menuConfigureNotifications) {
     menuConfigureNotifications.addEventListener('click', () => {
@@ -8337,53 +8117,11 @@ async function populateRecentChatsList() {
 
   menuBetterUiToggle.addEventListener('change', async (e) => {
     betterUiEnabled = e.target.checked;
-    betterUiSettings.enabled = betterUiEnabled;
     applyBetterUi(betterUiEnabled);
     localStorage.setItem('better_ui_enabled', betterUiEnabled);
     await saveSettingsToFirebase();
     showNotification(betterUiEnabled ? 'Better UI enabled' : 'Better UI disabled');
   });
-
-  if (menuBetterUiSettingsBtn) {
-    menuBetterUiSettingsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openBetterUiSettingsModal();
-    });
-  }
-
-  if (betterUiCloseBtn) {
-    betterUiCloseBtn.addEventListener('click', () => closeBetterUiSettingsModal());
-  }
-
-  if (betterUiSettingsModal) {
-    betterUiSettingsModal.addEventListener('click', (e) => {
-      if (e.target === betterUiSettingsModal) closeBetterUiSettingsModal();
-    });
-  }
-
-  [betterUiTransparency, betterUiMagnification, betterUiBlur, betterUiWhiteTint].forEach((input) => {
-    if (!input) return;
-    input.addEventListener('input', () => {
-      syncBetterUiControlValues();
-    });
-  });
-
-  if (betterUiSaveSettingsBtn) {
-    betterUiSaveSettingsBtn.addEventListener('click', async () => {
-      syncBetterUiControlValues();
-      betterUiSettings.enabled = betterUiEnabled;
-      await saveSettingsToFirebase();
-      saveBetterUiSettingsLocally();
-      closeBetterUiSettingsModal();
-      showNotification('Better UI settings saved');
-    });
-  }
-
-  if (betterUiApplyUserPresetBtn) {
-    betterUiApplyUserPresetBtn.addEventListener('click', () => {
-      applyImportedBetterUiSettings();
-    });
-  }
 
   const manageDevicesBtn = document.getElementById('manageDevicesBtn');
   const deviceSettingsModal = document.getElementById('deviceSettingsModal');
@@ -9558,7 +9296,6 @@ window.addEventListener("DOMContentLoaded", () => {
   // Clear the page reload flag now that page has loaded
   localStorage.removeItem('page_reload_in_progress');
 });
-
 
 
 
