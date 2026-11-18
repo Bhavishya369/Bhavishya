@@ -212,6 +212,7 @@ let reactionTarget = null;
 let giphyCurrentQuery = '';
 let giphyOffset = 0;
 let giphyIsLoading = false;
+let emojiRenderId = 0;
 
 // Video edit state
 let selectedVideoFile = null;
@@ -4006,7 +4007,6 @@ function saveRecentReaction(emoji) {
 // Setup press-hold detection on messages
 function setupReactionOnMessage(messageDiv) {
   let pressTimer = null;
-  let isPressHeld = false;
 
   const startPress = (e) => {
     if (e.target.closest('.message__actions') || 
@@ -4015,9 +4015,7 @@ function setupReactionOnMessage(messageDiv) {
       return;
     }
 
-    isPressHeld = false;
     pressTimer = setTimeout(() => {
-      isPressHeld = true;
       messageDiv.classList.add('message-selected');
       showReactionPicker(messageDiv, e);
     }, 1000); // 1s press-and-hold
@@ -4034,9 +4032,6 @@ function setupReactionOnMessage(messageDiv) {
     }
   };
 
-  messageDiv.addEventListener('mousedown', startPress);
-  messageDiv.addEventListener('mouseup', endPress);
-  messageDiv.addEventListener('mouseleave', endPress);
   messageDiv.addEventListener('touchstart', startPress, { passive: true });
   messageDiv.addEventListener('touchend', endPress, { passive: true });
 }
@@ -4441,7 +4436,7 @@ function getEmojiDataForGroup(group, searchTerm) {
     const matches = emojiData.filter(item => item.group === group);
     if (!searchTerm) return matches;
     const query = searchTerm.toLowerCase();
-    return matches.filter(item => item.name.toLowerCase().includes(query) || item.char === searchTerm);
+    return matches.filter(item => item.searchText.includes(query) || item.char === searchTerm);
   }
   return [];
 }
@@ -4449,6 +4444,7 @@ function getEmojiDataForGroup(group, searchTerm) {
 async function initializeChatApp() {
   // DOM Elements for chat - get references FIRST before resetting
   const chatInput = document.getElementById('chatInput');
+  let pendingClipboardFiles = [];
   const sendBtn = document.getElementById('sendBtn');
   messagesDiv = document.getElementById('messages');
   chatDiv = document.getElementById('chat');
@@ -5106,64 +5102,83 @@ async function initializeChatApp() {
     linkPreviewData = null;
   });
 
-  const emojiGroups = [
-    { name: 'Smileys & Emotion', icon: '😀' },
-    { name: 'People & Body', icon: '👋' },
-    { name: 'Animals & Nature', icon: '🐶' },
-    { name: 'Food & Drink', icon: '🍎' },
-    { name: 'Activities', icon: '⚽' },
-    { name: 'Travel & Places', icon: '✈️' },
-    { name: 'Objects', icon: '💡' },
-    { name: 'Symbols', icon: '❤️' },
-    { name: 'Flags', icon: '🏳️' }
-  ];
+  const emojiGroupLabels = {
+    'smileys-emotion': 'Smileys & Emotion',
+    'people-body': 'People & Body',
+    'animals-nature': 'Animals & Nature',
+    'food-drink': 'Food & Drink',
+    activities: 'Activities',
+    'travel-places': 'Travel & Places',
+    objects: 'Objects',
+    symbols: 'Symbols',
+    component: 'Components'
+  };
+  const emojiGroupIcons = {
+    'Smileys & Emotion': '😀',
+    'People & Body': '👋',
+    'Animals & Nature': '🐶',
+    'Food & Drink': '🍎',
+    Activities: '⚽',
+    'Travel & Places': '✈️',
+    Objects: '💡',
+    Symbols: '❤️',
+    Components: '🧩'
+  };
+  let currentEmojiResults = [];
+  let currentMediaResults = [];
+  let renderedStartRow = -1;
+  let renderedEndRow = -1;
+  let pickerScrollFrame = 0;
+  let giphyLoadError = false;
 
   async function loadEmojiData() {
-    try {
-      const response = await fetch('https://unpkg.com/emoji.json@13.1.0/emoji.json');
-      const data = await response.json();
-      emojiData = data.map(item => ({ char: item.char, name: item.name, group: item.group || item.category || 'Other' }));
-      if (emojiData.length > 0) {
-        activeEmojiGroup = 'Smileys & Emotion';
-      }
-    } catch (error) {
-      console.warn('Unable to load emoji library:', error);
-      emojiData = [];
+    const response = await fetch('Emoji raw json data.txt');
+    if (!response.ok) {
+      throw new Error(`Unable to load emoji data: ${response.status}`);
     }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      throw new Error('Emoji data file must contain a JSON array');
+    }
+
+    emojiData = data.filter(item => item && item.emoji && item.group).map(item => {
+      const group = emojiGroupLabels[item.group] || item.group;
+      const name = item.annotation || item.hexcode || item.emoji;
+      const searchText = [name, ...(item.tags || []), ...(item.shortcodes || []), ...(item.emoticons || [])]
+        .join(' ')
+        .toLowerCase();
+      return { char: item.emoji, name, group, searchText };
+    });
+    activeEmojiGroup = emojiData.find(item => item.group === activeEmojiGroup)
+      ? activeEmojiGroup
+      : (emojiData[0]?.group || 'Smileys & Emotion');
   }
 
   function getEmojiGroups() {
-    if (emojiData && emojiData.length > 0) {
-      const groups = {};
-      emojiData.forEach(item => {
-        groups[item.group] = true;
-      });
-      return Object.keys(groups).slice(0, 9);
-    }
-    return emojiGroups.map(item => item.name);
+    return [...new Set(emojiData.map(item => item.group))];
+  }
+
+  function renderEmojiCategories() {
+    const categoriesDiv = document.getElementById('emojiCategories');
+    categoriesDiv.innerHTML = '';
+
+    getEmojiGroups().forEach(group => {
+      const button = document.createElement('button');
+      button.className = `emoji-category${group === activeEmojiGroup ? ' active' : ''}`;
+      button.textContent = emojiGroupIcons[group] || '😀';
+      button.title = group;
+      button.addEventListener('click', () => showEmojiCategory(group));
+      categoriesDiv.appendChild(button);
+    });
   }
 
   function initEmojiPicker() {
-    const categoriesDiv = document.getElementById('emojiCategories');
-    categoriesDiv.innerHTML = '';
-    const groups = getEmojiGroups();
+    renderEmojiCategories();
 
-    groups.forEach((group, index) => {
-      const icon = emojiGroups.find(item => item.name === group)?.icon || '😀';
-      const button = document.createElement('button');
-      button.className = `emoji-category ${index === 0 ? 'active' : ''}`;
-      button.innerHTML = icon;
-      button.title = group;
-      button.addEventListener('click', () => {
-        activeEmojiGroup = group;
-        showEmojiCategory(group);
-      });
-      categoriesDiv.appendChild(button);
-    });
-
-    document.querySelectorAll('.emoji-tab').forEach((tab) => {
+    document.querySelectorAll('.emoji-tab').forEach(tab => {
       tab.addEventListener('click', () => {
-        document.querySelectorAll('.emoji-tab').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.emoji-tab').forEach(button => button.classList.remove('active'));
         tab.classList.add('active');
         emojiMode = tab.dataset.category;
         document.getElementById('emojiPickerTitle').textContent = emojiMode;
@@ -5172,11 +5187,9 @@ async function initializeChatApp() {
       });
     });
 
-    document.getElementById('emojiSearchInput').addEventListener('input', (e) => {
+    document.getElementById('emojiSearchInput').addEventListener('input', event => {
       clearTimeout(emojiSearchTimeout);
-      emojiSearchTimeout = setTimeout(() => {
-        renderEmojiPicker(e.target.value.trim());
-      }, 250);
+      emojiSearchTimeout = setTimeout(() => renderEmojiPicker(event.target.value.trim()), 250);
     });
 
     const emojiPicker = document.getElementById('emojiPicker');
@@ -5184,146 +5197,223 @@ async function initializeChatApp() {
       document.body.appendChild(emojiPicker);
     }
 
+    const emojiGridEl = document.getElementById('emojiGrid');
+    emojiGridEl.addEventListener('click', event => {
+      const item = event.target.closest('.emoji-item');
+      if (!item) return;
+
+      if (item.dataset.emoji) {
+        if (reactionTarget) {
+          toggleReaction(reactionTarget.messageKey, reactionTarget.messageId, item.dataset.emoji);
+          reactionTarget = null;
+          closeEmojiPicker();
+          return;
+        }
+        chatInput.value += item.dataset.emoji;
+        chatInput.focus();
+        autoResizeTextarea();
+      } else if (item.dataset.mediaUrl) {
+        if (emojiMode === 'GIF') {
+          sendGifMessage(item.dataset.mediaUrl, 'image');
+        } else {
+          sendStickerMessage(item.dataset.mediaUrl, 'image');
+        }
+      }
+    });
+    emojiGridEl.addEventListener('scroll', () => {
+      if (!pickerScrollFrame) {
+        pickerScrollFrame = requestAnimationFrame(() => {
+          pickerScrollFrame = 0;
+          renderVirtualPickerWindow();
+          if (emojiMode !== 'Emoji' && giphyOffset !== null &&
+              emojiGridEl.scrollTop + emojiGridEl.clientHeight >= emojiGridEl.scrollHeight - 100) {
+            loadMoreGiphyResults();
+          }
+        });
+      }
+    }, { passive: true });
+    window.addEventListener('resize', () => {
+      renderedStartRow = -1;
+      renderVirtualPickerWindow();
+    }, { passive: true });
+
     renderEmojiPicker();
+  }
+
+  function renderVirtualPickerWindow() {
+    const emojiGridEl = document.getElementById('emojiGrid');
+    const items = emojiMode === 'Emoji' ? currentEmojiResults : currentMediaResults;
+    if (!items.length) return;
+
+    const isMedia = emojiMode !== 'Emoji';
+    const columns = isMedia ? 2 : Math.max(1,
+      window.getComputedStyle(emojiGridEl).gridTemplateColumns.split(' ').length);
+    const styles = window.getComputedStyle(emojiGridEl);
+    const rowGap = parseFloat(styles.rowGap) || 10;
+    const oldItem = emojiGridEl.querySelector('.emoji-item');
+    const itemHeight = oldItem
+      ? oldItem.getBoundingClientRect().height
+      : (isMedia ? 110 : Math.max(36,
+        (emojiGridEl.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight) -
+          (columns - 1) * (parseFloat(styles.columnGap) || 0)) / columns));
+    const rowHeight = itemHeight + rowGap;
+    const totalRows = Math.ceil(items.length / columns);
+    const visibleRows = Math.max(1, Math.ceil(emojiGridEl.clientHeight / rowHeight));
+    const firstVisibleRow = Math.min(totalRows - 1, Math.floor(emojiGridEl.scrollTop / rowHeight));
+    const startRow = Math.max(0, firstVisibleRow - 3);
+    const endRow = Math.min(totalRows, firstVisibleRow + visibleRows + 5);
+
+    if (renderedStartRow >= 0 &&
+        firstVisibleRow >= renderedStartRow + 2 &&
+        firstVisibleRow + visibleRows < renderedEndRow - 2) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const topSpacerHeight = startRow ? Math.max(0, startRow * rowHeight - rowGap) : 0;
+    if (topSpacerHeight) {
+      const spacer = document.createElement('div');
+      spacer.className = 'emoji-virtual-spacer';
+      spacer.style.height = `${topSpacerHeight}px`;
+      fragment.appendChild(spacer);
+    }
+
+    const startIndex = startRow * columns;
+    const endIndex = Math.min(items.length, endRow * columns);
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const item = document.createElement('div');
+      if (isMedia) {
+        item.className = 'emoji-item media-item';
+        item.dataset.mediaUrl = items[index];
+        const img = document.createElement('img');
+        img.src = items[index];
+        img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        item.appendChild(img);
+      } else {
+        item.className = 'emoji-item';
+        item.dataset.emoji = items[index].char;
+        item.textContent = items[index].char;
+        item.title = items[index].name;
+      }
+      fragment.appendChild(item);
+    }
+
+    const remainingRows = totalRows - endRow;
+    const bottomSpacerHeight = remainingRows ? Math.max(0, remainingRows * rowHeight - rowGap) : 0;
+    if (bottomSpacerHeight) {
+      const spacer = document.createElement('div');
+      spacer.className = 'emoji-virtual-spacer';
+      spacer.style.height = `${bottomSpacerHeight}px`;
+      fragment.appendChild(spacer);
+    }
+
+    if (isMedia && giphyOffset !== null) {
+      const sentinel = document.createElement('div');
+      sentinel.className = 'emoji-load-sentinel';
+      sentinel.textContent = giphyIsLoading
+        ? 'Loading…'
+        : (giphyLoadError ? 'Unable to load more results. Scroll to retry.' : 'Scroll to load more');
+      fragment.appendChild(sentinel);
+    }
+
+    emojiGridEl.replaceChildren(fragment);
+    renderedStartRow = startRow;
+    renderedEndRow = endRow;
   }
 
   function renderEmojiPicker(searchTerm = '') {
     const emojiGridEl = document.getElementById('emojiGrid');
+    const renderId = ++emojiRenderId;
+    giphyIsLoading = false;
+    giphyLoadError = false;
+    renderedStartRow = -1;
+    emojiGridEl.scrollTop = 0;
     emojiGridEl.innerHTML = '';
+    emojiGridEl.classList.toggle('media-mode', emojiMode !== 'Emoji');
 
     if (emojiMode === 'Emoji') {
-      const filtered = getEmojiDataForGroup(activeEmojiGroup, searchTerm);
-      filtered.slice(0, 200).forEach(({ char, name }) => {
-        const emojiItem = document.createElement('div');
-        emojiItem.className = 'emoji-item';
-        emojiItem.textContent = char;
-        emojiItem.title = name;
-        emojiItem.addEventListener('click', () => {
-          if (reactionTarget) {
-            toggleReaction(reactionTarget.messageKey, reactionTarget.messageId, char);
-            reactionTarget = null;
-            closeEmojiPicker();
-            return;
-          }
-
-          chatInput.value += char;
-          chatInput.focus();
-          autoResizeTextarea();
-        });
-        emojiGridEl.appendChild(emojiItem);
-      });
-    } else {
-      if (reactionTarget) {
-        emojiGridEl.innerHTML = '<div class="emoji-loading">Reaction mode supports only emoji.</div>';
-        removeEmojiLoadMoreButton();
+      if (!emojiData.length) {
+        emojiGridEl.innerHTML = '<div class="emoji-loading">Loading emoji…</div>';
         return;
       }
-
-      giphyCurrentQuery = searchTerm;
-      giphyOffset = 0;
-      emojiGridEl.innerHTML = '<div class="emoji-loading">Loading...</div>';
-      removeEmojiLoadMoreButton();
-      fetchGiphyContent(searchTerm, emojiMode, 0).then(({ items, nextOffset }) => {
-        giphyOffset = nextOffset;
-        emojiGridEl.innerHTML = '';
-        if (!items.length) {
-          emojiGridEl.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">No results found. Try another search.</div>';
-          return;
-        }
-        items.forEach(({ url }) => {
-          const item = document.createElement('div');
-          item.className = 'emoji-item media-item';
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
-          img.loading = 'lazy';
-          item.appendChild(img);
-          item.addEventListener('click', () => {
-            if (emojiMode === 'GIF') {
-              sendGifMessage(url, 'image');
-            } else {
-              sendStickerMessage(url, 'image');
-            }
-          });
-          emojiGridEl.appendChild(item);
-        });
-        if (giphyOffset !== null) {
-          createEmojiLoadMoreButton();
-        }
-      }).catch((error) => {
-        console.error('Giphy fetch failed:', error);
-        emojiGridEl.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Unable to load GIFs or stickers.</div>';
-      });
+      currentEmojiResults = getEmojiDataForGroup(activeEmojiGroup, searchTerm);
+      if (!currentEmojiResults.length) {
+        emojiGridEl.innerHTML = '<div class="emoji-loading">No results found. Try another search.</div>';
+        return;
+      }
+      renderVirtualPickerWindow();
+      return;
     }
+
+    if (reactionTarget) {
+      emojiGridEl.innerHTML = '<div class="emoji-loading">Reaction mode supports only emoji.</div>';
+      return;
+    }
+
+    giphyCurrentQuery = searchTerm;
+    giphyOffset = 0;
+    currentMediaResults = [];
+    emojiGridEl.innerHTML = '<div class="emoji-loading">Loading...</div>';
+    fetchGiphyContent(searchTerm, emojiMode, 0).then(({ items, nextOffset }) => {
+      if (renderId !== emojiRenderId) return;
+      giphyOffset = nextOffset;
+      if (!items.length) {
+        emojiGridEl.innerHTML = '<div class="emoji-loading">No results found. Try another search.</div>';
+        return;
+      }
+      currentMediaResults = items.map(item => item.url);
+      renderedStartRow = -1;
+      renderVirtualPickerWindow();
+      if (giphyOffset !== null && emojiGridEl.scrollHeight <= emojiGridEl.clientHeight + 80) {
+        loadMoreGiphyResults();
+      }
+    }).catch(error => {
+      if (renderId !== emojiRenderId) return;
+      console.error('Giphy fetch failed:', error);
+      emojiGridEl.innerHTML = '<div class="emoji-loading">Unable to load GIFs or stickers.</div>';
+    });
   }
 
   window.renderEmojiPicker = renderEmojiPicker;
 
-  function createEmojiLoadMoreButton() {
-    let loadMore = document.getElementById('emojiLoadMoreButton');
-    if (!loadMore) {
-      loadMore = document.createElement('button');
-      loadMore.id = 'emojiLoadMoreButton';
-      loadMore.className = 'emoji-load-more';
-      loadMore.textContent = 'Load more';
-      loadMore.addEventListener('click', loadMoreGiphyResults);
-      document.getElementById('emojiGrid').after(loadMore);
-    }
-  }
-
-  function removeEmojiLoadMoreButton() {
-    const loadMore = document.getElementById('emojiLoadMoreButton');
-    if (loadMore) {
-      loadMore.remove();
-    }
-  }
-
   async function loadMoreGiphyResults() {
-    if (giphyOffset === null || giphyIsLoading) return;
+    if (giphyIsLoading || emojiMode === 'Emoji') return;
+    const renderId = emojiRenderId;
+    if (giphyOffset === null) return;
+
     giphyIsLoading = true;
-    const emojiGridEl = document.getElementById('emojiGrid');
-    const loadMore = document.getElementById('emojiLoadMoreButton');
-    if (loadMore) {
-      loadMore.textContent = 'Loading...';
-    }
+    giphyLoadError = false;
+    renderVirtualPickerWindow();
 
     try {
       const { items, nextOffset } = await fetchGiphyContent(giphyCurrentQuery, emojiMode, giphyOffset);
-      giphyOffset = nextOffset;
-      items.forEach(({ url }) => {
-        const item = document.createElement('div');
-        item.className = 'emoji-item media-item';
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = emojiMode === 'GIF' ? 'GIF' : 'Sticker';
-        img.loading = 'lazy';
-        item.appendChild(img);
-        item.addEventListener('click', () => {
-          if (emojiMode === 'GIF') {
-            sendGifMessage(url, 'image');
-          } else {
-            sendStickerMessage(url, 'image');
-          }
-        });
-        emojiGridEl.appendChild(item);
-      });
-      if (giphyOffset === null) {
-        removeEmojiLoadMoreButton();
-      }
+      if (renderId !== emojiRenderId) return;
+      giphyOffset = items.length ? nextOffset : null;
+      currentMediaResults.push(...items.map(item => item.url));
+      renderedStartRow = -1;
+      renderVirtualPickerWindow();
     } catch (error) {
-      console.error('Failed to load more Giphy results:', error);
+      if (renderId === emojiRenderId) {
+        console.error('Failed to load more Giphy results:', error);
+        giphyLoadError = true;
+        renderedStartRow = -1;
+        renderVirtualPickerWindow();
+      }
     } finally {
-      giphyIsLoading = false;
-      if (loadMore) {
-        loadMore.textContent = giphyOffset !== null ? 'Load more' : 'No more results';
+      if (renderId === emojiRenderId) {
+        giphyIsLoading = false;
+        renderedStartRow = -1;
+        renderVirtualPickerWindow();
       }
     }
   }
 
   function showEmojiCategory(group) {
     activeEmojiGroup = group;
-    document.querySelectorAll('.emoji-category').forEach((btn) => {
-      btn.classList.toggle('active', btn.title === group);
+    document.querySelectorAll('.emoji-category').forEach(button => {
+      button.classList.toggle('active', button.title === group);
     });
     giphyCurrentQuery = '';
     giphyOffset = 0;
@@ -5433,6 +5523,10 @@ async function initializeChatApp() {
   // Toggle emoji picker
   emojiBtn.addEventListener('click', () => {
     emojiPicker.classList.toggle('show');
+    if (emojiPicker.classList.contains('show')) {
+      renderedStartRow = -1;
+      renderVirtualPickerWindow();
+    }
   });
 
   closeEmojiBtn.addEventListener('click', () => {
@@ -6286,36 +6380,35 @@ async function populateRecentChatsList() {
       return;
     }
     
-    if (!text) {
+    if (!text && !pendingClipboardFiles.length) {
       isSending = false;
       return;
     }
     
-    const timestamp = Date.now();
-    
-    const message = {
-      id: `msg_${timestamp}_${userId}`,
-      name: username,
-      userId: userId,
-      text: text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp: timestamp,
-      edited: false,
-      channel: userChannel,
-      replyTo: replyToMessage ? {
-        id: replyToMessage.id,
-        sender: replyToMessage.name,
-        text: replyToMessage.text
-      } : null
-    };
-    
-    // Add link preview if available
-    if (linkPreviewData) {
-      message.linkPreview = linkPreviewData;
-    }
-    
-    db.ref('chat').push(message)
-      .then(() => {
+    try {
+      if (text) {
+        const timestamp = Date.now();
+        const message = {
+          id: `msg_${timestamp}_${userId}`,
+          name: username,
+          userId: userId,
+          text: text,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: timestamp,
+          edited: false,
+          channel: userChannel,
+          replyTo: replyToMessage ? {
+            id: replyToMessage.id,
+            sender: replyToMessage.name,
+            text: replyToMessage.text
+          } : null
+        };
+
+        if (linkPreviewData) {
+          message.linkPreview = linkPreviewData;
+        }
+
+        await db.ref('chat').push(message);
         chatInput.value = '';
         replyToMessage = null;
         hideReplyPreview();
@@ -6323,19 +6416,24 @@ async function populateRecentChatsList() {
         linkPreviewInput.classList.remove('show');
         autoResizeTextarea();
         updateTypingStatus(false);
-        
-        // Scroll to bottom
-        setTimeout(() => {
-          messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }, 100);
-        
-        isSending = false;
-      })
-      .catch(error => {
-        console.error("Error sending message:", error);
-        showNotification("Failed to send message. Please try again.", true);
-        isSending = false;
-      });
+      }
+
+      while (pendingClipboardFiles.length) {
+        const file = pendingClipboardFiles[0];
+        await shareChatFile(file);
+        pendingClipboardFiles.shift();
+        updateClipboardFilePreview();
+      }
+
+      setTimeout(() => {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }, 100);
+    } catch (error) {
+      console.error('Error sending message or pasted file:', error);
+      showNotification('Failed to send. Please try again.', true);
+    } finally {
+      isSending = false;
+    }
   }
 
   // Remove previous message listener if exists to prevent duplicates
@@ -6514,9 +6612,16 @@ async function populateRecentChatsList() {
     markStartupCheckpoint('ready', 'Ready');
     setTimeout(hideAppLoader, 300);
 
-    // Load emoji library in background after initial UI is ready
+    // Load the local emoji dataset after initial UI is ready.
     setTimeout(() => {
-      loadEmojiData().then(() => renderEmojiPicker()).catch(() => {});
+      loadEmojiData().then(() => {
+        renderEmojiCategories();
+        renderEmojiPicker();
+      }).catch(error => {
+        console.error('Unable to load emoji data:', error);
+        document.getElementById('emojiGrid').innerHTML =
+          '<div class="emoji-loading">Unable to load emoji data.</div>';
+      });
     }, 400);
 
     let realtimeQuery = query;
@@ -7910,6 +8015,7 @@ async function populateRecentChatsList() {
   const clipboardImagePreviewBox = document.getElementById('clipboardImagePreviewBox');
   const clipboardImagePreviewImage = document.getElementById('clipboardImagePreviewImage');
   const clipboardImagePreviewClose = document.getElementById('clipboardImagePreviewClose');
+  const clipboardFilePreviewName = document.getElementById('clipboardFilePreviewName');
   let currentClipboardPreviewUrl = null;
 
   function hideClipboardImagePreview() {
@@ -7918,6 +8024,11 @@ async function populateRecentChatsList() {
     }
     if (clipboardImagePreviewImage) {
       clipboardImagePreviewImage.src = '';
+      clipboardImagePreviewImage.style.display = 'none';
+    }
+    if (clipboardFilePreviewName) {
+      clipboardFilePreviewName.textContent = '';
+      clipboardFilePreviewName.style.display = 'none';
     }
     if (currentClipboardPreviewUrl) {
       URL.revokeObjectURL(currentClipboardPreviewUrl);
@@ -7925,20 +8036,28 @@ async function populateRecentChatsList() {
     }
   }
 
-  function showClipboardImagePreview(url) {
+  function updateClipboardFilePreview() {
     hideClipboardImagePreview();
-    currentClipboardPreviewUrl = url;
-    if (clipboardImagePreviewImage) {
-      clipboardImagePreviewImage.src = url;
+    if (!pendingClipboardFiles.length) return;
+
+    const firstFile = pendingClipboardFiles[0];
+    if (pendingClipboardFiles.length === 1 && firstFile.type.startsWith('image/')) {
+      currentClipboardPreviewUrl = URL.createObjectURL(firstFile);
+      clipboardImagePreviewImage.src = currentClipboardPreviewUrl;
+      clipboardImagePreviewImage.style.display = 'block';
+    } else {
+      clipboardFilePreviewName.textContent = pendingClipboardFiles.length === 1
+        ? firstFile.name
+        : `${pendingClipboardFiles.length} files ready to send`;
+      clipboardFilePreviewName.style.display = 'block';
     }
-    if (clipboardImagePreviewBox) {
-      clipboardImagePreviewBox.style.display = 'flex';
-    }
+    clipboardImagePreviewBox.style.display = 'flex';
   }
 
   if (clipboardImagePreviewClose) {
     clipboardImagePreviewClose.addEventListener('click', (e) => {
       e.stopPropagation();
+      pendingClipboardFiles = [];
       hideClipboardImagePreview();
     });
   }
@@ -7960,18 +8079,28 @@ async function populateRecentChatsList() {
   async function handleClipboardPaste(event) {
     if (!event.clipboardData) return;
 
-    const items = Array.from(event.clipboardData.items || []);
-    const imageItem = items.find(item => item.type.startsWith('image/'));
-    if (!imageItem) return;
+    const pastedFiles = Array.from(event.clipboardData.files || []);
+    Array.from(event.clipboardData.items || []).forEach(item => {
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) pastedFiles.push(file);
+      }
+    });
+
+    const uniqueFiles = [];
+    const seenFiles = new Set();
+    pastedFiles.forEach(file => {
+      const signature = `${file.name}:${file.size}:${file.type}:${file.lastModified}`;
+      if (!seenFiles.has(signature)) {
+        seenFiles.add(signature);
+        uniqueFiles.push(file);
+      }
+    });
+    if (!uniqueFiles.length) return;
 
     event.preventDefault();
-
-    const blob = imageItem.getAsFile();
-    if (!blob) return;
-
-    const previewUrl = URL.createObjectURL(blob);
-    hideClipboardImagePreview();
-    showClipboardImagePreview(previewUrl);
+    pendingClipboardFiles.push(...uniqueFiles);
+    updateClipboardFilePreview();
 
     const linkPreviewInput = document.getElementById('linkPreviewInput');
     if (linkPreviewInput) {
@@ -7979,7 +8108,7 @@ async function populateRecentChatsList() {
     }
 
     chatInput.focus();
-    showNotification('Image pasted. Click preview to open or tap × to cancel.');
+    showNotification(`${uniqueFiles.length} file${uniqueFiles.length === 1 ? '' : 's'} pasted. Send to upload.`);
   }
 
   // Menu button functionality (WhatsApp-style)
@@ -8896,110 +9025,94 @@ async function populateRecentChatsList() {
     switchChannelModal.style.display = 'none';
   });
 
-  // Attach button functionality with Cloudinary
+  async function shareChatFile(file) {
+    const isPdf = /\.pdf$/i.test(file.name);
+    const isRaw = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar)$/i.test(file.name);
+    const timestamp = Date.now();
+    const fileName = `${userId}_${timestamp}_${file.name.replace(/\s+/g, '_')}`;
+    let storageUrl = null;
+    let uploadResult = null;
+    let storageType = 'cloudinary';
+
+    if (isPdf || isRaw) {
+      storageType = 'supabase';
+      const { data, error } = await supabaseClient.storage.from('chat-files').upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+      if (error) {
+        console.warn('Supabase upload failed, falling back to Cloudinary:', error);
+        const result = await uploadToCloudinary(file);
+        uploadResult = result;
+        storageUrl = result.secure_url;
+        storageType = 'cloudinary';
+      } else {
+        uploadResult = data;
+        const publicUrlResult = supabaseClient.storage.from('chat-files').getPublicUrl(fileName);
+        const publicData = publicUrlResult?.data || {};
+        if (publicUrlResult?.error) throw publicUrlResult.error;
+        storageUrl = publicData?.publicUrl || publicData?.publicURL || null;
+        if (!storageUrl) throw new Error('Unable to retrieve Supabase public URL');
+      }
+    } else {
+      const result = await uploadToCloudinary(file);
+      uploadResult = result;
+      storageUrl = result.secure_url;
+    }
+
+    let mediaType = 'file';
+    if (isImageFile(file.name)) {
+      mediaType = 'image';
+    } else if (isVideoFile(file.name)) {
+      mediaType = 'video';
+    } else if (isAudioFile(file.name)) {
+      mediaType = 'audio';
+    }
+
+    const message = {
+      id: `msg_${timestamp}_${userId}`,
+      name: username,
+      userId,
+      text: mediaType === 'file' ? `Shared a file: ${file.name}` : '',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp,
+      channel: userChannel,
+      ...(mediaType !== 'file' ? {
+        mediaType,
+        mediaUrl: storageUrl
+      } : {
+        fileData: {
+          name: file.name,
+          size: file.size,
+          url: storageUrl,
+          type: file.type,
+          storage: storageType,
+          publicId: uploadResult?.public_id || '',
+          format: uploadResult?.format || ''
+        }
+      })
+    };
+
+    await db.ref('chat').push(message);
+    showNotification('File shared successfully!');
+  }
+
   attachBtn.addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '*/*';  // Allow all file types without restrictions
+    input.accept = '*/*';
     input.multiple = false;
-    
-    input.onchange = async (e) => {
-      const file = e.target.files[0];
+    input.onchange = async event => {
+      const file = event.target.files[0];
       if (!file) return;
-      
       try {
-        // Use Supabase storage for PDFs and raw documents
-        const isPdf = /\.pdf$/i.test(file.name);
-        const isRaw = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar)$/i.test(file.name);
-        const timestamp = Date.now();
-        const fileName = `${userId}_${timestamp}_${file.name.replace(/\s+/g, '_')}`;
-
-        let storageUrl = null;
-        let uploadResult = null;
-        let storageType = 'cloudinary';
-
-        if (isPdf || isRaw) {
-          storageType = 'supabase';
-          const { data, error } = await supabaseClient.storage.from('chat-files').upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-          if (error) {
-            console.warn('Supabase upload failed, falling back to Cloudinary:', error);
-            const result = await uploadToCloudinary(file);
-            uploadResult = result;
-            storageUrl = result.secure_url;
-            storageType = 'cloudinary';
-          } else {
-            uploadResult = data;
-            const publicUrlResult = supabaseClient.storage.from('chat-files').getPublicUrl(fileName);
-            const publicData = publicUrlResult?.data || {};
-            const publicError = publicUrlResult?.error;
-            if (publicError) {
-              throw publicError;
-            }
-
-            storageUrl = publicData?.publicUrl || publicData?.publicURL || null;
-            if (!storageUrl) {
-              throw new Error('Unable to retrieve Supabase public URL');
-            }
-          }
-        } else {
-          const result = await uploadToCloudinary(file);
-          uploadResult = result;
-          storageUrl = result.secure_url;
-        }
-        
-        // Determine media type
-        let mediaType = 'file';
-        if (isImageFile(file.name)) {
-          mediaType = 'image';
-        } else if (isVideoFile(file.name)) {
-          mediaType = 'video';
-        } else if (isAudioFile(file.name)) {
-          mediaType = 'audio';
-        }
-
-        const message = {
-          id: `msg_${timestamp}_${userId}`,
-          name: username,
-          userId: userId,
-          text: mediaType === 'file' ? `Shared a file: ${file.name}` : '',
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          timestamp: timestamp,
-          channel: userChannel,
-          ...(mediaType !== 'file' ? {
-            mediaType: mediaType,
-            mediaUrl: storageUrl
-          } : {
-            fileData: {
-              name: file.name,
-              size: file.size,
-              url: storageUrl,
-              type: file.type,
-              storage: storageType,
-              publicId: uploadResult?.public_id || '',
-              format: uploadResult?.format || ''
-            }
-          })
-        };
-        
-        db.ref('chat').push(message)
-          .then(() => {
-            showNotification('File shared successfully!');
-          })
-          .catch(error => {
-            console.error("Error sharing file:", error);
-            showNotification("Failed to share file.", true);
-          });
-        
+        await shareChatFile(file);
       } catch (error) {
-        console.error('Upload error:', error);
+        console.error('Error sharing file:', error);
         showNotification('Failed to upload file.', true);
       }
     };
-    
     input.click();
   });
 

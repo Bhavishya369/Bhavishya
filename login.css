@@ -1810,7 +1810,6 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .emoji-category,
 :root.better-ui .emoji-tab,
 :root.better-ui .emoji-item,
-:root.better-ui .emoji-load-more,
 :root.better-ui .emoji-item.media-item {
   background: rgba(255, 255, 255, 0.14) !important;
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
@@ -1821,8 +1820,7 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .emoji-category:hover,
 :root.better-ui .emoji-category.active,
 :root.better-ui .emoji-tab.active,
-:root.better-ui .emoji-tab:hover,
-:root.better-ui .emoji-load-more:hover {
+:root.better-ui .emoji-tab:hover {
   background: rgba(124, 58, 237, 0.28) !important;
   border-color: rgba(255, 255, 255, 0.22) !important;
   color: var(--text-primary) !important;
@@ -2526,6 +2524,14 @@ body.menu-open .scroll-to-bottom-btn {
   padding: 6px;
 }
 
+.emoji-grid.media-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.emoji-grid.media-mode .emoji-item.media-item {
+  grid-column: span 1;
+}
+
 .emoji-footer {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2606,21 +2612,23 @@ body.menu-open .scroll-to-bottom-btn {
   font-size: 14px;
 }
 
-.emoji-load-more {
-  width: 100%;
-  margin-top: 10px;
-  padding: 10px 14px;
-  border: none;
-  border-radius: 14px;
-  background: rgba(124, 58, 237, 0.15);
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.2s ease;
+.emoji-load-sentinel {
+  grid-column: 1 / -1;
+  min-height: 28px;
+  padding: 6px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 12px;
 }
 
-.emoji-load-more:hover {
-  background: rgba(124, 58, 237, 0.24);
+.emoji-virtual-spacer {
+  grid-column: 1 / -1;
+  width: 100%;
+  pointer-events: none;
+}
+
+.emoji-loading {
+  grid-column: 1 / -1;
 }
 
 .emoji-grid::-webkit-scrollbar {
@@ -3935,6 +3943,16 @@ input[type="search"]::placeholder,
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.clipboard-file-preview-name {
+  max-width: 100%;
+  padding: 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .link-preview-input-title {
