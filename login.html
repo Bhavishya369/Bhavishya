@@ -27,14 +27,6 @@
     })();
   </script>
   
-  <!-- Video.js for video editing -->
-  <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
-  <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
-  
-  <!-- FFMPEG for video trimming -->
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.3/dist/ffmpeg.min.js"></script>
-  <script src="https://unpkg.com/@ffmpeg/util@0.12.0/dist/util.js"></script>
-
   <!-- Font Awesome and Google Fonts -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
@@ -80,9 +72,14 @@
 
   <!-- Custom CSS -->
   <link rel="stylesheet" href="login.css">
+  <link rel="stylesheet" href="editor-common.css">
+  <link rel="stylesheet" href="image-editor.css">
+  <link rel="stylesheet" href="video-editor.css">
   <link rel="stylesheet" href="morse-keyboard.css">
   
   <!-- Custom JavaScript -->
+  <script src="image-editor.js" defer></script>
+  <script src="video-editor.js" defer></script>
   <script src="login.js" defer></script>
 </head>
 
@@ -378,8 +375,35 @@
           </button>
         </div>
       </div>
+      <button class="media-viewer-nav media-viewer-nav-prev" id="mediaViewerPrevBtn" type="button" aria-label="Previous media" title="Previous media" style="display: none;">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+      <button class="media-viewer-nav media-viewer-nav-next" id="mediaViewerNextBtn" type="button" aria-label="Next media" title="Next media" style="display: none;">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+      <div class="media-viewer-zoom-controls" id="mediaViewerZoomControls" hidden aria-label="Image zoom controls">
+        <button class="media-viewer-zoom-btn" id="mediaViewerZoomOutBtn" type="button" aria-label="Zoom out" title="Zoom out">
+          <i class="fas fa-minus"></i>
+        </button>
+        <button class="media-viewer-zoom-level" id="mediaViewerZoomResetBtn" type="button" aria-label="Reset zoom" title="Reset zoom">100%</button>
+        <button class="media-viewer-zoom-btn" id="mediaViewerZoomInBtn" type="button" aria-label="Zoom in" title="Zoom in">
+          <i class="fas fa-plus"></i>
+        </button>
+      </div>
       <div class="media-viewer-content" id="mediaViewerContent">
         <!-- Media content will be inserted here -->
+      </div>
+    </div>
+
+    <div class="media-gallery-modal" id="mediaGalleryModal" role="dialog" aria-modal="true" aria-labelledby="mediaGalleryTitle">
+      <div class="media-gallery-dialog">
+        <div class="media-gallery-header">
+          <h2 class="media-gallery-title" id="mediaGalleryTitle">Media</h2>
+          <button class="media-gallery-close" id="mediaGalleryCloseBtn" type="button" aria-label="Close media gallery" title="Close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="media-gallery-grid" id="mediaGalleryGrid"></div>
       </div>
     </div>
 
@@ -398,71 +422,71 @@
     </div>
     
     <!-- Image Editor with HTML5 Canvas -->
-    <div class="image-editor-modal" id="imageEditorModal">
+    <div class="image-editor-modal" id="imageEditorModal" role="dialog" aria-modal="true" aria-labelledby="imageEditorTitle" aria-describedby="editorStatus">
       <div class="editor-header">
         <div class="editor-header-left">
-          <span>Edit Image</span>
+          <span id="imageEditorTitle">Edit Image</span>
           <span class="editor-status" id="editorStatus"></span>
         </div>
         <div>
-          <button class="editor-tool-btn" id="cancelImageEdit">Cancel</button>
-          <button class="editor-tool-btn primary" id="saveImageEdit">Save</button>
+          <button class="editor-tool-btn" id="cancelImageEdit" type="button">Cancel</button>
+          <button class="editor-tool-btn primary" id="saveImageEdit" type="button">Save</button>
         </div>
       </div>
-      <div class="editor-container" id="toastImageEditorContainer" style="height: 500px; width: 100%;"></div>
+      <div class="editor-container" id="toastImageEditorContainer" aria-label="Image editing canvas"></div>
       <div class="editor-tools">
-        <button class="editor-tool-btn active" id="brushTool">
-          <i class="fas fa-paint-brush"></i> Brush
+        <button class="editor-tool-btn active" id="brushTool" type="button">
+          <i class="fas fa-paint-brush" aria-hidden="true"></i> Brush
         </button>
-        <button class="editor-tool-btn" id="textTool">
-          <i class="fas fa-font"></i> Text
+        <button class="editor-tool-btn" id="textTool" type="button">
+          <i class="fas fa-font" aria-hidden="true"></i> Text
         </button>
-        <button class="editor-tool-btn" id="eraserTool">
-          <i class="fas fa-eraser"></i> Eraser
+        <button class="editor-tool-btn" id="eraserTool" type="button">
+          <i class="fas fa-eraser" aria-hidden="true"></i> Eraser
         </button>
-        <button class="editor-tool-btn" id="cropTool">
-          <i class="fas fa-crop-alt"></i> Crop
+        <button class="editor-tool-btn" id="cropTool" type="button">
+          <i class="fas fa-crop-alt" aria-hidden="true"></i> Crop
         </button>
         <div class="text-controls" id="textControls" style="display: none;">
           <input type="text" class="editor-text-input" id="textInput" placeholder="Type text to add" title="Enter text to place on canvas">
           <button class="editor-tool-btn" id="addTextBtn" type="button">
-            <i class="fas fa-plus"></i> Add
+            <i class="fas fa-plus" aria-hidden="true"></i> Add
           </button>
         </div>
-        <input type="color" class="color-picker" id="brushColor" value="#ff0000" title="Brush Color">
-        <span class="brush-size-label">Size:</span>
-        <input type="range" class="brush-size" id="brushSize" min="1" max="50" value="5" title="Brush Size">
-        <button class="editor-tool-btn" id="undoEdit">
-          <i class="fas fa-undo"></i> Undo
+        <input type="color" class="color-picker" id="brushColor" value="#ff0000" title="Brush Color" aria-label="Brush color">
+        <label class="brush-size-label" for="brushSize">Size:</label>
+        <input type="range" class="brush-size" id="brushSize" min="1" max="50" value="5" title="Brush Size" aria-label="Brush size">
+        <button class="editor-tool-btn" id="undoEdit" type="button">
+          <i class="fas fa-undo" aria-hidden="true"></i> Undo
         </button>
-        <button class="editor-tool-btn" id="clearEdit">
-          <i class="fas fa-trash"></i> Clear
+        <button class="editor-tool-btn" id="clearEdit" type="button">
+          <i class="fas fa-trash" aria-hidden="true"></i> Clear
         </button>
       </div>
     </div>
     
     <!-- Video Editor -->
-    <div class="video-editor-modal" id="videoEditorModal">
+    <div class="video-editor-modal" id="videoEditorModal" role="dialog" aria-modal="true" aria-labelledby="videoEditorTitle">
       <div class="editor-header">
-        <span>Edit Video</span>
+        <span id="videoEditorTitle">Edit Video</span>
         <div>
-          <button class="editor-tool-btn" id="cancelVideoEdit">Cancel</button>
-          <button class="editor-tool-btn primary" id="saveVideoEdit">Save</button>
+          <button class="editor-tool-btn" id="cancelVideoEdit" type="button">Cancel</button>
+          <button class="editor-tool-btn primary" id="saveVideoEdit" type="button">Save</button>
         </div>
       </div>
       <div class="video-editor-player">
-        <video id="videoEditorPlayer" controls style="max-width: 100%; max-height: 60vh;"></video>
+        <video id="videoEditorPlayer" controls playsinline preload="metadata"></video>
       </div>
       <div class="video-trim-controls">
         <p>Trim Video:</p>
-        <input type="range" class="trim-range" id="trimStart" min="0" max="100" value="0">
-        <input type="range" class="trim-range" id="trimEnd" min="0" max="100" value="100">
+        <input type="range" class="trim-range" id="trimStart" min="0" max="100" value="0" aria-label="Trim start">
+        <input type="range" class="trim-range" id="trimEnd" min="0" max="100" value="100" aria-label="Trim end">
         <div class="trim-times">
           <span id="trimStartTime">0:00</span>
           <span id="trimEndTime">0:00</span>
         </div>
-        <button class="editor-tool-btn" id="applyTrim" style="margin-top: 10px;">
-          <i class="fas fa-cut"></i> Apply Trim
+        <button class="editor-tool-btn" id="applyTrim" type="button">
+          <i class="fas fa-cut" aria-hidden="true"></i> Apply Trim
         </button>
       </div>
     </div>
@@ -509,6 +533,10 @@
       <div class="menu-item" id="menuChatBackground">
         <i class="fas fa-image"></i>
         <span>Chat Background</span>
+      </div>
+      <div class="menu-item" id="menuMediaGallery">
+        <i class="fas fa-photo-video"></i>
+        <span>Media</span>
       </div>
       <div class="menu-item" id="menuClearChat">
         <i class="fas fa-trash"></i>

@@ -145,8 +145,14 @@ function saveEncryptedChatCache(messages) {
   if (!chatCacheKey || !messages) return;
   chatCacheWriteQueue = chatCacheWriteQueue.then(async () => {
     try {
+      const recentMessages = Object.fromEntries(
+        Object.entries(messages)
+          .filter(([, message]) => message && typeof message === 'object')
+          .sort(([, a], [, b]) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
+          .slice(-MAX_CHAT_MESSAGES)
+      );
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const plaintext = new TextEncoder().encode(JSON.stringify({ version: 1, messages }));
+      const plaintext = new TextEncoder().encode(JSON.stringify({ version: 1, messages: recentMessages }));
       const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chatCacheKey, plaintext);
       localStorage.setItem(getChatCacheStorageKey(), JSON.stringify({
         version: 1,
@@ -183,22 +189,6 @@ let audioContext = null;
 let analyser = null;
 let dataArray = null;
 
-// Image editor variables
-let isDrawing = false;
-let isEraserActive = false;
-let currentBrushColor = '#4dff00';
-let currentBrushSize = 5;
-let currentEditingImage = null;
-let currentEditingImageFormat = 'png';
-let editHistory = [];
-let cropMode = false;
-let cropStart = null;
-let cropRect = null;
-
-// Video editor variables
-let currentEditingVideo = null;
-let videoDuration = 0;
-
 // Search variables
 let searchResults = [];
 let currentSearchIndex = -1;
@@ -214,109 +204,9 @@ let giphyOffset = 0;
 let giphyIsLoading = false;
 let emojiRenderId = 0;
 
-// Video edit state
-let selectedVideoFile = null;
-let currentEditingVideoUrl = null;
-let currentEditingMessageKey = null;
-let ffmpegInstance = null;
-let ffmpegLoading = false;
-
 // Link preview variables
 let linkPreviewData = null;
 let linkPreviewTimer = null;
-
-// Image editor brush functions (HTML5 Canvas)
-function activateBrushTool() {
-  isEraserActive = false;
-  
-  const canvas = document.getElementById('drawingCanvas');
-  const ctx = canvas ? canvas.getContext('2d') : null;
-  
-  if (ctx) {
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = currentBrushColor;
-    ctx.lineWidth = currentBrushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  }
-  
-  const brushBtn = document.getElementById('brushTool');
-  const textBtn = document.getElementById('textTool');
-  const eraserBtn = document.getElementById('eraserTool');
-  const textControls = document.getElementById('textControls');
-  if (brushBtn) brushBtn.classList.add('active');
-  if (textBtn) textBtn.classList.remove('active');
-  if (eraserBtn) eraserBtn.classList.remove('active');
-  if (textControls) textControls.style.display = 'none';
-}
-
-function activateTextTool() {
-  isEraserActive = false;
-  
-  const canvas = document.getElementById('drawingCanvas');
-  const ctx = canvas ? canvas.getContext('2d') : null;
-  
-  if (ctx) {
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.lineWidth = currentBrushSize;
-    ctx.strokeStyle = currentBrushColor;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  }
-  
-  const brushBtn = document.getElementById('brushTool');
-  const textBtn = document.getElementById('textTool');
-  const eraserBtn = document.getElementById('eraserTool');
-  const textControls = document.getElementById('textControls');
-  if (brushBtn) brushBtn.classList.remove('active');
-  if (textBtn) textBtn.classList.add('active');
-  if (eraserBtn) eraserBtn.classList.remove('active');
-  if (textControls) textControls.style.display = 'flex';
-}
-
-function activateEraserTool() {
-  isEraserActive = true;
-  
-  const canvas = document.getElementById('drawingCanvas');
-  if (canvas) {
-    const ctx = canvas.getContext('2d');
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.strokeStyle = 'rgba(0,0,0,1)';
-    ctx.lineWidth = currentBrushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  }
-  
-  const brushBtn = document.getElementById('brushTool');
-  const textBtn = document.getElementById('textTool');
-  const eraserBtn = document.getElementById('eraserTool');
-  const textControls = document.getElementById('textControls');
-  if (brushBtn) brushBtn.classList.remove('active');
-  if (textBtn) textBtn.classList.remove('active');
-  if (eraserBtn) eraserBtn.classList.add('active');
-  if (textControls) textControls.style.display = 'none';
-}
-
-function updateBrush() {
-  currentBrushSize = parseInt(document.getElementById('brushSize')?.value || 5, 10);
-  currentBrushColor = document.getElementById('brushColor')?.value || '#ff0000';
-  
-  const canvas = document.getElementById('drawingCanvas');
-  const ctx = canvas ? canvas.getContext('2d') : null;
-  
-  if (ctx) {
-    ctx.lineWidth = currentBrushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    if (isEraserActive) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = currentBrushColor;
-    }
-  }
-}
 
 async function saveOneSignalPlayerId(playerId) {
   if (!playerId) return;
@@ -2195,6 +2085,14 @@ function getCloudinaryTransformedUrl(url, transformation) {
   return `${parts.base}${transformation}/${parts.remainder}`;
 }
 
+function getMediaThumbnailUrl(url, type = 'image') {
+  if (!isCloudinaryUrl(url)) return type === 'video' ? null : url;
+  const transformation = type === 'video'
+    ? 'so_0,f_jpg,q_auto,w_200,h_200,c_fill'
+    : 'f_auto,q_auto,w_200,h_200,c_fill';
+  return getCloudinaryTransformedUrl(url, transformation);
+}
+
 function getCloudinaryDownloadUrl(url, filename) {
   if (!isCloudinaryUrl(url)) return url;
   const parts = getCloudinaryUploadUrl(url);
@@ -3167,456 +3065,6 @@ async function sendVoiceMessage(audioBlob) {
   }
 }
 
-function getImageFormatFromUrl(url) {
-  const match = url.match(/\.([a-zA-Z0-9]+)(?:[?#].*)?$/);
-  if (!match) return null;
-  const ext = match[1].toLowerCase();
-  if (ext === 'jpg') return 'jpeg';
-  if (['jpeg', 'png', 'webp', 'gif', 'bmp'].includes(ext)) return ext;
-  return null;
-}
-
-// Initialize image editor with HTML5 Canvas
-function initImageEditor(imageUrl) {
-  console.log('initImageEditor called with URL:', imageUrl);
-  
-  const editorContainer = document.getElementById('toastImageEditorContainer');
-  if (!editorContainer) {
-    console.error('Image editor container not found');
-    return;
-  }
-
-  // Create background image and transparent drawing canvas
-  editorContainer.innerHTML = `
-    <div class="editor-canvas-wrapper">
-      <img id="editorBackgroundImage" class="editor-background-image" alt="Image background" src="" />
-      <canvas id="drawingCanvas" width="800" height="600" class="drawing-canvas"></canvas>
-    </div>
-  `;
-  
-  const canvas = document.getElementById('drawingCanvas');
-  const backgroundImage = document.getElementById('editorBackgroundImage');
-  const ctx = canvas.getContext('2d');
-  
-  if (backgroundImage) {
-    backgroundImage.crossOrigin = 'anonymous';
-  }
-  
-  if (!ctx) {
-    console.error('Failed to get canvas context');
-    showNotification('Failed to initialize canvas', true);
-    return;
-  }
-
-  console.log('Canvas created and context obtained');
-
-  canvas.style.background = 'transparent';
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Load and display the image behind the canvas
-  if (imageUrl) {
-    currentEditingImageFormat = getImageFormatFromUrl(imageUrl) || 'png';
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const wrapper = document.querySelector('.editor-canvas-wrapper');
-      if (wrapper) {
-        const maxWidth = Math.min(window.innerWidth * 0.9, img.width);
-        const maxHeight = Math.min(window.innerHeight * 0.75, img.height);
-        const aspect = img.width / img.height;
-        let displayWidth = maxWidth;
-        let displayHeight = maxWidth / aspect;
-        if (displayHeight > maxHeight) {
-          displayHeight = maxHeight;
-          displayWidth = maxHeight * aspect;
-        }
-        wrapper.style.width = `${displayWidth}px`;
-        wrapper.style.height = `${displayHeight}px`;
-      }
-      canvas.width = img.width;
-      canvas.height = img.height;
-      backgroundImage.crossOrigin = 'anonymous';
-      backgroundImage.src = imageUrl;
-      backgroundImage.style.display = 'block';
-      currentEditingImage = imageUrl;
-      editHistory = [];
-      saveCanvasStateHTML5(canvas, ctx);
-      activateBrushTool();
-      updateBrush();
-      setupCanvasDrawing(canvas, ctx);
-    };
-    img.onerror = (err) => {
-      console.error('Failed to load image:', err, 'URL:', imageUrl);
-      backgroundImage.style.display = 'none';
-      currentEditingImage = null;
-      editHistory = [];
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#999';
-      ctx.font = '16px Arial';
-      ctx.textAlign = 'center';
-      ctx.fillText('Image failed to load', canvas.width / 2, canvas.height / 2);
-      ctx.fillText('You can still draw on this canvas', canvas.width / 2, canvas.height / 2 + 30);
-      setupCanvasDrawing(canvas, ctx);
-      showNotification('Image could not load, but you can still draw', false);
-    };
-    img.src = imageUrl.includes('?') ? imageUrl + '&t=' + Date.now() : imageUrl + '?t=' + Date.now();
-  } else {
-    console.warn('No image URL provided');
-    backgroundImage.style.display = 'none';
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#ddd';
-    ctx.font = '16px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('No image selected', canvas.width / 2, canvas.height / 2);
-    editHistory = [];
-    setupCanvasDrawing(canvas, ctx);
-  }
-  
-  // Show custom editor controls
-  const editorTools = document.querySelector('.editor-tools');
-  if (editorTools) {
-    editorTools.style.display = 'flex';
-  }
-}
-
-// Setup canvas drawing with mouse events
-function setupCanvasDrawing(canvas, ctx) {
-  let isDrawing = false;
-  let draggedText = null;
-  let textElements = canvas.textElements || []; // Track text elements for dragging
-  canvas.textElements = textElements;
-  
-  // Save initial state if no history exists yet
-  if (editHistory.length === 0) {
-    saveCanvasStateHTML5(canvas, ctx);
-  }
-  
-  canvas.addEventListener('mousedown', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-
-    if (cropMode) {
-      cropStart = { x, y };
-      cropRect = { x, y, width: 0, height: 0 };
-      isDrawing = true;
-      return;
-    }
-    
-    // Check if clicking on text (if text tool active)
-    if (!isEraserActive && document.getElementById('textTool').classList.contains('active')) {
-      // Check for text near click
-      draggedText = null;
-      for (let text of textElements) {
-        const hitLeft = x >= text.x - 10;
-        const hitRight = x <= text.x + (text.width || 0) + 10;
-        const hitTop = y >= text.y - 10;
-        const hitBottom = y <= text.y + (text.height || 24) + 10;
-        if (hitLeft && hitRight && hitTop && hitBottom) {
-          draggedText = text;
-          draggedText.dragOffsetX = x - text.x;
-          draggedText.dragOffsetY = y - text.y;
-          break;
-        }
-      }
-      return;
-    }
-    
-    isDrawing = true;
-    
-    if (isEraserActive) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = currentBrushSize;
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-    }
-  });
-  
-  canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
-    
-    // Handle text dragging
-    if (draggedText) {
-      draggedText.x = x - draggedText.dragOffsetX;
-      draggedText.y = y - draggedText.dragOffsetY;
-      redrawCanvas(canvas, ctx, textElements);
-      return;
-    }
-    
-    if (!isDrawing) return;
-    
-    if (cropMode) {
-      if (cropStart) {
-        cropRect = {
-          x: Math.min(cropStart.x, x),
-          y: Math.min(cropStart.y, y),
-          width: Math.abs(x - cropStart.x),
-          height: Math.abs(y - cropStart.y)
-        };
-        redrawCanvas(canvas, ctx, textElements, () => drawCropOverlay(ctx, cropRect));
-      }
-      return;
-    }
-
-    if (isEraserActive) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.lineWidth = currentBrushSize;
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
-  });
-  
-  canvas.addEventListener('mouseup', () => {
-    if (draggedText) {
-      draggedText = null;
-      return;
-    }
-
-    const editorStatusElement = document.getElementById('editorStatus');
-    if (cropMode && cropStart && cropRect && cropRect.width > 0 && cropRect.height > 0) {
-      applyCrop(canvas, ctx, cropRect);
-      cropMode = false;
-      cropStart = null;
-      cropRect = null;
-      if (editorStatusElement) editorStatusElement.textContent = '';
-      saveCanvasStateHTML5(canvas, ctx);
-      return;
-    }
-    
-    if (isDrawing) {
-      isDrawing = false;
-      ctx.closePath();
-      saveCanvasStateHTML5(canvas, ctx);
-    }
-  });
-  
-  canvas.addEventListener('mouseleave', () => {
-    isDrawing = false;
-    draggedText = null;
-  });
-  
-  // Touch support for mobile
-  canvas.addEventListener('touchstart', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const touch = e.touches[0];
-    const x = (touch.clientX - rect.left) * scaleX;
-    const y = (touch.clientY - rect.top) * scaleY;
-    
-    isDrawing = true;
-    
-    if (isEraserActive) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = currentBrushSize;
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-    }
-  });
-  
-  canvas.addEventListener('touchmove', (e) => {
-    if (!isDrawing) return;
-    e.preventDefault();
-    
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const touch = e.touches[0];
-    const x = (touch.clientX - rect.left) * scaleX;
-    const y = (touch.clientY - rect.top) * scaleY;
-    
-    if (isEraserActive) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.lineWidth = currentBrushSize;
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
-  });
-  
-  canvas.addEventListener('touchend', () => {
-    const editorStatusElement = document.getElementById('editorStatus');
-    if (cropMode && cropStart && cropRect && cropRect.width > 0 && cropRect.height > 0) {
-      applyCrop(canvas, ctx, cropRect);
-      cropMode = false;
-      cropStart = null;
-      cropRect = null;
-      if (editorStatusElement) editorStatusElement.textContent = '';
-      saveCanvasStateHTML5(canvas, ctx);
-      return;
-    }
-    if (isDrawing) {
-      isDrawing = false;
-      ctx.closePath();
-      saveCanvasStateHTML5(canvas, ctx);
-    }
-  });
-  
-  // Store textElements reference in canvas for access
-  canvas.textElements = textElements;
-}
-
-// Save canvas state for undo
-function saveCanvasStateHTML5(canvas, ctx) {
-  if (editHistory.length < 20) {
-    const imageData = canvas.toDataURL('image/png');
-    editHistory.push(imageData);
-  }
-}
-
-// Redraw canvas with text elements
-function redrawCanvas(canvas, ctx, textElements, callback) {
-  // Restore previous canvas state
-  if (editHistory.length > 0) {
-    const previousState = editHistory[editHistory.length - 1];
-    const img = new Image();
-    img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      
-      // Redraw all text elements
-      for (let text of textElements) {
-        drawTextOnCanvas(ctx, text);
-      }
-      if (typeof callback === 'function') {
-        callback();
-      }
-    };
-    img.src = previousState;
-  } else {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (typeof callback === 'function') {
-      callback();
-    }
-  }
-}
-
-function drawCropOverlay(ctx, cropRect) {
-  if (!cropRect || cropRect.width <= 0 || cropRect.height <= 0) return;
-  ctx.save();
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-  ctx.fillRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 6]);
-  ctx.strokeRect(cropRect.x, cropRect.y, cropRect.width, cropRect.height);
-  ctx.restore();
-}
-
-function applyCrop(canvas, ctx, cropRect) {
-  if (!cropRect || cropRect.width <= 0 || cropRect.height <= 0) return;
-  const backgroundImage = document.getElementById('editorBackgroundImage');
-  if (!backgroundImage || !backgroundImage.src) return;
-
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = cropRect.width;
-  tempCanvas.height = cropRect.height;
-  const tempCtx = tempCanvas.getContext('2d');
-  if (!tempCtx) return;
-
-  tempCtx.drawImage(backgroundImage, -cropRect.x, -cropRect.y);
-  tempCtx.drawImage(canvas, -cropRect.x, -cropRect.y);
-
-  const croppedDataUrl = tempCanvas.toDataURL('image/png');
-  const wrapper = document.querySelector('.editor-canvas-wrapper');
-  if (wrapper) {
-    const maxWidth = Math.min(window.innerWidth * 0.9, cropRect.width);
-    const maxHeight = Math.min(window.innerHeight * 0.75, cropRect.height);
-    const aspect = cropRect.width / cropRect.height;
-    let displayWidth = maxWidth;
-    let displayHeight = maxWidth / aspect;
-    if (displayHeight > maxHeight) {
-      displayHeight = maxHeight;
-      displayWidth = maxHeight * aspect;
-    }
-    wrapper.style.width = `${displayWidth}px`;
-    wrapper.style.height = `${displayHeight}px`;
-  }
-
-  canvas.width = cropRect.width;
-  canvas.height = cropRect.height;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  backgroundImage.src = croppedDataUrl;
-  backgroundImage.style.display = 'block';
-  canvas.textElements = [];
-  editHistory = [];
-  saveCanvasStateHTML5(canvas, ctx);
-}
-
-// Draw text on canvas with site theme
-function drawTextOnCanvas(ctx, textObj) {
-  ctx.font = `${textObj.size || 20}px Arial`;
-  ctx.fillStyle = textObj.color || currentBrushColor;
-  ctx.textBaseline = 'top';
-  ctx.fillText(textObj.text, textObj.x, textObj.y);
-  
-  // Draw selection border if needed
-  if (textObj.selected) {
-    const metrics = ctx.measureText(textObj.text);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(textObj.x - 5, textObj.y - 5, metrics.width + 10, 30);
-  }
-}
-
-// Undo for HTML5 canvas
-function undoCanvasAction() {
-  const canvas = document.getElementById('drawingCanvas');
-  const ctx = canvas.getContext('2d');
-  
-  if (!ctx) return;
-  
-  if (editHistory.length > 0) {
-    editHistory.pop();
-    
-    if (editHistory.length > 0) {
-      const previousState = editHistory[editHistory.length - 1];
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-        
-        // Redraw text elements
-        if (canvas.textElements) {
-          for (let text of canvas.textElements) {
-            drawTextOnCanvas(ctx, text);
-          }
-        }
-      };
-      img.src = previousState;
-    }
-  }
-}
-
 // Search messages
 function searchMessages(query) {
   searchResults = [];
@@ -4018,7 +3466,7 @@ function setupReactionOnMessage(messageDiv) {
     pressTimer = setTimeout(() => {
       messageDiv.classList.add('message-selected');
       showReactionPicker(messageDiv, e);
-    }, 1000); // 1s press-and-hold
+    }, 3500); // 3.5s press-and-hold
   };
 
   const endPress = () => {
@@ -4535,7 +3983,29 @@ async function initializeChatApp() {
   const mediaViewerTitle = document.getElementById('mediaViewerTitle');
   const mediaViewerDownloadBtn = document.getElementById('mediaViewerDownloadBtn');
   const mediaViewerEditBtn = document.getElementById('mediaViewerEditBtn');
+  const mediaViewerPrevBtn = document.getElementById('mediaViewerPrevBtn');
+  const mediaViewerNextBtn = document.getElementById('mediaViewerNextBtn');
+  const mediaViewerZoomControls = document.getElementById('mediaViewerZoomControls');
+  const mediaViewerZoomOutBtn = document.getElementById('mediaViewerZoomOutBtn');
+  const mediaViewerZoomResetBtn = document.getElementById('mediaViewerZoomResetBtn');
+  const mediaViewerZoomInBtn = document.getElementById('mediaViewerZoomInBtn');
   const mediaViewerContent = document.getElementById('mediaViewerContent');
+  const mediaGalleryModal = document.getElementById('mediaGalleryModal');
+  const mediaGalleryTitle = document.getElementById('mediaGalleryTitle');
+  const mediaGalleryGrid = document.getElementById('mediaGalleryGrid');
+  const mediaGalleryCloseBtn = document.getElementById('mediaGalleryCloseBtn');
+  let mediaViewerGallery = [];
+  let mediaViewerIndex = -1;
+  let mediaViewerTouchStart = null;
+  let mediaViewerZoomScale = 1;
+  let mediaViewerPanX = 0;
+  let mediaViewerPanY = 0;
+  let mediaViewerImageStage = null;
+  let mediaViewerZoomImage = null;
+  let mediaViewerPanStart = null;
+  let mediaViewerPinchStart = null;
+  let mediaViewerReturnToGallery = false;
+  let mediaGalleryObserver = null;
   const profilePreview = document.getElementById('profilePreview');
   const profilePreviewClose = document.getElementById('profilePreviewClose');
   const profilePreviewAvatar = document.getElementById('profilePreviewAvatar');
@@ -4550,30 +4020,10 @@ async function initializeChatApp() {
     });
   }
   
-  // Image editor elements
-  const imageEditorModal = document.getElementById('imageEditorModal');
-  const cancelImageEditBtn = document.getElementById('cancelImageEdit');
-  const saveImageEditBtn = document.getElementById('saveImageEdit');
-  const brushToolBtn = document.getElementById('brushTool');
-  const textToolBtn = document.getElementById('textTool');
-  const eraserToolBtn = document.getElementById('eraserTool');
-  const brushColorPicker = document.getElementById('brushColor');
-  const brushSizeSlider = document.getElementById('brushSize');
-  const cropToolBtn = document.getElementById('cropTool');
-  const undoEditBtn = document.getElementById('undoEdit');
-  const clearEditBtn = document.getElementById('clearEdit');
-  
-  // Video editor elements
-  const videoEditorModal = document.getElementById('videoEditorModal');
-  const cancelVideoEditBtn = document.getElementById('cancelVideoEdit');
-  const saveVideoEditBtn = document.getElementById('saveVideoEdit');
-  const applyTrimBtn = document.getElementById('applyTrim');
-  const trimStartSlider = document.getElementById('trimStart');
-  const trimEndSlider = document.getElementById('trimEnd');
-  const trimStartTime = document.getElementById('trimStartTime');
-  const trimEndTime = document.getElementById('trimEndTime');
-  
-  // Link preview elements
+  window.ImageEditor.initialize();
+  window.VideoEditor.initialize();
+
+  // Link preview elements  // Link preview elements
   const linkPreviewInput = document.getElementById('linkPreviewInput');
   const removePreviewBtn = document.getElementById('removePreviewBtn');
   const linkPreviewInputContent = document.getElementById('linkPreviewInputContent');
@@ -4605,6 +4055,7 @@ async function initializeChatApp() {
   const menuExportChat = document.getElementById('menuExportChat');
   const menuSwitchChannel = document.getElementById('menuSwitchChannel');
   const menuUsers = document.getElementById('menuUsers');
+  const menuMediaGallery = document.getElementById('menuMediaGallery');
   const menuSettings = document.getElementById('menuSettings');
   const menuLogout = document.getElementById('menuLogout');
 
@@ -5128,6 +4579,7 @@ async function initializeChatApp() {
   let currentMediaResults = [];
   let renderedStartRow = -1;
   let renderedEndRow = -1;
+  let pickerLayoutCache = null;
   let pickerScrollFrame = 0;
   let giphyLoadError = false;
 
@@ -5233,6 +4685,7 @@ async function initializeChatApp() {
       }
     }, { passive: true });
     window.addEventListener('resize', () => {
+      pickerLayoutCache = null;
       renderedStartRow = -1;
       renderVirtualPickerWindow();
     }, { passive: true });
@@ -5246,17 +4699,26 @@ async function initializeChatApp() {
     if (!items.length) return;
 
     const isMedia = emojiMode !== 'Emoji';
-    const columns = isMedia ? 2 : Math.max(1,
-      window.getComputedStyle(emojiGridEl).gridTemplateColumns.split(' ').length);
-    const styles = window.getComputedStyle(emojiGridEl);
-    const rowGap = parseFloat(styles.rowGap) || 10;
-    const oldItem = emojiGridEl.querySelector('.emoji-item');
-    const itemHeight = oldItem
-      ? oldItem.getBoundingClientRect().height
-      : (isMedia ? 110 : Math.max(36,
-        (emojiGridEl.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight) -
-          (columns - 1) * (parseFloat(styles.columnGap) || 0)) / columns));
-    const rowHeight = itemHeight + rowGap;
+    let columns;
+    let rowHeight;
+    let rowGap;
+    if (pickerLayoutCache && pickerLayoutCache.isMedia === isMedia) {
+      ({ columns, rowHeight, rowGap } = pickerLayoutCache);
+    } else {
+      const styles = window.getComputedStyle(emojiGridEl);
+      columns = isMedia ? 2 : Math.max(1, styles.gridTemplateColumns.split(' ').length);
+      rowGap = parseFloat(styles.rowGap) || 10;
+      const oldItem = emojiGridEl.querySelector('.emoji-item');
+      const itemHeight = oldItem
+        ? oldItem.getBoundingClientRect().height
+        : (isMedia ? 110 : Math.max(36,
+          (emojiGridEl.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight) -
+            (columns - 1) * (parseFloat(styles.columnGap) || 0)) / columns));
+      rowHeight = itemHeight + rowGap;
+      if (oldItem) {
+        pickerLayoutCache = { isMedia, columns, rowHeight, rowGap };
+      }
+    }
     const totalRows = Math.ceil(items.length / columns);
     const visibleRows = Math.max(1, Math.ceil(emojiGridEl.clientHeight / rowHeight));
     const firstVisibleRow = Math.min(totalRows - 1, Math.floor(emojiGridEl.scrollTop / rowHeight));
@@ -5328,6 +4790,7 @@ async function initializeChatApp() {
     const renderId = ++emojiRenderId;
     giphyIsLoading = false;
     giphyLoadError = false;
+    pickerLayoutCache = null;
     renderedStartRow = -1;
     emojiGridEl.scrollTop = 0;
     emojiGridEl.innerHTML = '';
@@ -6352,6 +5815,140 @@ async function populateRecentChatsList() {
     }
   });
 
+  let bugChaosScheduleTimer = null;
+  const bugChaosTimers = new Set();
+  const bugFloatingElements = new Set();
+  const normalChatPlaceholder = chatInput.placeholder;
+
+  function clearBugDisturbance(element) {
+    element.classList.remove('bug-random-disturbance');
+    element.style.removeProperty('--bug-jump-x');
+    element.style.removeProperty('--bug-jump-y');
+    element.style.removeProperty('--bug-jump-angle');
+    element.style.removeProperty('--bug-jump-hue');
+  }
+
+  function scheduleBugChaos(callback, delay) {
+    let timer;
+    timer = setTimeout(() => {
+      bugChaosTimers.delete(timer);
+      callback();
+    }, delay);
+    bugChaosTimers.add(timer);
+  }
+
+  function showBugChaosToast() {
+    const messages = [
+      'UI STATE: mildly haunted',
+      'The interface disagrees with itself',
+      'Unexpectedly expected behavior',
+      'Reality is buffering…'
+    ];
+    const toast = document.createElement('div');
+    toast.className = 'bug-mode-chaos-toast';
+    toast.setAttribute('aria-hidden', 'true');
+    toast.textContent = messages[Math.floor(Math.random() * messages.length)];
+    document.body.appendChild(toast);
+    scheduleBugChaos(() => toast.remove(), 850);
+  }
+
+  function runBugChaos() {
+    if (!document.documentElement.classList.contains('bug-mode')) return;
+
+    bugFloatingElements.forEach(clearBugDisturbance);
+    bugFloatingElements.clear();
+
+    const candidates = Array.from(document.body.querySelectorAll('*')).filter(element => {
+      if (element.closest('.bug-mode-overlay, .bug-mode-chaos-toast')) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 &&
+        rect.bottom > 0 && rect.right > 0 &&
+        rect.top < window.innerHeight && rect.left < window.innerWidth &&
+        window.getComputedStyle(element).visibility !== 'hidden';
+    });
+    for (let index = candidates.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+    }
+
+    const floatingCount = Math.ceil(candidates.length * 0.7);
+    for (let index = 0; index < floatingCount; index += 1) {
+      const element = candidates[index];
+      const jumpX = Math.round(Math.random() * 64 - 32);
+      const jumpY = Math.round(Math.random() * 48 - 24);
+      const jumpAngle = Math.round(Math.random() * 16 - 8);
+      element.style.setProperty('--bug-jump-x', `${jumpX}px`);
+      element.style.setProperty('--bug-jump-y', `${jumpY}px`);
+      element.style.setProperty('--bug-jump-angle', `${jumpAngle}deg`);
+      element.style.setProperty('--bug-jump-hue', `${Math.round(Math.random() * 120 - 60)}deg`);
+      element.classList.add('bug-random-disturbance');
+      bugFloatingElements.add(element);
+    }
+
+    if (Math.random() < 0.35) showBugChaosToast();
+    if (chatInput && !chatInput.value && Math.random() < 0.28) {
+      chatInput.placeholder = 'Is the keyboard supposed to do that?';
+      scheduleBugChaos(() => {
+        if (!chatInput.value) chatInput.placeholder = normalChatPlaceholder;
+      }, 700);
+    }
+
+    bugChaosScheduleTimer = setTimeout(runBugChaos, 900 + Math.random() * 600);
+  }
+
+  function stopBugChaos() {
+    if (bugChaosScheduleTimer !== null) {
+      clearTimeout(bugChaosScheduleTimer);
+      bugChaosScheduleTimer = null;
+    }
+    bugChaosTimers.forEach(clearTimeout);
+    bugChaosTimers.clear();
+    bugFloatingElements.forEach(clearBugDisturbance);
+    bugFloatingElements.clear();
+    document.querySelectorAll('.bug-random-disturbance').forEach(clearBugDisturbance);
+    document.querySelectorAll('.bug-mode-chaos-toast').forEach(toast => toast.remove());
+    if (chatInput) chatInput.placeholder = normalChatPlaceholder;
+  }
+
+  function startBugChaos() {
+    const reducedMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducedMotion) return;
+    runBugChaos();
+  }
+
+  function toggleBugMode() {
+    const enabled = !document.documentElement.classList.contains('bug-mode');
+    document.documentElement.classList.toggle('bug-mode', enabled);
+    let overlay = document.getElementById('bugModeOverlay');
+
+    if (enabled && !overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'bugModeOverlay';
+      overlay.className = 'bug-mode-overlay';
+      overlay.setAttribute('aria-hidden', 'true');
+
+      const badge = document.createElement('span');
+      badge.className = 'bug-mode-badge';
+      badge.textContent = 'BUG MODE // REALITY.EXE';
+
+      overlay.appendChild(badge);
+      document.body.appendChild(overlay);
+    } else if (!enabled && overlay) {
+      overlay.remove();
+    }
+
+    if (enabled) {
+      startBugChaos();
+    } else {
+      stopBugChaos();
+    }
+
+    showNotification(enabled
+      ? 'Bug mode enabled — type /bug again to restore reality.'
+      : 'Reality restored.');
+  }
+
   // Send message
   async function sendMessage() {
     if (isSending) return;
@@ -6359,6 +5956,14 @@ async function populateRecentChatsList() {
     isSending = true;
     
     let text = chatInput.value.trim();
+
+    if (text.toLowerCase() === '/bug') {
+      toggleBugMode();
+      chatInput.value = '';
+      autoResizeTextarea();
+      isSending = false;
+      return;
+    }
     
     // Handle /clear chat command
     if (text === '/clear chat') {
@@ -7419,7 +7024,7 @@ async function populateRecentChatsList() {
       const mediaUrl = mediaMessage.dataset.mediaUrl;
       const mediaType = mediaMessage.dataset.mediaType;
       
-      openMediaViewer(mediaUrl, mediaType);
+      openMediaViewer(mediaUrl, mediaType, mediaMessage);
     }
     
     // Handle file click
@@ -7432,9 +7037,9 @@ async function populateRecentChatsList() {
       
       // For image files, open in media viewer
       if (isImageFile(fileName)) {
-        openMediaViewer(fileUrl, 'image');
+        openMediaViewer(fileUrl, 'image', fileMessage);
       } else if (isVideoFile(fileName)) {
-        openMediaViewer(fileUrl, 'video');
+        openMediaViewer(fileUrl, 'video', fileMessage);
       } else if (isAudioFile(fileName)) {
         openMediaViewer(fileUrl, 'audio');
       } else if (/\.pdf$/i.test(fileName)) {
@@ -7456,17 +7061,275 @@ async function populateRecentChatsList() {
   });
 
   // Open media viewer - UPDATED WITH BACK BUTTON
-  function openMediaViewer(url, type) {
+  function getChatMediaGallery() {
+    const gallery = [];
+    messagesDiv.querySelectorAll('.media-message, .file-message').forEach(element => {
+      let itemType;
+      let itemUrl;
+
+      if (element.classList.contains('media-message')) {
+        itemType = element.dataset.mediaType;
+        itemUrl = element.dataset.mediaUrl;
+      } else {
+        const fileName = element.dataset.fileName || '';
+        itemType = isImageFile(fileName) ? 'image' : (isVideoFile(fileName) ? 'video' : null);
+        itemUrl = element.dataset.fileUrl;
+      }
+
+      if ((itemType === 'image' || itemType === 'video') && itemUrl) {
+        gallery.push({ element, url: itemUrl, type: itemType });
+      }
+    });
+    return gallery;
+  }
+
+  function renderMediaGallery() {
+    const items = getChatMediaGallery();
+    mediaGalleryTitle.textContent = `Media (${items.length})`;
+    if (mediaGalleryObserver) {
+      mediaGalleryObserver.disconnect();
+      mediaGalleryObserver = null;
+    }
+    mediaGalleryGrid.replaceChildren();
+
+    if (!items.length) {
+      const emptyState = document.createElement('div');
+      emptyState.className = 'media-gallery-empty';
+      emptyState.textContent = 'No media in this chat yet.';
+      mediaGalleryGrid.appendChild(emptyState);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const pendingThumbnails = [];
+    items.forEach(item => {
+      const button = document.createElement('button');
+      button.className = 'media-gallery-item';
+      button.type = 'button';
+      button.setAttribute('aria-label', `Open ${item.type}`);
+
+      const thumbnailUrl = getMediaThumbnailUrl(item.url, item.type);
+      if (thumbnailUrl) {
+        const image = document.createElement('img');
+        image.dataset.thumbnailUrl = thumbnailUrl;
+        image.alt = '';
+        image.decoding = 'async';
+        button.appendChild(image);
+        pendingThumbnails.push(image);
+      }
+
+      if (item.type === 'video') {
+        const videoIcon = document.createElement('i');
+        videoIcon.className = 'fas fa-play-circle media-gallery-video-icon';
+        button.appendChild(videoIcon);
+      }
+
+      const typeLabel = document.createElement('span');
+      typeLabel.className = 'media-gallery-item-type';
+      typeLabel.textContent = item.type === 'video' ? 'Video' : 'Image';
+      button.appendChild(typeLabel);
+      button.addEventListener('click', () => {
+        mediaGalleryModal.classList.remove('show');
+        openMediaViewer(item.url, item.type, item.element, true);
+      });
+      fragment.appendChild(button);
+    });
+    mediaGalleryGrid.appendChild(fragment);
+
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          const image = entry.target;
+          image.fetchPriority = 'high';
+          image.src = image.dataset.thumbnailUrl;
+          delete image.dataset.thumbnailUrl;
+          observer.unobserve(image);
+        });
+      }, { root: mediaGalleryGrid, rootMargin: '50px' });
+      mediaGalleryObserver = observer;
+      pendingThumbnails.forEach(image => observer.observe(image));
+    } else {
+      pendingThumbnails.forEach(image => {
+        image.src = image.dataset.thumbnailUrl;
+        delete image.dataset.thumbnailUrl;
+      });
+    }
+  }
+
+  function openMediaViewer(url, type, sourceElement = null, returnToGallery = false) {
+    mediaViewerReturnToGallery = returnToGallery;
+    mediaViewerGallery = sourceElement && (type === 'image' || type === 'video')
+      ? getChatMediaGallery()
+      : [];
+    mediaViewerIndex = mediaViewerGallery.findIndex(item => item.element === sourceElement);
+    if (mediaViewerIndex < 0) {
+      mediaViewerGallery = [{ element: sourceElement, url, type }];
+      mediaViewerIndex = 0;
+    }
+
+    renderMediaViewerItem(url, type);
+  }
+
+  function showMediaViewerItem(index) {
+    if (index < 0 || index >= mediaViewerGallery.length) return;
+    mediaViewerIndex = index;
+    const item = mediaViewerGallery[index];
+    renderMediaViewerItem(item.url, item.type);
+  }
+
+  function updateMediaViewerNavigation() {
+    const hasMultipleItems = mediaViewerGallery.length > 1;
+    mediaViewerPrevBtn.style.display = hasMultipleItems ? 'flex' : 'none';
+    mediaViewerNextBtn.style.display = hasMultipleItems ? 'flex' : 'none';
+    mediaViewerPrevBtn.disabled = mediaViewerIndex <= 0;
+    mediaViewerNextBtn.disabled = mediaViewerIndex >= mediaViewerGallery.length - 1;
+  }
+
+  function updateMediaViewerZoomControls() {
+    const zoomPercent = Math.round(mediaViewerZoomScale * 100);
+    mediaViewerZoomResetBtn.textContent = `${zoomPercent}%`;
+    mediaViewerZoomOutBtn.disabled = mediaViewerZoomScale <= 1;
+    mediaViewerZoomInBtn.disabled = mediaViewerZoomScale >= 4;
+    mediaViewerZoomResetBtn.disabled = mediaViewerZoomScale === 1;
+    if (mediaViewerImageStage) {
+      mediaViewerImageStage.classList.toggle('is-zoomed', mediaViewerZoomScale > 1);
+    }
+  }
+
+  function setMediaViewerZoom(nextScale, clientX, clientY) {
+    if (!mediaViewerImageStage || !mediaViewerZoomImage) return;
+
+    const previousScale = mediaViewerZoomScale;
+    const stageRect = mediaViewerImageStage.getBoundingClientRect();
+    const focusX = Number.isFinite(clientX) ? clientX - (stageRect.left + stageRect.width / 2) : 0;
+    const focusY = Number.isFinite(clientY) ? clientY - (stageRect.top + stageRect.height / 2) : 0;
+    const scale = Math.max(1, Math.min(4, nextScale));
+
+    mediaViewerPanX = focusX - ((focusX - mediaViewerPanX) / previousScale) * scale;
+    mediaViewerPanY = focusY - ((focusY - mediaViewerPanY) / previousScale) * scale;
+    mediaViewerZoomScale = scale;
+
+    if (scale === 1) {
+      mediaViewerPanX = 0;
+      mediaViewerPanY = 0;
+    }
+
+    const maxPanX = Math.max(0, (mediaViewerZoomImage.offsetWidth * scale - stageRect.width) / 2);
+    const maxPanY = Math.max(0, (mediaViewerZoomImage.offsetHeight * scale - stageRect.height) / 2);
+    mediaViewerPanX = Math.max(-maxPanX, Math.min(maxPanX, mediaViewerPanX));
+    mediaViewerPanY = Math.max(-maxPanY, Math.min(maxPanY, mediaViewerPanY));
+    mediaViewerZoomImage.style.transform =
+      `translate3d(${mediaViewerPanX}px, ${mediaViewerPanY}px, 0) scale(${mediaViewerZoomScale})`;
+    updateMediaViewerZoomControls();
+  }
+
+  function enableMediaImageZoom(stage, image) {
+    mediaViewerImageStage = stage;
+    mediaViewerZoomImage = image;
+    image.addEventListener('load', () => setMediaViewerZoom(mediaViewerZoomScale));
+
+    stage.addEventListener('wheel', event => {
+      event.preventDefault();
+      const step = event.deltaY < 0 ? 0.25 : -0.25;
+      setMediaViewerZoom(mediaViewerZoomScale + step, event.clientX, event.clientY);
+    }, { passive: false });
+
+    stage.addEventListener('pointerdown', event => {
+      if (mediaViewerZoomScale <= 1 || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      event.preventDefault();
+      mediaViewerPanStart = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        panX: mediaViewerPanX,
+        panY: mediaViewerPanY
+      };
+      stage.classList.add('is-dragging');
+      stage.setPointerCapture(event.pointerId);
+    });
+
+    stage.addEventListener('pointermove', event => {
+      if (!mediaViewerPanStart || mediaViewerPanStart.pointerId !== event.pointerId) return;
+      mediaViewerPanX = mediaViewerPanStart.panX + event.clientX - mediaViewerPanStart.x;
+      mediaViewerPanY = mediaViewerPanStart.panY + event.clientY - mediaViewerPanStart.y;
+      setMediaViewerZoom(mediaViewerZoomScale);
+    });
+
+    const finishPan = event => {
+      if (!mediaViewerPanStart || mediaViewerPanStart.pointerId !== event.pointerId) return;
+      mediaViewerPanStart = null;
+      stage.classList.remove('is-dragging');
+      if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+    };
+    stage.addEventListener('pointerup', finishPan);
+    stage.addEventListener('pointercancel', finishPan);
+
+    const touchDistance = touches => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    };
+    stage.addEventListener('touchstart', event => {
+      if (event.touches.length !== 2) return;
+      mediaViewerTouchStart = null;
+      mediaViewerPanStart = null;
+      const first = event.touches[0];
+      const second = event.touches[1];
+      mediaViewerPinchStart = {
+        distance: touchDistance(event.touches),
+        scale: mediaViewerZoomScale,
+        x: (first.clientX + second.clientX) / 2,
+        y: (first.clientY + second.clientY) / 2
+      };
+    }, { passive: true });
+
+    stage.addEventListener('touchmove', event => {
+      if (!mediaViewerPinchStart || event.touches.length !== 2) return;
+      event.preventDefault();
+      const first = event.touches[0];
+      const second = event.touches[1];
+      const distance = touchDistance(event.touches);
+      setMediaViewerZoom(
+        mediaViewerPinchStart.scale * distance / mediaViewerPinchStart.distance,
+        (first.clientX + second.clientX) / 2,
+        (first.clientY + second.clientY) / 2
+      );
+    }, { passive: false });
+
+    stage.addEventListener('touchend', event => {
+      if (event.touches.length < 2) mediaViewerPinchStart = null;
+    }, { passive: true });
+    stage.addEventListener('touchcancel', () => {
+      mediaViewerPinchStart = null;
+    }, { passive: true });
+  }
+
+  function renderMediaViewerItem(url, type) {
     mediaViewerContent.innerHTML = '';
+    mediaViewerContent.classList.toggle('is-image-viewer', type === 'image');
     mediaViewerEditBtn.style.display = 'none';
+    mediaViewerZoomControls.hidden = type !== 'image';
+    mediaViewerZoomScale = 1;
+    mediaViewerPanX = 0;
+    mediaViewerPanY = 0;
+    mediaViewerImageStage = null;
+    mediaViewerZoomImage = null;
+    mediaViewerPanStart = null;
+    mediaViewerPinchStart = null;
+    updateMediaViewerZoomControls();
 
     if (type === 'image') {
+      const stage = document.createElement('div');
+      stage.className = 'media-viewer-image-stage';
       const mediaElement = document.createElement('img');
       mediaElement.src = url;
       mediaElement.alt = 'Image';
       mediaViewerEditBtn.style.display = 'flex';
       mediaViewerTitle.textContent = 'Image Viewer';
-      mediaViewerContent.appendChild(mediaElement);
+      stage.appendChild(mediaElement);
+      mediaViewerContent.appendChild(stage);
+      enableMediaImageZoom(stage, mediaElement);
     } else if (type === 'video') {
       const previewUrl = getPlayableVideoUrl(url);
       const mediaElement = document.createElement('video');
@@ -7527,18 +7390,8 @@ async function populateRecentChatsList() {
         showFallback();
       });
 
-      const tryPlayTest = async () => {
-        try {
-          await mediaElement.play();
-          mediaElement.pause();
-        } catch (err) {
-          showFallback();
-        }
-      };
-
       mediaViewerContent.appendChild(mediaElement);
       mediaViewerContent.appendChild(fallback);
-      setTimeout(tryPlayTest, 200);
     } else if (type === 'audio') {
       const mediaElement = document.createElement('audio');
       mediaElement.controls = true;
@@ -7552,11 +7405,97 @@ async function populateRecentChatsList() {
       mediaViewerContent.appendChild(mediaElement);
     }
 
+    if (mediaViewerGallery.length > 1) {
+      mediaViewerTitle.textContent += ` (${mediaViewerIndex + 1}/${mediaViewerGallery.length})`;
+    }
+    updateMediaViewerNavigation();
     mediaViewer.style.display = 'flex';
 
-    currentEditingImage = type === 'image' ? url : null;
-    currentEditingVideo = type === 'video' ? url : null;
   }
+
+  mediaViewerContent.addEventListener('touchstart', event => {
+    const target = event.target;
+    if (mediaViewerZoomScale > 1 || mediaViewerGallery.length < 2 || event.touches.length !== 1 ||
+        !(target instanceof Element) || !target.closest('img, video')) {
+      mediaViewerTouchStart = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    mediaViewerTouchStart = { x: touch.clientX, y: touch.clientY };
+  }, { passive: true });
+
+  mediaViewerContent.addEventListener('touchend', event => {
+    if (!mediaViewerTouchStart) return;
+
+    const start = mediaViewerTouchStart;
+    mediaViewerTouchStart = null;
+    if (event.changedTouches.length !== 1) return;
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 50 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) return;
+
+    showMediaViewerItem(mediaViewerIndex + (deltaX < 0 ? 1 : -1));
+  }, { passive: true });
+
+  mediaViewerContent.addEventListener('touchcancel', () => {
+    mediaViewerTouchStart = null;
+  }, { passive: true });
+
+  mediaViewerPrevBtn.addEventListener('click', () => {
+    showMediaViewerItem(mediaViewerIndex - 1);
+  });
+
+  mediaViewerNextBtn.addEventListener('click', () => {
+    showMediaViewerItem(mediaViewerIndex + 1);
+  });
+
+  mediaViewerZoomOutBtn.addEventListener('click', () => {
+    setMediaViewerZoom(mediaViewerZoomScale - 0.25);
+  });
+
+  mediaViewerZoomResetBtn.addEventListener('click', () => {
+    setMediaViewerZoom(1);
+  });
+
+  mediaViewerZoomInBtn.addEventListener('click', () => {
+    setMediaViewerZoom(mediaViewerZoomScale + 0.25);
+  });
+
+  menuMediaGallery.addEventListener('click', () => {
+    closeOpenMenus();
+    renderMediaGallery();
+    mediaGalleryModal.classList.add('show');
+  });
+
+  mediaGalleryCloseBtn.addEventListener('click', () => {
+    mediaGalleryModal.classList.remove('show');
+  });
+
+  mediaGalleryModal.addEventListener('click', event => {
+    if (event.target === mediaGalleryModal) {
+      mediaGalleryModal.classList.remove('show');
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (mediaGalleryModal.classList.contains('show') && event.key === 'Escape') {
+      mediaGalleryModal.classList.remove('show');
+      return;
+    }
+    if (mediaViewer.style.display !== 'flex' || mediaViewerGallery.length < 2) return;
+    const target = event.target;
+    if (target instanceof HTMLElement &&
+        (target.isContentEditable || target.closest('input, textarea, select, [contenteditable="true"]'))) {
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      showMediaViewerItem(mediaViewerIndex + (event.key === 'ArrowLeft' ? -1 : 1));
+    }
+  });
 
   async function openProfilePreview(userName, profileImage) {
     if (!profilePreview) return;
@@ -7605,6 +7544,10 @@ async function populateRecentChatsList() {
   // Close media viewer with back button
   mediaViewerBackBtn.addEventListener('click', () => {
     mediaViewer.style.display = 'none';
+    if (mediaViewerReturnToGallery) {
+      mediaViewerReturnToGallery = false;
+      mediaGalleryModal.classList.add('show');
+    }
   });
 
   // UPDATED: Media viewer download button with proper Cloudinary download
@@ -7640,309 +7583,20 @@ async function populateRecentChatsList() {
   mediaViewerEditBtn.addEventListener('click', () => {
     const mediaElement = mediaViewerContent.querySelector('img, video');
     if (mediaElement) {
-      mediaViewer.style.display = 'none';
-      
       if (mediaElement.tagName === 'IMG') {
-        imageEditorModal.style.display = 'flex';
-        requestAnimationFrame(() => initImageEditor(mediaElement.src));
+        mediaViewer.style.display = 'none';
+        requestAnimationFrame(() => window.ImageEditor.open(mediaElement.src));
       } else if (mediaElement.tagName === 'VIDEO') {
-        videoEditorModal.style.display = 'flex';
-        requestAnimationFrame(() => initVideoEditor(mediaElement.src));
-      }
-    }
-  });
-
-  // Image editor handlers - HTML5 Canvas
-  cancelImageEditBtn.addEventListener('click', () => {
-    imageEditorModal.style.display = 'none';
-    currentEditingImage = null;
-    const canvas = document.getElementById('drawingCanvas');
-    if (canvas) {
-      canvas.remove();
-    }
-  });
-
-  saveImageEditBtn.addEventListener('click', async () => {
-    const canvas = document.getElementById('drawingCanvas');
-    const backgroundImage = document.getElementById('editorBackgroundImage');
-    const statusElement = document.getElementById('editorStatus');
-
-    if (!canvas) {
-      showNotification('Image editor is still loading, please wait.', true);
-      return;
-    }
-
-    if (statusElement) {
-      statusElement.textContent = 'Saving image...';
-    }
-    saveImageEditBtn.disabled = true;
-
-    try {
-      const exportCanvas = document.createElement('canvas');
-      exportCanvas.width = canvas.width;
-      exportCanvas.height = canvas.height;
-      const exportCtx = exportCanvas.getContext('2d');
-
-      if (backgroundImage && backgroundImage.src) {
-        exportCtx.drawImage(backgroundImage, 0, 0, exportCanvas.width, exportCanvas.height);
-      }
-      exportCtx.drawImage(canvas, 0, 0);
-
-      const outputMime = ['jpeg', 'png', 'webp'].includes(currentEditingImageFormat) ? `image/${currentEditingImageFormat}` : 'image/png';
-      const quality = outputMime === 'image/jpeg' ? 0.92 : 1;
-      const dataURL = exportCanvas.toDataURL(outputMime, quality);
-      const response = await fetch(dataURL);
-      const blob = await response.blob();
-      const extension = outputMime === 'image/jpeg' ? 'jpg' : outputMime === 'image/webp' ? 'webp' : 'png';
-      const file = new File([blob], `edited_image_${Date.now()}.${extension}`, { type: outputMime });
-      
-      const result = await uploadToCloudinary(file);
-      const imageUrl = result.secure_url || result.url || '';
-      if (!imageUrl) {
-        throw new Error('No image URL returned from upload');
-      }
-
-      const timestamp = Date.now();
-      const message = {
-        id: `msg_${timestamp}_${userId}`,
-        name: username,
-        userId: userId,
-        text: 'Edited image',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: timestamp,
-        channel: userChannel,
-        mediaType: 'image',
-        mediaUrl: imageUrl
-      };
-      
-      await db.ref('chat').push(message);
-      showNotification('Edited image sent!');
-      
-      if (statusElement) {
-        statusElement.textContent = 'Saved successfully';
-      }
-      imageEditorModal.style.display = 'none';
-      canvas.remove();
-    } catch (error) {
-      console.error('Error saving edited image:', error);
-      if (statusElement) {
-        statusElement.textContent = 'Save failed';
-      }
-      showNotification('Failed to save image: ' + error.message, true);
-    } finally {
-      saveImageEditBtn.disabled = false;
-    }
-  });
-
-  brushToolBtn.addEventListener('click', () => {
-    activateBrushTool();
-  });
-
-  textToolBtn.addEventListener('click', () => {
-    activateTextTool();
-  });
-
-  eraserToolBtn.addEventListener('click', () => {
-    activateEraserTool();
-    cropMode = false;
-    if (editorStatus) editorStatus.textContent = '';
-  });
-
-  const editorStatus = document.getElementById('editorStatus');
-  const textInput = document.getElementById('textInput');
-  const addTextBtn = document.getElementById('addTextBtn');
-
-  if (cropToolBtn) {
-    cropToolBtn.addEventListener('click', () => {
-      cropMode = !cropMode;
-      activateBrushTool();
-      if (editorStatus) {
-        editorStatus.textContent = cropMode ? 'Crop mode active: drag to select area' : '';
-      }
-      if (cropMode) {
-        isEraserActive = false;
-      }
-    });
-  }
-
-  if (addTextBtn && textInput) {
-    addTextBtn.addEventListener('click', () => {
-      const canvas = document.getElementById('drawingCanvas');
-      const ctx = canvas ? canvas.getContext('2d') : null;
-      const text = textInput.value.trim();
-
-      if (!ctx || !text) {
-        return;
-      }
-
-      const isDarkTheme = document.body.classList.contains('dark-theme');
-      const textColor = currentBrushColor || (isDarkTheme ? '#ffffff' : '#000000');
-      const size = Math.max(16, Math.min(48, currentBrushSize * 3));
-      ctx.font = `${size}px Arial`;
-      const metrics = ctx.measureText(text);
-      const textObj = {
-        text: text,
-        x: 120,
-        y: 120,
-        color: textColor,
-        size: size,
-        width: metrics.width,
-        height: size,
-        dragOffsetX: 0,
-        dragOffsetY: 0,
-        selected: false
-      };
-
-      if (!canvas.textElements) canvas.textElements = [];
-      canvas.textElements.push(textObj);
-      ctx.globalCompositeOperation = 'source-over';
-      redrawCanvas(canvas, ctx, canvas.textElements);
-      textInput.value = '';
-    });
-  }
-
-  brushColorPicker.addEventListener('input', (e) => {
-    updateBrush();
-  });
-
-  brushSizeSlider.addEventListener('input', (e) => {
-    updateBrush();
-  });
-
-  undoEditBtn.addEventListener('click', () => {
-    undoCanvasAction();
-  });
-
-  clearEditBtn.addEventListener('click', () => {
-    if (confirm('Clear all drawings?')) {
-      const canvas = document.getElementById('drawingCanvas');
-      const ctx = canvas ? canvas.getContext('2d') : null;
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        canvas.textElements = [];
-        editHistory = [];
-        // Reload the image
-        if (currentEditingImage) {
-          initImageEditor(currentEditingImage);
+        const videoUrl = mediaElement.currentSrc ||
+          mediaElement.querySelector('source')?.src ||
+          mediaElement.src;
+        if (!videoUrl) {
+          showNotification('Video source is unavailable for editing.', true);
+          return;
         }
+        mediaViewer.style.display = 'none';
+        requestAnimationFrame(() => window.VideoEditor.open(videoUrl));
       }
-    }
-  });
-
-  // Video editor handlers - FFMPEG integration for trimming and muting
-  cancelVideoEditBtn.addEventListener('click', () => {
-    videoEditorModal.style.display = 'none';
-  });
-
-  saveVideoEditBtn.addEventListener('click', async () => {
-    if (!selectedVideoFile) {
-      showNotification('No video selected', true);
-      return;
-    }
-
-    const startTime = parseInt(trimStartSlider.value);
-    const endTime = parseInt(trimEndSlider.value);
-
-    if (endTime <= startTime) {
-      showNotification('End time must be after start time', true);
-      return;
-    }
-
-    showNotification('Processing video with FFmpeg...');
-    
-    try {
-      // Check if FFmpeg is loaded
-      if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
-        showNotification('Video processing library not loaded yet. Please try again in a moment.', true);
-        return;
-      }
-
-      // Initialize FFmpeg if not already done
-      if (!ffmpegInstance) {
-        const { FFmpeg, fetchFile } = window.FFmpeg;
-        ffmpegInstance = new FFmpeg.FFmpeg();
-        
-        if (!ffmpegLoading) {
-          ffmpegLoading = true;
-          try {
-            await ffmpegInstance.load();
-          } catch (loadError) {
-            console.error('Failed to load FFmpeg:', loadError);
-            showNotification('Failed to load video processor. Please refresh and try again.', true);
-            ffmpegLoading = false;
-            ffmpegInstance = null;
-            return;
-          }
-        }
-      }
-
-      // Write the video file to FFmpeg virtual filesystem
-      const arrayBuffer = await selectedVideoFile.arrayBuffer();
-      ffmpegInstance.FS('writeFile', 'input.mp4', new Uint8Array(arrayBuffer));
-
-      // Trim and remove audio: -ss (start), -to (end), -an (no audio)
-      await ffmpegInstance.run('-i', 'input.mp4', '-ss', `${startTime}`, '-to', `${endTime}`, '-an', '-c:v', 'copy', 'output.mp4');
-
-      // Read the processed video
-      const data = ffmpegInstance.FS('readFile', 'output.mp4');
-      const processedVideoBlob = new Blob([data.buffer], { type: 'video/mp4' });
-
-      // Upload to Cloudinary
-      const formData = new FormData();
-      formData.append('file', processedVideoBlob, 'trimmed_video.mp4');
-      formData.append('upload_preset', 'messenger_media');
-
-      const uploadResult = await fetch('https://api.cloudinary.com/v1_1/dqtx23jyq/video/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      const result = await uploadResult.json();
-      const videoUrl = result.secure_url || result.url || '';
-
-      if (!videoUrl) {
-        throw new Error('No video URL returned from upload');
-      }
-
-      // Send video message
-      const timestamp = Date.now();
-      const message = {
-        id: `msg_${timestamp}_${userId}`,
-        name: username,
-        userId: userId,
-        text: 'Trimmed & muted video',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: timestamp,
-        channel: userChannel,
-        mediaType: 'video',
-        mediaUrl: videoUrl
-      };
-
-      await db.ref('chat').push(message);
-      showNotification('Trimmed video sent!');
-      videoEditorModal.style.display = 'none';
-      
-      // Clear FFmpeg files
-      ffmpegInstance.FS('unlink', 'input.mp4');
-      ffmpegInstance.FS('unlink', 'output.mp4');
-
-    } catch (error) {
-      console.error('Error processing video:', error);
-      showNotification('Failed to process video', true);
-    }
-  });
-
-  applyTrimBtn.addEventListener('click', () => {
-    const startTime = parseInt(trimStartSlider.value);
-    const endTime = parseInt(trimEndSlider.value);
-    const videoDuration = parseInt(trimEndSlider.max);
-    
-    if (endTime > startTime) {
-      const startFormatted = formatTime(startTime);
-      const endFormatted = formatTime(endTime);
-      showNotification(`Trim set: ${startFormatted} to ${endFormatted} (${formatTime(endTime - startTime)} total)`);
-    } else {
-      showNotification('End time must be after start time', true);
     }
   });
 

@@ -1,0 +1,42 @@
+.editor-header {
+  padding: 15px;
+  background: var(--header-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.editor-tool-btn {
+  background: var(--message-bg);
+  border: none;
+  color: var(--text-primary);
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.editor-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+}
+
+.editor-tool-btn.active {
+  background: rgba(255, 255, 255, 0.22);
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .editor-tools {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .editor-tool-btn {
+    flex-shrink: 0;
+  }
+}
