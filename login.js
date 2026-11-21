@@ -46,6 +46,7 @@ let onlineUsers = {};
 let recentChatUsers = {};
 const seenMessagesMarked = new Set();
 let currentMessages = {};
+let allMessageReactions = {};
 let isAdmin = false;
 let activitySessionRef = null;
 let activitySessionId = '';
@@ -1736,6 +1737,9 @@ async function appendInitialMessages(snapshot) {
   }
 
   messagesDiv.appendChild(fragment);
+  entries.forEach(([messageKey]) => {
+    renderMessageReactions(messageKey, allMessageReactions[messageKey] || {});
+  });
   refreshDateSeparators();
   refreshMessageGroups();
   updateStartupMessageProgress(startupMessageRenderTotal, startupMessageRenderTotal);
@@ -3817,41 +3821,36 @@ function toggleReaction(messageKey, messageId, emoji) {
   }
 
   const reactionsRef = db.ref(`reactions/${messageKey}`);
-  
-  reactionsRef.once('value', (snapshot) => {
-    const reactions = snapshot.val() || {};
-    
-    if (!reactions[emoji]) {
-      reactions[emoji] = [];
-    }
+  const currentUserReaction = `${username}:${userId}`;
 
-    // Toggle current user's reaction
-    const currentUserReaction = `${username}:${userId}`;
-    const index = reactions[emoji].indexOf(currentUserReaction);
-    
+  reactionsRef.transaction((current) => {
+    const reactions = current && typeof current === 'object' ? { ...current } : {};
+    const users = Array.isArray(reactions[emoji]) ? [...reactions[emoji]] : [];
+    const index = users.indexOf(currentUserReaction);
+
     if (index > -1) {
-      // Remove reaction
-      reactions[emoji].splice(index, 1);
-      if (reactions[emoji].length === 0) {
-        delete reactions[emoji];
-      }
+      users.splice(index, 1);
     } else {
-      // Add reaction
-      reactions[emoji].push(currentUserReaction);
+      users.push(currentUserReaction);
     }
 
-    // Save reactions
-    if (Object.keys(reactions).length === 0) {
-      reactionsRef.remove();
+    if (users.length > 0) {
+      reactions[emoji] = users;
     } else {
-      reactionsRef.set(reactions);
+      delete reactions[emoji];
     }
 
-    // Save to recent reactions
+    return Object.keys(reactions).length > 0 ? reactions : null;
+  }, (error, committed, snapshot) => {
+    if (error) {
+      console.error('Error saving message reaction:', error);
+      showNotification('Failed to save reaction. Please try again.', true);
+      return;
+    }
+    if (!committed) return;
+
     saveRecentReaction(emoji);
-
-    // Update display
-    displayMessageReactions(messageKey);
+    renderMessageReactions(messageKey, snapshot.val() || {});
   });
 }
 
@@ -3860,38 +3859,35 @@ function displayMessageReactions(messageKey) {
   const messageDiv = document.querySelector(`[data-key="${messageKey}"]`);
   if (!messageDiv) return;
 
-  const reactionsContainer = messageDiv.querySelector('.message__reactions');
+  const reactionsRef = db.ref(`reactions/${messageKey}`);
+
+  reactionsRef.once('value', (snapshot) => {
+    renderMessageReactions(messageKey, snapshot.val() || {});
+  });
+}
+
+function renderMessageReactions(messageKey, reactions) {
+  const messageDiv = document.querySelector(`[data-key="${messageKey}"]`);
+  const reactionsContainer = messageDiv?.querySelector('.message__reactions');
   if (!reactionsContainer) return;
 
-  const reactionsRef = db.ref(`reactions/${messageKey}`);
-  
-  reactionsRef.once('value', (snapshot) => {
-    const reactions = snapshot.val() || {};
-    reactionsContainer.innerHTML = '';
+  reactionsContainer.innerHTML = '';
+  Object.entries(reactions).forEach(([emoji, users]) => {
+    if (!Array.isArray(users) || users.length === 0) return;
 
-    if (Object.keys(reactions).length === 0) {
-      return;
-    }
+    const isCurrentUserReacted = users.includes(`${username}:${userId}`);
+    const badge = document.createElement('div');
+    badge.className = `reaction-badge ${isCurrentUserReacted ? 'user-reacted' : ''}`;
+    badge.innerHTML = `
+      <span class="reaction-emoji">${emoji}</span>
+      ${users.length > 1 ? `<span class="reaction-count">${users.length}</span>` : ''}
+    `;
 
-    Object.entries(reactions).forEach(([emoji, users]) => {
-      if (!users || users.length === 0) return;
-
-      const isCurrentUserReacted = users.some(u => u.includes(userId));
-      const count = users.length;
-
-      const badge = document.createElement('div');
-      badge.className = `reaction-badge ${isCurrentUserReacted ? 'user-reacted' : ''}`;
-      badge.innerHTML = `
-        <span class="reaction-emoji">${emoji}</span>
-        ${count > 1 ? `<span class="reaction-count">${count}</span>` : ''}
-      `;
-      
-      badge.addEventListener('click', () => {
-        showReactionUsers(messageKey, emoji, users);
-      });
-
-      reactionsContainer.appendChild(badge);
+    badge.addEventListener('click', () => {
+      showReactionUsers(messageKey, emoji, users);
     });
+
+    reactionsContainer.appendChild(badge);
   });
 }
 
@@ -3961,46 +3957,41 @@ function showReactionUsers(messageKey, emoji, users) {
 }
 
 function removeUserReaction(messageKey, emoji) {
-  // Remove current user's reaction
   const reactionsRef = db.ref(`reactions/${messageKey}`);
-  
-  reactionsRef.once('value', (snapshot) => {
-    const reactions = snapshot.val() || {};
-    
-    if (!reactions[emoji]) {
+  const currentUserReaction = `${username}:${userId}`;
+
+  reactionsRef.transaction((current) => {
+    if (!current || typeof current !== 'object' || !Array.isArray(current[emoji])) {
       return;
     }
 
-    // Remove current user's reaction
-    const currentUserReaction = `${username}:${userId}`;
-    const index = reactions[emoji].indexOf(currentUserReaction);
-    
-    if (index > -1) {
-      reactions[emoji].splice(index, 1);
-      if (reactions[emoji].length === 0) {
-        delete reactions[emoji];
-      }
-      
-      // Save reactions
-      if (Object.keys(reactions).length === 0) {
-        reactionsRef.remove();
-      } else {
-        reactionsRef.set(reactions);
-      }
+    const reactions = { ...current };
+    const users = [...reactions[emoji]];
+    const index = users.indexOf(currentUserReaction);
+    if (index === -1) return;
 
-      // Update display
-      displayMessageReactions(messageKey);
-      
-      // Refresh the modal
-      const modal = document.getElementById('reactionUsersModal');
-      if (modal && modal.classList.contains('show')) {
-        const newReactionsRef = db.ref(`reactions/${messageKey}`);
-        newReactionsRef.once('value', (snap) => {
-          const newReactions = snap.val() || {};
-          const users = newReactions[emoji] || [];
-          showReactionUsers(messageKey, emoji, users);
-        });
-      }
+    users.splice(index, 1);
+    if (users.length > 0) {
+      reactions[emoji] = users;
+    } else {
+      delete reactions[emoji];
+    }
+
+    return Object.keys(reactions).length > 0 ? reactions : null;
+  }, (error, committed, snapshot) => {
+    if (error) {
+      console.error('Error removing message reaction:', error);
+      showNotification('Failed to remove reaction. Please try again.', true);
+      return;
+    }
+    if (!committed) return;
+
+    const reactions = snapshot.val() || {};
+    renderMessageReactions(messageKey, reactions);
+
+    const modal = document.getElementById('reactionUsersModal');
+    if (modal && modal.classList.contains('show')) {
+      showReactionUsers(messageKey, emoji, reactions[emoji] || []);
     }
   });
 }
@@ -5216,12 +5207,9 @@ async function initializeChatApp() {
 
   // Listen for reactions changes in real-time
   db.ref('reactions').on('value', (snapshot) => {
-    const allReactions = snapshot.val() || {};
-    Object.keys(allReactions).forEach(messageKey => {
-      const messageDiv = document.querySelector(`[data-key="${messageKey}"]`);
-      if (messageDiv) {
-        displayMessageReactions(messageKey);
-      }
+    allMessageReactions = snapshot.val() || {};
+    document.querySelectorAll('.message[data-key]').forEach((messageDiv) => {
+      renderMessageReactions(messageDiv.dataset.key, allMessageReactions[messageDiv.dataset.key] || {});
     });
   });
 
