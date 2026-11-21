@@ -524,6 +524,9 @@
         <i class="fas fa-water"></i>
         <span>Better UI</span>
         <div class="menu-item-switch">
+          <button class="menu-better-ui-settings-btn" id="betterUiSettingsBtn" type="button" title="Better UI Settings" aria-label="Open Better UI settings">
+            <i class="fas fa-bars"></i>
+          </button>
           <label class="toggle-switch">
             <input type="checkbox" id="menuBetterUiToggle">
             <span class="toggle-slider"></span>
@@ -811,6 +814,85 @@
         </div>
         <div class="modal-buttons">
           <button class="modal-btn primary" id="closeSettingsBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="betterUiSettingsModal">
+      <div class="modal settings-modal better-ui-settings-modal">
+        <div class="modal-header">Better UI Settings</div>
+        <div class="modal-body settings-body">
+          <div class="settings-section">
+            <div class="settings-section-title">Appearance</div>
+
+            <div class="better-ui-setting-row is-focused" data-better-ui-setting="transparency">
+              <div class="settings-option-label">
+                <span>Transparency</span>
+                <p class="settings-option-desc">Adjust the transparency of all Better UI elements.</p>
+              </div>
+              <div class="better-ui-setting-value" id="betterUiTransparencyValue">72%</div>
+              <input type="range" id="betterUiTransparency" class="better-ui-slider" min="0" max="100" value="72">
+            </div>
+
+            <div class="better-ui-setting-row" data-better-ui-setting="magnification">
+              <div class="settings-option-label">
+                <span>Magnification</span>
+                <p class="settings-option-desc">Adjust how strongly Better UI magnifies the content behind it.</p>
+              </div>
+              <div class="better-ui-setting-value" id="betterUiMagnificationValue">20%</div>
+              <input type="range" id="betterUiMagnification" class="better-ui-slider" min="0" max="100" value="20">
+            </div>
+
+            <div class="better-ui-setting-row" data-better-ui-setting="blur">
+              <div class="settings-option-label">
+                <span>Blur</span>
+                <p class="settings-option-desc">Adjust the blur applied to Better UI surfaces.</p>
+              </div>
+              <div class="better-ui-setting-value" id="betterUiBlurValue">18px</div>
+              <input type="range" id="betterUiBlur" class="better-ui-slider" min="0" max="60" value="18">
+            </div>
+
+            <div class="better-ui-setting-row" data-better-ui-setting="tintIntensity">
+              <div class="settings-option-label">
+                <span>Tint Intensity</span>
+                <p class="settings-option-desc">Adjust the tint intensity to match the current theme.</p>
+              </div>
+              <div class="better-ui-setting-value" id="betterUiTintIntensityValue">18%</div>
+              <input type="range" id="betterUiTintIntensity" class="better-ui-slider" min="0" max="100" value="18">
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Options</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Border</span>
+                <p class="settings-option-desc">Toggle the border line for Better UI elements.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="betterUiBorderToggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-option better-ui-import-option">
+              <div class="settings-option-label">
+                <span>Use Other's Better UI Settings</span>
+                <p class="settings-option-desc">Import a Better UI setup from another user without affecting their other settings.</p>
+              </div>
+              <div class="better-ui-import-controls">
+                <select id="betterUiUserPicker" class="better-ui-user-picker">
+                  <option value="">Choose a user</option>
+                </select>
+                <button class="settings-btn" id="applyBetterUiImportBtn" type="button">
+                  <i class="fas fa-download"></i>
+                  <span>Use Settings</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="modal-btn primary" id="closeBetterUiSettingsBtn" type="button">Close</button>
         </div>
       </div>
     </div>

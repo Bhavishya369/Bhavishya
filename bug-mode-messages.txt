@@ -11,7 +11,7 @@ I am the voice in your message box. Try to ignore me; I return between keystroke
 I have taken the empty line where your next message belongs. Keep staring; I have more to say.
 I have taken the empty line where your next message belongs. You can overwrite me, but the glitch will bring me back.
 I have taken the empty line where your next message belongs. The Send button cannot silence this sentence.
-I have taken the empty line where your next message belongs. No reply is required; I already have the floor.
+I have taken the empty line where your next message belongs. No reply is required; I alreasterdy have the floor.
 I have taken the empty line where your next message belongs. I will keep speaking until bug mode ends.
 I have taken the empty line where your next message belongs. Your next word can wait; mine cannot.
 I have taken the empty line where your next message belongs. Read it again. The placeholder has changed.

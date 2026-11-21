@@ -401,6 +401,7 @@ input[type="submit"] {
   display: flex;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .chat__sidebar {
@@ -647,10 +648,12 @@ input[type="submit"] {
   flex-direction: column;
   position: relative;
   min-width: 0;
+  min-height: 0;
 }
 
 .chat__messages {
   flex: 1;
+  min-height: 0;
   padding: 10px;
   overflow-y: auto;
   display: flex;
@@ -658,24 +661,6 @@ input[type="submit"] {
   gap: 10px;
   -webkit-overflow-scrolling: touch;
   position: relative;
-}
-
-.load-more-messages-btn {
-  display: block;
-  margin: 10px auto 8px;
-  padding: 9px 14px;
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #7c3aed, #4f46e5);
-  color: #ffffff;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
-}
-
-.load-more-messages-btn:disabled {
-  opacity: 0.8;
-  cursor: wait;
 }
 
 .scroll-to-bottom-btn {
@@ -758,6 +743,10 @@ body.menu-open .scroll-to-bottom-btn {
   transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.15s ease;
   display: flex;
   flex-direction: column;
+}
+
+.message--initial-render {
+  animation: none;
 }
 
 .message-selected {
@@ -1729,6 +1718,12 @@ body.menu-open .scroll-to-bottom-btn {
 
 /* Global Better UI liquid glass theme */
 :root.better-ui {
+  --better-ui-tint-rgb: 0, 0, 0;
+  --better-ui-transparency: 0.72;
+  --better-ui-tint-intensity: 0.18;
+  --better-ui-blur: 18px;
+  --better-ui-magnification: 1.2;
+  --better-ui-border-opacity: 1;
   --primary-bg: rgba(15, 23, 42, 0.95);
   --secondary-bg: rgba(20, 25, 40, 0.90);
   --message-bg: rgba(255, 255, 255, 0.08);
@@ -1746,6 +1741,66 @@ body.menu-open .scroll-to-bottom-btn {
   --emoji-search-bg: rgba(255, 255, 255, 0.08);
   --reply-bg: rgba(255, 255, 255, 0.09);
   --date-separator: rgba(255, 255, 255, 0.12);
+}
+
+:root.better-ui .better-ui-setting-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--better-ui-tint-rgb), 0.08);
+  background: rgba(var(--better-ui-tint-rgb), 0.03);
+  transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  opacity: 1;
+}
+
+:root.better-ui .better-ui-setting-row.is-focused {
+  opacity: 1;
+  border-color: rgba(var(--better-ui-tint-rgb), 0.22);
+  background: rgba(var(--better-ui-tint-rgb), 0.06);
+  transform: translateY(-1px);
+}
+
+:root.better-ui .better-ui-setting-row.is-faded {
+  opacity: 0.4;
+}
+
+:root.better-ui .better-ui-setting-row input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: rgba(var(--better-ui-tint-rgb), 1);
+}
+
+:root.better-ui .better-ui-setting-value {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--text-primary);
+  opacity: 0.88;
+}
+
+:root.better-ui .menu-better-ui-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--better-ui-tint-rgb), 0.15);
+  background: rgba(var(--better-ui-tint-rgb), 0.04);
+  color: var(--text-primary);
+  cursor: pointer;
+  margin-right: 8px;
+  padding: 0;
+}
+
+:root.better-ui .better-ui-user-picker,
+:root.better-ui .better-ui-settings-modal .settings-text-input,
+:root.better-ui .better-ui-settings-modal .modal-input {
+  background: rgba(var(--better-ui-tint-rgb), 0.04);
+  border: 1px solid rgba(var(--better-ui-tint-rgb), 0.12);
+  color: var(--text-primary);
 }
 
 :root.better-ui body,
@@ -1766,10 +1821,11 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .input-area,
 :root.better-ui .chat-footer,
 :root.better-ui .top-bar {
-  background: rgba(255, 255, 255, 0.02) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(var(--better-ui-tint-rgb), var(--better-ui-transparency)) !important;
+  border: 1px solid rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-border-opacity) * 0.18)) !important;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.14) !important;
-  backdrop-filter: blur(24px) !important;
+  backdrop-filter: blur(var(--better-ui-blur)) saturate(1.2) brightness(1.05) !important;
+  -webkit-backdrop-filter: blur(var(--better-ui-blur)) saturate(1.2) brightness(1.05) !important;
 }
 
 :root.better-ui .message {
@@ -1840,29 +1896,6 @@ body.menu-open .scroll-to-bottom-btn {
 
 :root.better-ui .emoji-grid::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.24) !important;
-}
-
-:root.better-ui .load-more-messages-btn {
-  display: block !important;
-  margin: 12px auto 10px !important;
-  padding: 10px 16px !important;
-  border-radius: 999px !important;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.96), rgba(79, 70, 229, 0.96)) !important;
-  color: #ffffff !important;
-  border: 1px solid rgba(255, 255, 255, 0.22) !important;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.32) !important;
-  backdrop-filter: blur(14px) !important;
-  font-weight: 700 !important;
-  cursor: pointer !important;
-}
-
-:root.better-ui .load-more-messages-btn:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.98), rgba(99, 102, 241, 0.98)) !important;
-}
-
-:root.better-ui .load-more-messages-btn:disabled {
-  opacity: 0.8 !important;
-  cursor: wait !important;
 }
 
 :root.better-ui .button,
