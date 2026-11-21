@@ -224,12 +224,16 @@
             </div>
           </div>
 
-          <!-- Clipboard image preview -->
-          <div class="clipboard-image-preview-box" id="clipboardImagePreviewBox" style="display: none;" title="Open image in a new tab">
-            <button class="clipboard-image-preview-close" id="clipboardImagePreviewClose" type="button" title="Remove pasted image">
+          <!-- Pending media preview -->
+          <div class="clipboard-image-preview-box" id="clipboardImagePreviewBox" style="display: none;" title="Open media in a new tab">
+            <button class="clipboard-image-preview-close" id="clipboardImagePreviewClose" type="button" title="Remove pending media">
               <i class="fas fa-times"></i>
             </button>
+            <button class="clipboard-media-edit" id="clipboardMediaEdit" type="button" title="Edit media" aria-label="Edit media" style="display: none;">
+              <i class="fas fa-pen"></i>
+            </button>
             <img id="clipboardImagePreviewImage" class="clipboard-image-preview" alt="Pasted image preview">
+            <video id="clipboardImagePreviewVideo" class="clipboard-image-preview-video" muted playsinline preload="metadata" style="display: none;"></video>
             <span id="clipboardFilePreviewName" class="clipboard-file-preview-name" style="display: none;"></span>
           </div>
           
@@ -848,6 +852,7 @@
             <div class="settings-section-title">Messenger Users</div>
             <p class="settings-option-desc">Select a user to open the messenger as that user.</p>
           </div>
+          <input class="admin-user-search" id="adminUserSearchInput" type="search" placeholder="Search users..." aria-label="Search users" autocomplete="off">
           <div class="admin-user-list-label">Select user</div>
           <div class="admin-user-list" id="adminUserList" role="listbox" aria-label="Select user">
             <div class="admin-user-state">Loading users...</div>

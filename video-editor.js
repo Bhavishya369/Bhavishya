@@ -34,6 +34,7 @@
     pendingTimelinePointer: null,
     timelineFrame: null,
     previewEnd: null,        // when preview button was pressed
+    onSave: null,
     exporting: false,
     ffmpeg: null,
     ffmpegLoading: null
@@ -549,6 +550,19 @@
         await ff.deleteFile(outName).catch(() => {});
       }
 
+      if (s.onSave) {
+        const file = new File(
+          [finalBlob],
+          `edited_video_${Date.now()}.mp4`,
+          { type: finalBlob.type || 'video/mp4' }
+        );
+        await s.onSave(file);
+        notify('Edited video ready to send.');
+        setBusy(false);
+        closeEditor();
+        return;
+      }
+
       /* 3. upload */
       showProgress('Uploading…', '0%', 0);
       const result = await uploadVideo(finalBlob, (p) => {
@@ -596,12 +610,13 @@
   /* =========================================================
      OPEN / CLOSE
      ========================================================= */
-  function openEditor(videoUrl, optionalFile) {
+  function openEditor(videoUrl, optionalFile, options = {}) {
     initOnce();
     if (!s.els.modal) return;
 
     s.videoUrl   = videoUrl || null;
     s.videoBlob  = optionalFile || null;
+    s.onSave     = typeof options.onSave === 'function' ? options.onSave : null;
     s.duration   = 0;
     s.currentTime = 0;
     s.trimStart  = 0;
@@ -665,6 +680,7 @@
 
     s.videoUrl  = null;
     s.videoBlob = null;
+    s.onSave = null;
     s.duration  = 0;
     s.currentTime = 0;
     s.trimStart = 0;

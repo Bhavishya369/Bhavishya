@@ -22,6 +22,7 @@
 
     /* document */
     sourceUrl: null,
+    onSave: null,
     format: 'png',
     bgImage: null,        // HTMLImageElement
     bgLoaded: false,
@@ -657,7 +658,9 @@
   }
 
   async function loadSourceImage(url) {
-    const bust = url + (url.includes('?') ? '&t=' : '?t=') + Date.now();
+    const bust = url.startsWith('blob:')
+      ? url
+      : url + (url.includes('?') ? '&t=' : '?t=') + Date.now();
     setStatus('Loading image…');
 
     let result = null;
@@ -803,6 +806,7 @@
     state.bgEl = null;
     state.wrapper = null;
     state.container = null;
+    state.onSave = null;
     state.texts = [];
     state.history = [];
     state.historyIndex = -1;
@@ -866,6 +870,13 @@
       const blob = await (await fetch(dataUrl)).blob();
       const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png';
       const file = new File([blob], `edited_image_${Date.now()}.${ext}`, { type: mime });
+
+      if (state.onSave) {
+        await state.onSave(file);
+        notify('Edited image ready to send.');
+        closeEditor();
+        return;
+      }
 
       /* These globals live in login.js */
       const result = await uploadToCloudinary(file);
@@ -987,12 +998,13 @@
     });
   }
 
-  function openImageEditor(imageUrl) {
+  function openImageEditor(imageUrl, options = {}) {
     initializeImageEditor();
 
     const modal = $('imageEditorModal');
     if (!modal) return;
 
+    state.onSave = typeof options.onSave === 'function' ? options.onSave : null;
     modal.style.display = 'flex';
 
     // Let the modal lay out before measuring the container for fitWrapper()
