@@ -775,6 +775,26 @@
             </div>
           </div>
 
+          <div class="settings-section" id="crazyAdminSection" style="display: none;">
+            <div class="settings-section-title">Crazy</div>
+            <p class="settings-option-desc crazy-mode-description">Run the existing Bug Mode demonstration on currently online users. Changes apply across their active devices.</p>
+            <p class="settings-option-desc crazy-mode-warning">Development/testing only: the current Firebase rules allow public database writes, so this is not protected from direct access.</p>
+            <div class="crazy-mode-controls">
+              <button class="settings-btn crazy-mode-trigger-all" id="crazyTriggerAllBtn" type="button">
+                <i class="fas fa-bolt"></i>
+                <span>Trigger All Online Users</span>
+              </button>
+              <button class="settings-btn crazy-mode-stop-all" id="crazyStopAllBtn" type="button">
+                <i class="fas fa-stop"></i>
+                <span>Stop All</span>
+              </button>
+            </div>
+            <div class="settings-section-title">Online Users</div>
+            <ul class="crazy-online-user-list" id="crazyOnlineUsers" aria-live="polite">
+              <li class="crazy-online-user-empty">Loading online users...</li>
+            </ul>
+          </div>
+
           <!-- Chat Background Section -->
           <div class="settings-section">
             <div class="settings-section-title">Chat Background</div>

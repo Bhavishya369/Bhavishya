@@ -3312,47 +3312,6 @@ html.bug-mode body::before {
   animation: bug-signal-flash 1.7s steps(1, end) infinite;
 }
 
-.bug-mode-badge {
-  position: absolute;
-  top: 78px;
-  right: 16px;
-  padding: 8px 11px;
-  border: 1px solid rgba(118, 255, 105, 0.72);
-  border-radius: 7px;
-  background: rgba(3, 12, 8, 0.88);
-  box-shadow: 0 0 18px rgba(118, 255, 105, 0.24);
-  color: #a5ff83;
-  font: 800 11px/1.2 monospace;
-  letter-spacing: 0.08em;
-  isolation: isolate;
-  text-shadow: 1px 0 rgba(255, 0, 115, 0.85), -1px 0 rgba(0, 255, 245, 0.78);
-  animation: bug-badge-flicker 2.1s steps(1, end) infinite, bug-badge-slice 4.8s steps(1, end) infinite;
-}
-
-.bug-mode-badge::before,
-.bug-mode-badge::after {
-  content: attr(data-text);
-  position: absolute;
-  inset: 8px 11px;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 0;
-}
-
-.bug-mode-badge::before {
-  color: #ff2878;
-  transform: translateX(-3px);
-  clip-path: inset(0 0 52% 0);
-  animation: bug-badge-glitch-red 1.9s steps(1, end) infinite;
-}
-
-.bug-mode-badge::after {
-  color: #00fff5;
-  transform: translateX(3px);
-  clip-path: inset(48% 0 0 0);
-  animation: bug-badge-glitch-cyan 2.3s steps(1, end) infinite;
-}
-
 html.bug-mode .chat__title,
 html.bug-mode #chatInput,
 html.bug-mode #sendBtn {
@@ -3551,34 +3510,6 @@ html.bug-mode .bug-random-disturbance {
   66% { opacity: 0.12; }
 }
 
-@keyframes bug-badge-flicker {
-  0%, 89%, 100% { opacity: 1; transform: translateX(0); }
-  90% { opacity: 0.55; transform: translateX(-2px); }
-  92% { opacity: 1; transform: translateX(2px); }
-  94% { opacity: 0.8; transform: translateX(0); }
-}
-
-@keyframes bug-badge-slice {
-  0%, 72%, 76%, 100% { clip-path: inset(0); }
-  73% { clip-path: inset(18% 0 62% 0); }
-  74% { clip-path: inset(68% 0 8% 0); }
-  75% { clip-path: inset(42% 0 34% 0); }
-}
-
-@keyframes bug-badge-glitch-red {
-  0%, 84%, 100% { opacity: 0; transform: translateX(0); }
-  85% { opacity: 0.9; transform: translateX(-5px); }
-  87% { opacity: 0.65; transform: translateX(4px); }
-  89% { opacity: 0; }
-}
-
-@keyframes bug-badge-glitch-cyan {
-  0%, 78%, 100% { opacity: 0; transform: translateX(0); }
-  79% { opacity: 0.85; transform: translateX(5px); }
-  82% { opacity: 0.7; transform: translateX(-4px); }
-  84% { opacity: 0; }
-}
-
 @keyframes bug-screen-jitter {
   0%, 86%, 100% { transform: translate(0); }
   87% { transform: translate(2px, -1px) skewX(0.12deg); }
@@ -3637,9 +3568,6 @@ html.bug-mode .bug-random-disturbance {
   html.bug-mode .chat__title,
   html.bug-mode #chatInput,
   html.bug-mode #sendBtn,
-  .bug-mode-badge,
-  .bug-mode-badge::before,
-  .bug-mode-badge::after,
   .bug-ghost-cursor,
   .bug-ghost-impact,
   .bug-mode-ghost-reaction,
@@ -4954,6 +4882,81 @@ html.bug-mode .bug-random-disturbance {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 15px;
+}
+
+.crazy-mode-description {
+  margin-bottom: 14px !important;
+}
+
+.crazy-mode-warning {
+  color: #f59e0b;
+  margin-bottom: 14px !important;
+}
+
+.crazy-mode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.crazy-mode-trigger-all {
+  background: #7c3aed;
+}
+
+.crazy-mode-trigger-all:hover {
+  background: #6d28d9;
+}
+
+.crazy-mode-stop-all,
+.crazy-mode-stop {
+  background: #dc2626;
+}
+
+.crazy-mode-stop-all:hover,
+.crazy-mode-stop:hover {
+  background: #b91c1c;
+}
+
+.crazy-online-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.crazy-online-user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--secondary-bg);
+}
+
+.crazy-online-user-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.crazy-online-user-name {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.crazy-online-user-status,
+.crazy-online-user-empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.crazy-online-user-action {
+  flex-shrink: 0;
 }
 
 .settings-option {

@@ -44,6 +44,7 @@ let isTyping = false;
 let typingTimeout = null;
 let onlineUsers = {};
 let recentChatUsers = {};
+let presenceHeartbeatTimer = null;
 const seenMessagesMarked = new Set();
 let currentMessages = {};
 let allMessageReactions = {};
@@ -54,7 +55,8 @@ let activityQueue = [];
 let activityFlushTimer = null;
 let activitySessionFinalized = false;
 
-const MAX_CHAT_MESSAGES = 200;
+const PRESENCE_HEARTBEAT_INTERVAL_MS = 30000;
+const PRESENCE_STALE_AFTER_MS = 120000;
 const profileImageCache = new Map();
 const profileImageRequests = new Map();
 const CHAT_CACHE_PREFIX = 'bhavishya_chat_cache_v1';
@@ -145,14 +147,18 @@ function saveEncryptedChatCache(messages) {
   if (!chatCacheKey || !messages) return;
   chatCacheWriteQueue = chatCacheWriteQueue.then(async () => {
     try {
-      const recentMessages = Object.fromEntries(
+      const currentChannelMessages = Object.fromEntries(
         Object.entries(messages)
           .filter(([, message]) => message && typeof message === 'object')
+          .filter(([, message]) => {
+            if (userChannel === 'general') return !message.channel || message.channel === 'general';
+            if (userChannel === 'admin') return true;
+            return message.channel === userChannel;
+          })
           .sort(([, a], [, b]) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
-          .slice(-MAX_CHAT_MESSAGES)
       );
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const plaintext = new TextEncoder().encode(JSON.stringify({ version: 1, messages: recentMessages }));
+      const plaintext = new TextEncoder().encode(JSON.stringify({ version: 1, messages: currentChannelMessages }));
       const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chatCacheKey, plaintext);
       localStorage.setItem(getChatCacheStorageKey(), JSON.stringify({
         version: 1,
@@ -775,6 +781,11 @@ async function loadSettingsFromFirebase() {
         } else {
           applyChatBackground(settings.chatBackground);
         }
+      } else {
+        chatBackground = 'default';
+        localStorage.setItem('chat_background', 'default');
+        localStorage.removeItem('chat_background_custom');
+        applyChatBackground('default');
       }
       
       // Load notifications setting
@@ -950,6 +961,7 @@ function applyChatBackground(bgType) {
     messagesDiv.classList.add(`bg-${bgType}`);
     chatDiv.classList.add(`bg-${bgType}`);
   } else {
+    messagesDiv.classList.add('bg-default');
     chatDiv.classList.add('bg-default');
   }
 }
@@ -4051,6 +4063,9 @@ async function initializeChatApp() {
   let isAtBottom = true;
   const typingUserSpan = document.getElementById('typingUser');
   const onlineUsersList = document.getElementById('onlineUsers');
+  let crazyModeUsers = {};
+  let crazyOnlineUsers = {};
+  let remoteCrazyModeState = null;
   recentChatsList = document.getElementById('recentChats');
   const userAvatar = document.getElementById('userAvatar');
   const onlineCount = document.getElementById('onlineCount');
@@ -4079,6 +4094,9 @@ async function initializeChatApp() {
   userProfileImage = null;
   chatBackground = 'default';
   notificationsEnabled = false;
+  localStorage.setItem('chat_background', 'default');
+  localStorage.removeItem('chat_background_custom');
+  applyChatBackground('default');
   
   // Load cross-device settings from Firebase and setup sync listener
   // AFTER DOM is cleared, so new settings apply cleanly
@@ -5241,63 +5259,179 @@ async function initializeChatApp() {
   });
 
   // User presence (online/offline) with channel support
-  function updateUserPresence(isOnline) {
+  async function updateUserPresence(isOnline) {
     const safeKey = getFirebaseSafeUserKey(username || localStorage.getItem('chat_username') || 'unknown');
     const userRef = db.ref(`users/${safeKey}`);
     const userStatusRef = db.ref(`status/${userId || safeKey}`);
-    
+
     if (isOnline) {
-      // Mark user online and preserve existing user data.
-      userRef.update({ 
-        username: username, 
-        lastSeen: null, 
-        online: true,
-        isAdmin: isAdmin,
-        channel: userChannel,
-        notifyWhenOffline: false,
-        chatNotificationSentSinceLastVisit: false
-      });
-      
-      userStatusRef.set({ 
-        username: username, 
-        online: true, 
-        lastActive: Date.now(),
-        isAdmin: isAdmin,
-        channel: userChannel
-      });
-      
-      // Setup disconnect handler to mark the user offline and enable one notification on next new message.
-      userStatusRef.onDisconnect().set({ 
-        username: username, 
-        online: false, 
-        lastActive: Date.now(),
-        isAdmin: isAdmin,
-        channel: userChannel
-      });
-      userRef.onDisconnect().update({
+      const disconnectedStatus = {
+        username: username,
         online: false,
-        lastSeen: Date.now(),
-        notifyWhenOffline: true
-      });
+        lastActive: firebase.database.ServerValue.TIMESTAMP,
+        isAdmin: isAdmin,
+        channel: userChannel
+      };
+
+      try {
+        await Promise.all([
+          userStatusRef.onDisconnect().set(disconnectedStatus),
+          userRef.onDisconnect().update({
+            online: false,
+            lastSeen: firebase.database.ServerValue.TIMESTAMP,
+            notifyWhenOffline: true
+          })
+        ]);
+
+        await Promise.all([
+          userRef.update({
+            username: username,
+            lastSeen: null,
+            online: true,
+            isAdmin: isAdmin,
+            channel: userChannel,
+            notifyWhenOffline: false,
+            chatNotificationSentSinceLastVisit: false
+          }),
+          userStatusRef.set({
+            username: username,
+            online: true,
+            lastActive: firebase.database.ServerValue.TIMESTAMP,
+            isAdmin: isAdmin,
+            channel: userChannel
+          })
+        ]);
+
+        if (presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = setInterval(() => {
+          userStatusRef.update({ lastActive: firebase.database.ServerValue.TIMESTAMP })
+            .catch((error) => console.error('Unable to refresh user presence:', error));
+        }, PRESENCE_HEARTBEAT_INTERVAL_MS);
+      } catch (error) {
+        console.error('Unable to update user presence:', error);
+      }
     } else {
-      userStatusRef.set({ 
-        username: username, 
-        online: false, 
-        lastActive: Date.now(),
-        isAdmin: isAdmin,
-        channel: userChannel
-      });
-      userRef.update({
-        online: false,
-        lastSeen: Date.now(),
-        notifyWhenOffline: true
-      });
+      if (presenceHeartbeatTimer) {
+        clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = null;
+      }
+      try {
+        await Promise.all([
+          userStatusRef.set({
+            username: username,
+            online: false,
+            lastActive: firebase.database.ServerValue.TIMESTAMP,
+            isAdmin: isAdmin,
+            channel: userChannel
+          }),
+          userRef.update({
+            online: false,
+            lastSeen: firebase.database.ServerValue.TIMESTAMP,
+            notifyWhenOffline: true
+          })
+        ]);
+      } catch (error) {
+        console.error('Unable to mark user offline:', error);
+      }
     }
+  }
+
+  function isPresenceFresh(user) {
+    const lastActive = Number(user?.lastActive);
+    return Number.isFinite(lastActive) && Date.now() - lastActive <= PRESENCE_STALE_AFTER_MS;
+  }
+
+  function markStalePresenceOffline(id) {
+    db.ref(`status/${id}`).transaction((user) => {
+      if (!user || !user.online || isPresenceFresh(user)) return;
+      return { ...user, online: false };
+    }).catch((error) => console.error(`Unable to clear stale presence for ${id}:`, error));
+  }
+
+  function getCrazyModeUserKey(userName) {
+    return getFirebaseSafeUserKey(userName).replace(/\//g, '_');
+  }
+
+  function getCrazyOnlineUsers(statusUsers) {
+    const activeUsers = {};
+    Object.values(statusUsers).forEach((user) => {
+      if (!user || !user.online || !isPresenceFresh(user) || typeof user.username !== 'string' || !user.username.trim()) return;
+      const key = getCrazyModeUserKey(user.username);
+      if (!activeUsers[key]) {
+        activeUsers[key] = { username: user.username.trim(), deviceCount: 0, isAdmin: false };
+      }
+      activeUsers[key].deviceCount += 1;
+      activeUsers[key].isAdmin = activeUsers[key].isAdmin || user.isAdmin === true;
+    });
+    return activeUsers;
+  }
+
+  function renderCrazyOnlineUsers() {
+    const list = document.getElementById('crazyOnlineUsers');
+    if (!list) return;
+    list.replaceChildren();
+
+    const users = Object.entries(crazyOnlineUsers)
+      .sort(([, first], [, second]) => first.username.localeCompare(second.username));
+    if (!users.length) {
+      const emptyState = document.createElement('li');
+      emptyState.className = 'crazy-online-user-empty';
+      emptyState.textContent = 'No users are currently online.';
+      list.appendChild(emptyState);
+      return;
+    }
+
+    users.forEach(([userKey, user]) => {
+      const enabled = crazyModeUsers[userKey]?.active === true;
+      const item = document.createElement('li');
+      item.className = 'crazy-online-user-item';
+
+      const details = document.createElement('div');
+      details.className = 'crazy-online-user-details';
+      const name = document.createElement('span');
+      name.className = 'crazy-online-user-name';
+      name.textContent = user.username;
+      const status = document.createElement('span');
+      status.className = 'crazy-online-user-status';
+      status.textContent = `Online now · ${user.deviceCount} ${user.deviceCount === 1 ? 'device' : 'devices'}`;
+      details.append(name, status);
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `settings-btn crazy-online-user-action${enabled ? ' crazy-mode-stop' : ''}`;
+      button.textContent = enabled ? 'Stop' : 'Trigger';
+      button.disabled = !isAdmin;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          const userModeRef = db.ref(`crazyMode/users/${userKey}`);
+          if (crazyModeUsers[userKey]?.active === true) {
+            await userModeRef.remove();
+          } else {
+            await userModeRef.set({
+              active: true,
+              updatedAt: firebase.database.ServerValue.TIMESTAMP,
+              updatedBy: username
+            });
+          }
+        } catch (error) {
+          console.error(`Unable to update Bug Mode for ${user.username}:`, error);
+          showNotification(`Could not update Bug Mode for ${user.username}.`, true);
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      item.append(details, button);
+      list.appendChild(item);
+    });
   }
 
   // Listen for online users in the same channel
   db.ref('status').on('value', (snapshot) => {
     const users = snapshot.val() || {};
+    crazyOnlineUsers = getCrazyOnlineUsers(users);
+    renderCrazyOnlineUsers();
     onlineUsers = {};
     onlineUsersList.innerHTML = '';
     
@@ -5343,7 +5477,10 @@ async function initializeChatApp() {
     // Add other users from the same channel (or all channels for admin)
     Object.keys(users).forEach((id) => {
       const user = users[id];
-      if (user && user.online && id !== userId) {
+      if (user && user.online && !isPresenceFresh(user)) {
+        markStalePresenceOffline(id);
+      }
+      if (user && user.online && isPresenceFresh(user) && id !== userId) {
         // Show user if: admin OR same channel
         if (isAdmin || user.channel === userChannel) {
           onlineUsers[id] = user;
@@ -5868,7 +6005,7 @@ async function populateRecentChatsList() {
       });
       
       // Also check recent messages to find existing channels
-      db.ref('chat').orderByChild('timestamp').limitToLast(MAX_CHAT_MESSAGES).once('value', (snapshot) => {
+      db.ref('chat').orderByChild('timestamp').limitToLast(200).once('value', (snapshot) => {
         const messages = snapshot.val() || {};
         Object.values(messages).forEach(msg => {
           if (msg && msg.channel && msg.channel !== 'general' && msg.channel !== 'admin') {
@@ -5978,6 +6115,9 @@ async function populateRecentChatsList() {
   let bugGhostQuestionGenerationVersion = 0;
   let bugGhostQuestionLastSentHash = '';
   let bugGhostQuestionPopup = null;
+  let toroshioIntroActive = false;
+  let toroshioIntroIndex = 0;
+  let toroshioIntroTimer = null;
   let bugGhostDraftActive = false;
   let bugGhostActivityStarted = false;
   let bugGhostOverlay = null;
@@ -6012,17 +6152,46 @@ async function populateRecentChatsList() {
     return `bugGhostQuestionLastSent:v1:${encodeURIComponent(username)}:${encodeURIComponent(userChannel)}`;
   }
 
-  function loadBugGhostQuestionCache() {
+  async function readEncryptedBugGhostQuestionCache() {
+    await restoreChatCacheKey();
+    if (!chatCacheKey) return null;
+    try {
+      const stored = localStorage.getItem(getBugGhostQuestionsStorageKey());
+      if (!stored) return null;
+      const payload = JSON.parse(stored);
+      if (!payload.iv || !payload.data) return null;
+      const plaintext = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: base64ToBytes(payload.iv) },
+        chatCacheKey,
+        base64ToBytes(payload.data)
+      );
+      return JSON.parse(new TextDecoder().decode(plaintext));
+    } catch (error) {
+      console.warn('Encrypted Toroshia question cache unavailable.', error);
+      return null;
+    }
+  }
+
+  async function loadBugGhostQuestionCache() {
     let cachedTranscriptHash = '';
     try {
-      const saved = localStorage.getItem(getBugGhostQuestionsStorageKey());
-      if (saved) {
-        const cache = JSON.parse(saved);
-        if (cache && Array.isArray(cache.questions) && typeof cache.transcriptHash === 'string') {
-          bugGhostQuestions = cache.questions
-            .filter(question => typeof question === 'string' && question.trim().endsWith('?'))
-            .slice(0, 100);
-          cachedTranscriptHash = cache.transcriptHash;
+      const cache = await readEncryptedBugGhostQuestionCache();
+      if (cache && Array.isArray(cache.questions) && typeof cache.transcriptHash === 'string') {
+        bugGhostQuestions = cache.questions
+          .filter(question => typeof question === 'string' && question.trim().endsWith('?'))
+          .slice(0, 100);
+        cachedTranscriptHash = cache.transcriptHash;
+      }
+      // Remove any legacy plaintext question cache.
+      const legacyStorage = localStorage.getItem(getBugGhostQuestionsStorageKey());
+      if (legacyStorage) {
+        try {
+          const legacyPayload = JSON.parse(legacyStorage);
+          if (!legacyPayload.iv || !legacyPayload.data) {
+            localStorage.removeItem(getBugGhostQuestionsStorageKey());
+          }
+        } catch (_) {
+          localStorage.removeItem(getBugGhostQuestionsStorageKey());
         }
       }
     } catch (error) {
@@ -6040,6 +6209,7 @@ async function populateRecentChatsList() {
         console.error('Unable to migrate the previous Toroshia transcript position:', error);
       }
     }
+    localStorage.removeItem(getBugGhostQuestionsStorageKey('v5'));
 
     try {
       bugGhostQuestionLastSentHash =
@@ -6061,16 +6231,26 @@ async function populateRecentChatsList() {
     }
   }
 
-  function saveBugGhostQuestionCache(questions, transcriptHash, complete = true) {
+  async function saveBugGhostQuestionCache(questions, transcriptHash, complete = true) {
+    await restoreChatCacheKey();
+    if (!chatCacheKey) return;
     try {
-      localStorage.setItem(getBugGhostQuestionsStorageKey(), JSON.stringify({
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const plaintext = new TextEncoder().encode(JSON.stringify({
+        version: 1,
         questions,
         transcriptHash,
         complete,
         savedAt: Date.now()
       }));
+      const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chatCacheKey, plaintext);
+      localStorage.setItem(getBugGhostQuestionsStorageKey(), JSON.stringify({
+        version: 1,
+        iv: bytesToBase64(iv),
+        data: bytesToBase64(new Uint8Array(encrypted))
+      }));
     } catch (error) {
-      console.error('Unable to save Toroshia questions:', error);
+      console.error('Unable to save encrypted Toroshia questions:', error);
     }
   }
 
@@ -6634,6 +6814,11 @@ async function populateRecentChatsList() {
   }
 
   function scheduleBugGhostQuestionRefresh(delay = 1200) {
+    if (!document.documentElement.classList.contains('bug-mode') &&
+        !bugGhostQuestionCompleteHistoryPending &&
+        !bugGhostQuestionForceRefreshPending) {
+      return;
+    }
     if (bugGhostQuestionRefreshTimer !== null) {
       clearTimeout(bugGhostQuestionRefreshTimer);
     }
@@ -6788,8 +6973,77 @@ async function populateRecentChatsList() {
     }, 4000);
   }
 
+  function showToroshioFirstMessages() {
+    if (!document.documentElement.classList.contains('bug-mode')) return;
+    if (toroshioIntroActive) return;
+
+    const firstMessages = [
+      '🌑 You never expected me here...<br><br>But here I am. 🩸<br><br>The name\'s <strong>TOROSHIO 🎈</strong>',
+      'Don\'t be frightened just yet... 👁️<br>The show has only JUST begun. 🎭<br><br>You\'ve got plenty of time to be terrified later. ⏳',
+      'Choose your next moves carefully...<br>Every action has its consequences. ⚠️',
+      'Now...<br><br>Allow me to ask you something. 🥀',
+      '<strong>Are you absolutely sure you know what you\'ve just stepped into?</strong> 💀'
+    ];
+
+    toroshioIntroActive = true;
+    toroshioIntroIndex = 0;
+
+    const displayMessage = () => {
+      if (!document.documentElement.classList.contains('bug-mode')) {
+        toroshioIntroActive = false;
+        toroshioIntroIndex = 0;
+        return;
+      }
+
+      if (!bugGhostQuestionPopup || !bugGhostQuestionPopup.isConnected) {
+        bugGhostQuestionPopup = document.createElement('div');
+        bugGhostQuestionPopup.className = 'bug-mode-ai-question';
+        bugGhostQuestionPopup.setAttribute('role', 'status');
+        bugGhostQuestionPopup.setAttribute('aria-live', 'polite');
+        document.body.appendChild(bugGhostQuestionPopup);
+      }
+
+      stopBugGhostQuestionGlitch();
+      const speaker = document.createElement('span');
+      speaker.className = 'bug-mode-ai-speaker';
+      speaker.textContent = 'Toroshio 🎈 :';
+      const message = document.createElement('span');
+      message.className = 'bug-mode-ai-question-text';
+      message.innerHTML = firstMessages[toroshioIntroIndex];
+      bugGhostQuestionPopup.replaceChildren(speaker, message);
+      bugGhostQuestionPopup.classList.remove('is-visible');
+      void bugGhostQuestionPopup.offsetWidth;
+      bugGhostQuestionPopup.classList.add('is-visible');
+
+      toroshioIntroTimer = setTimeout(() => {
+        bugGhostQuestionPopup?.classList.remove('is-visible');
+        toroshioIntroIndex += 1;
+
+        if (toroshioIntroIndex >= firstMessages.length) {
+          toroshioIntroTimer = setTimeout(() => {
+            toroshioIntroTimer = null;
+            toroshioIntroActive = false;
+            bugGhostQuestionPopup?.remove();
+            bugGhostQuestionPopup = null;
+            requestBugGhostQuestions();
+            if (bugGhostQuestions.length) {
+              bugGhostQuestionIndex = Math.floor(Math.random() * bugGhostQuestions.length);
+              showBugGhostQuestion();
+            }
+          }, 4000);
+          return;
+        }
+
+        toroshioIntroTimer = setTimeout(displayMessage, 4000);
+      }, 8000);
+    };
+
+    displayMessage();
+  }
+
   function showBugGhostQuestion() {
     if (!document.documentElement.classList.contains('bug-mode') || !bugGhostQuestions.length) return;
+    if (toroshioIntroActive) return;
     if (!bugGhostQuestionPopup || !bugGhostQuestionPopup.isConnected) {
       bugGhostQuestionPopup = document.createElement('div');
       bugGhostQuestionPopup.className = 'bug-mode-ai-question';
@@ -6837,6 +7091,12 @@ async function populateRecentChatsList() {
       clearTimeout(bugGhostQuestionRefreshTimer);
       bugGhostQuestionRefreshTimer = null;
     }
+    if (toroshioIntroTimer !== null) {
+      clearTimeout(toroshioIntroTimer);
+      toroshioIntroTimer = null;
+    }
+    toroshioIntroActive = false;
+    toroshioIntroIndex = 0;
     bugGhostQuestionRefreshPending = false;
     bugGhostQuestionForceRefreshPending = false;
     bugGhostQuestionCompleteHistoryPending = false;
@@ -6855,6 +7115,9 @@ async function populateRecentChatsList() {
   }
 
   async function requestBugGhostQuestions({ force = false, completeHistory = false } = {}) {
+    if (!force && !document.documentElement.classList.contains('bug-mode')) {
+      return;
+    }
     if (bugGhostQuestionRequestStarted) {
       if (force) {
         bugGhostQuestionRefreshPending = true;
@@ -7296,6 +7559,12 @@ async function populateRecentChatsList() {
     }
     bugChaosTimers.forEach(clearTimeout);
     bugChaosTimers.clear();
+    if (toroshioIntroTimer !== null) {
+      clearTimeout(toroshioIntroTimer);
+      toroshioIntroTimer = null;
+    }
+    toroshioIntroActive = false;
+    toroshioIntroIndex = 0;
     if (bugGhostQuestionTimer !== null) {
       clearTimeout(bugGhostQuestionTimer);
       bugGhostQuestionTimer = null;
@@ -7340,11 +7609,7 @@ async function populateRecentChatsList() {
   }
 
   function startBugChaos() {
-    requestBugGhostQuestions();
-    if (bugGhostQuestions.length && !bugGhostQuestionPopup) {
-      bugGhostQuestionIndex = Math.floor(Math.random() * bugGhostQuestions.length);
-      showBugGhostQuestion();
-    }
+    showToroshioFirstMessages();
     const reducedMotion = window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reducedMotion) {
@@ -7369,8 +7634,10 @@ async function populateRecentChatsList() {
     startBugChaos();
   });
 
-  function toggleBugMode() {
-    const enabled = !document.documentElement.classList.contains('bug-mode');
+  function setBugMode(enabled, showStatus = true) {
+    const currentlyEnabled = document.documentElement.classList.contains('bug-mode');
+    if (currentlyEnabled === enabled) return;
+
     document.documentElement.classList.toggle('bug-mode', enabled);
     let overlay = document.getElementById('bugModeOverlay');
 
@@ -7379,13 +7646,6 @@ async function populateRecentChatsList() {
       overlay.id = 'bugModeOverlay';
       overlay.className = 'bug-mode-overlay';
       overlay.setAttribute('aria-hidden', 'true');
-
-      const badge = document.createElement('span');
-      badge.className = 'bug-mode-badge';
-      badge.textContent = 'BUG MODE // REALITY.EXE';
-      badge.dataset.text = badge.textContent;
-
-      overlay.appendChild(badge);
       document.body.appendChild(overlay);
     } else if (!enabled && overlay) {
       overlay.remove();
@@ -7401,10 +7661,50 @@ async function populateRecentChatsList() {
       stopBugChaos();
     }
 
-    showNotification(enabled
-      ? 'Bug mode enabled — type /bug again to restore reality.'
-      : 'Reality restored.');
+    if (showStatus) {
+      showNotification(enabled
+        ? 'Bug mode enabled — type /bug again to restore reality.'
+        : 'Reality restored.');
+    }
   }
+
+  function toggleBugMode() {
+    if (remoteCrazyModeState === true) {
+      showNotification('Bug Mode is currently controlled by an admin.', true);
+      return;
+    }
+    setBugMode(!document.documentElement.classList.contains('bug-mode'));
+  }
+
+  const ownCrazyModeRef = db.ref(`crazyMode/users/${getCrazyModeUserKey(username)}`);
+  let ownCrazyModeListenerInitialized = false;
+  ownCrazyModeRef.on('value', (snapshot) => {
+    const mode = snapshot.val();
+    const enabled = mode?.active === true;
+
+    // Bug Mode is a transient state. Do not restore it after a page refresh;
+    // consume the stale remote state and remove it so it starts normal.
+    if (!ownCrazyModeListenerInitialized) {
+      ownCrazyModeListenerInitialized = true;
+      remoteCrazyModeState = false;
+      if (enabled) {
+        setBugMode(false, false);
+        ownCrazyModeRef.remove().catch((error) => {
+          console.error('Unable to clear transient Bug Mode after refresh:', error);
+        });
+      }
+      return;
+    }
+
+    const wasEnabled = remoteCrazyModeState;
+    remoteCrazyModeState = enabled;
+
+    if (enabled || wasEnabled === true) {
+      setBugMode(enabled, false);
+    }
+  }, (error) => {
+    console.error('Unable to listen for Crazy Mode state:', error);
+  });
 
   // Send message
   async function sendMessage() {
@@ -9904,6 +10204,60 @@ async function populateRecentChatsList() {
   let adminUserListLoaded = false;
 
   if (isAdmin && securePasswordOption) securePasswordOption.remove();
+
+  const crazyAdminSection = document.getElementById('crazyAdminSection');
+  const crazyTriggerAllBtn = document.getElementById('crazyTriggerAllBtn');
+  const crazyStopAllBtn = document.getElementById('crazyStopAllBtn');
+  if (crazyAdminSection) crazyAdminSection.style.display = isAdmin ? '' : 'none';
+
+  if (isAdmin) {
+    db.ref('crazyMode/users').on('value', (snapshot) => {
+      crazyModeUsers = snapshot.val() || {};
+      renderCrazyOnlineUsers();
+    }, (error) => {
+      console.error('Unable to load Crazy Mode states:', error);
+      showNotification('Unable to load Crazy Mode states.', true);
+    });
+
+    crazyTriggerAllBtn?.addEventListener('click', async () => {
+      if (!isAdmin) return;
+      const onlineUserEntries = Object.entries(crazyOnlineUsers)
+        .filter(([, user]) => !user.isAdmin);
+      if (!onlineUserEntries.length) {
+        showNotification('There are no online non-admin users to trigger.', true);
+        return;
+      }
+
+      crazyTriggerAllBtn.disabled = true;
+      try {
+        await Promise.all(onlineUserEntries.map(([userKey]) => db.ref(`crazyMode/users/${userKey}`).set({
+          active: true,
+          updatedAt: firebase.database.ServerValue.TIMESTAMP,
+          updatedBy: username
+        })));
+        showNotification(`Bug Mode triggered for ${onlineUserEntries.length} online users.`);
+      } catch (error) {
+        console.error('Unable to trigger Bug Mode for all online users:', error);
+        showNotification('Could not trigger Bug Mode for all online users.', true);
+      } finally {
+        crazyTriggerAllBtn.disabled = false;
+      }
+    });
+
+    crazyStopAllBtn?.addEventListener('click', async () => {
+      if (!isAdmin) return;
+      crazyStopAllBtn.disabled = true;
+      try {
+        await db.ref('crazyMode/users').remove();
+        showNotification('Bug Mode stopped for all users.');
+      } catch (error) {
+        console.error('Unable to stop Bug Mode for all users:', error);
+        showNotification('Could not stop Bug Mode for all users.', true);
+      } finally {
+        crazyStopAllBtn.disabled = false;
+      }
+    });
+  }
 
   function setupPasswordVisibilityToggle(input, toggleButton) {
     toggleButton?.addEventListener('click', () => {
