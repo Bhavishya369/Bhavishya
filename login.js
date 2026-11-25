@@ -9059,7 +9059,6 @@ async function populateRecentChatsList() {
     if ((menuOverlay && menuOverlay.style.display === 'block') ||
         (menuContainer && menuContainer.classList.contains('show')) ||
         (exportMenuContainer && exportMenuContainer.classList.contains('show'))) {
-      closeOpenMenus();
       hideScrollToBottomButton();
       return;
     }
