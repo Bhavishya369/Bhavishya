@@ -58,9 +58,10 @@ let activityFlushTimer = null;
 let activitySessionFinalized = false;
 
 const PRESENCE_HEARTBEAT_INTERVAL_MS = 30000;
-const PRESENCE_STALE_AFTER_MS = 120000;
+const PRESENCE_STALE_AFTER_MS = 300000;
 const profileImageCache = new Map();
 const profileImageRequests = new Map();
+const profileImageSettingsListeners = new Map();
 const CHAT_CACHE_PREFIX = 'bhavishya_chat_cache_v1';
 let chatCacheKey = null;
 let chatCacheWriteQueue = Promise.resolve();
@@ -268,20 +269,31 @@ async function readEncryptedChatCache() {
   }
 }
 
+const CHAT_CACHE_MESSAGE_LIMIT = 200;
+
+function getLatestChatCacheMessages(messages) {
+  const entries = Object.entries(messages || {})
+    .filter(([, message]) => message && typeof message === 'object')
+    .filter(([, message]) => {
+      if (userChannel === 'general') return !message.channel || message.channel === 'general';
+      if (userChannel === 'admin') return true;
+      return message.channel === userChannel;
+    })
+    .sort(([keyA, messageA], [keyB, messageB]) => {
+      const timestampDifference = (Number(messageA.timestamp) || 0) - (Number(messageB.timestamp) || 0);
+      if (timestampDifference) return timestampDifference;
+      const a = String(keyA);
+      const b = String(keyB);
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+  return Object.fromEntries(entries.slice(-CHAT_CACHE_MESSAGE_LIMIT));
+}
+
 function saveEncryptedChatCache(messages) {
-  if (!chatCacheKey || !messages) return;
+  if (!chatCacheKey || !messages) return Promise.resolve();
   chatCacheWriteQueue = chatCacheWriteQueue.then(async () => {
     try {
-      const currentChannelMessages = Object.fromEntries(
-        Object.entries(messages)
-          .filter(([, message]) => message && typeof message === 'object')
-          .filter(([, message]) => {
-            if (userChannel === 'general') return !message.channel || message.channel === 'general';
-            if (userChannel === 'admin') return true;
-            return message.channel === userChannel;
-          })
-          .sort(([, a], [, b]) => (Number(a.timestamp) || 0) - (Number(b.timestamp) || 0))
-      );
+      const currentChannelMessages = getLatestChatCacheMessages(messages);
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const plaintext = new TextEncoder().encode(JSON.stringify({ version: 1, messages: currentChannelMessages }));
       const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, chatCacheKey, plaintext);
@@ -294,6 +306,7 @@ function saveEncryptedChatCache(messages) {
       console.warn('Unable to save encrypted chat cache.', error);
     }
   }).catch(() => {});
+  return chatCacheWriteQueue;
 }
 
 // URL of your push server (Render, Heroku, etc.).
@@ -871,7 +884,7 @@ function syncBetterUiStyleVars() {
 }
 
 async function saveSettingsToFirebase() {
-  if (!username) return;
+  if (!username) return false;
   
   try {
     const safeKey = getFirebaseSafeUserKey(username);
@@ -888,8 +901,10 @@ async function saveSettingsToFirebase() {
     };
     
     await settingsRef.set(settings);
+    return true;
   } catch (error) {
     console.error('Error saving settings to Firebase:', error);
+    return false;
   }
 }
 
@@ -902,19 +917,20 @@ async function loadSettingsFromFirebase() {
     const settingsRef = db.ref(`users/${safeKey}/settings`);
     const snapshot = await settingsRef.once('value');
     const settings = snapshot.val();
+    if (!settings || (settings.theme !== 'dark' && settings.theme !== 'light')) {
+      localStorage.setItem('theme', 'dark');
+      document.documentElement.classList.remove('--dark-theme', '--light-theme');
+      document.documentElement.classList.add('--dark-theme');
+      window.ChatLoader?.setTheme('dark');
+      syncBetterUiStyleVars();
+      const themeSwitch = document.getElementById('themeSwitch');
+      if (themeSwitch) themeSwitch.checked = true;
+    }
     
     if (settings) {
       // Load profile image
-      if (settings.profileImage) {
-        userProfileImage = settings.profileImage;
-        localStorage.setItem(`profile_image_${username}`, settings.profileImage);
-        const userAvatar = document.getElementById('userAvatar');
-        if (userAvatar) {
-          userAvatar.style.backgroundImage = `url(${settings.profileImage})`;
-          userAvatar.style.backgroundSize = 'cover';
-          userAvatar.style.backgroundPosition = 'center';
-          userAvatar.textContent = '';
-        }
+      if (Object.prototype.hasOwnProperty.call(settings, 'profileImage')) {
+        cacheUserProfileImage(username, settings.profileImage);
       }
       
       // Load chat background
@@ -1021,27 +1037,14 @@ function setupSettingsSyncListener() {
   if (!username) return;
   
   try {
+    subscribeToUserProfileImage(username);
     const safeKey = getFirebaseSafeUserKey(username);
     const settingsRef = db.ref(`users/${safeKey}/settings`);
     settingsRef.on('value', (snapshot) => {
       const settings = snapshot.val();
       if (settings && settings.lastUpdated) {
         // Only apply if settings are from a different source (not just saved locally)
-        const timeSinceUpdate = Date.now() - settings.lastUpdated;
-        if (timeSinceUpdate > 2000) { // Give 2 second window for local save
-          // Profile Image
-          if (settings.profileImage && settings.profileImage !== userProfileImage) {
-            userProfileImage = settings.profileImage;
-            localStorage.setItem(`profile_image_${username}`, settings.profileImage);
-            const userAvatar = document.getElementById('userAvatar');
-            if (userAvatar) {
-              userAvatar.style.backgroundImage = `url(${settings.profileImage})`;
-              userAvatar.style.backgroundSize = 'cover';
-              userAvatar.style.backgroundPosition = 'center';
-              userAvatar.textContent = '';
-            }
-          }
-          
+        if (Date.now() - settings.lastUpdated > 2000) {
           // Chat Background
           if (settings.chatBackground && settings.chatBackground !== chatBackground) {
             chatBackground = settings.chatBackground;
@@ -1131,41 +1134,87 @@ function applyCustomBackground(imageUrl) {
 // Get user profile image from Firebase settings
 async function getUserProfileImage(userName) {
   if (!userName) return null;
-  if (profileImageCache.has(userName)) return profileImageCache.get(userName);
-
   if (profileImageRequests.has(userName)) return profileImageRequests.get(userName);
 
-  const request = (async () => {
-    const localKey = `profile_image_${userName}`;
-    const localImage = localStorage.getItem(localKey);
-    if (localImage) {
-      profileImageCache.set(userName, localImage);
-      return localImage;
-    }
+  const hadCachedImage = profileImageCache.has(userName);
+  const cachedImage = hadCachedImage
+    ? profileImageCache.get(userName)
+    : localStorage.getItem(`profile_image_${userName}`);
+  if (!hadCachedImage && cachedImage) {
+    cacheUserProfileImage(userName, cachedImage);
+  }
 
-    try {
-      const safeKey = getFirebaseSafeUserKey(userName);
-      const settingsRef = db.ref(`users/${safeKey}/settings`);
-      const snapshot = await settingsRef.once('value');
-      const settings = snapshot.val();
-      const imageUrl = settings && settings.profileImage ? settings.profileImage : null;
-      profileImageCache.set(userName, imageUrl || null);
-      if (imageUrl) {
-        localStorage.setItem(localKey, imageUrl);
-      }
-      return imageUrl;
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-      profileImageCache.set(userName, null);
-      return null;
-    }
-  })();
+  const request = subscribeToUserProfileImage(userName);
   profileImageRequests.set(userName, request);
 
   try {
-    return await request;
+    const initialImage = await request;
+    return profileImageCache.has(userName) ? profileImageCache.get(userName) : initialImage;
   } finally {
-    profileImageRequests.delete(userName);
+    if (profileImageRequests.get(userName) === request) {
+      profileImageRequests.delete(userName);
+    }
+  }
+}
+
+function subscribeToUserProfileImage(userName) {
+  const existingListener = profileImageSettingsListeners.get(userName);
+  if (existingListener) return existingListener.initialValue;
+
+  let resolveInitialValue;
+  const initialValue = new Promise(resolve => {
+    resolveInitialValue = resolve;
+  });
+  const safeKey = getFirebaseSafeUserKey(userName);
+  const profileImageRef = db.ref(`users/${safeKey}/settings/profileImage`);
+  const onValue = snapshot => {
+    const profileImage = snapshot.val() || null;
+    cacheUserProfileImage(userName, profileImage);
+    if (resolveInitialValue) {
+      resolveInitialValue(profileImage);
+      resolveInitialValue = null;
+    }
+  };
+  const onError = error => {
+    console.error(`Unable to watch profile image for ${userName}:`, error);
+    profileImageSettingsListeners.delete(userName);
+    if (resolveInitialValue) {
+      resolveInitialValue(profileImageCache.get(userName) || null);
+      resolveInitialValue = null;
+    }
+  };
+
+  profileImageSettingsListeners.set(userName, {
+    reference: profileImageRef,
+    callback: onValue,
+    initialValue
+  });
+  profileImageRef.on('value', onValue, onError);
+  return initialValue;
+}
+
+function cacheUserProfileImage(userName, profileImage) {
+  if (!userName) return;
+  const imageUrl = profileImage || null;
+  profileImageCache.set(userName, imageUrl);
+
+  const localKey = `profile_image_${userName}`;
+  if (imageUrl) {
+    localStorage.setItem(localKey, imageUrl);
+  } else {
+    localStorage.removeItem(localKey);
+  }
+
+  document.querySelectorAll('.user-avatar, .message__avatar').forEach(avatar => {
+    if (normalizeName(avatar.dataset.username) === normalizeName(userName)) {
+      applyProfileImageToAvatarElement(avatar, userName, imageUrl);
+    }
+  });
+
+  if (username && normalizeName(userName) === normalizeName(username)) {
+    userProfileImage = imageUrl;
+    const userAvatar = document.getElementById('userAvatar');
+    if (userAvatar) applyProfileImageToAvatarElement(userAvatar, userName, imageUrl);
   }
 }
 
@@ -1191,6 +1240,7 @@ function applyProfileImageToAvatarElement(avatarElement, userName, profileImage)
 function createUserAvatarElement(userName, profileImage = null) {
   const avatarDiv = document.createElement('div');
   avatarDiv.className = 'user-avatar';
+  avatarDiv.dataset.username = userName || '';
   applyProfileImageToAvatarElement(avatarDiv, userName, profileImage);
   return avatarDiv;
 }
@@ -1883,8 +1933,34 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
   startupMessageRenderIndex = 0;
   startupMessageRenderTotal = entries.length;
   const fragment = document.createDocumentFragment();
-  const renderBatchSize = 8;
+  const renderBatchSize = Number.isInteger(progressOptions.batchSize)
+    ? Math.max(1, progressOptions.batchSize)
+    : 8;
   const renderBudgetMs = 4;
+  const insertBefore = progressOptions.insertBefore?.parentNode === messagesDiv
+    ? progressOptions.insertBefore
+    : null;
+  const collectNode = node => {
+    if (Array.isArray(progressOptions.collectNodes)) {
+      progressOptions.collectNodes.push(node);
+    }
+  };
+  const appendFragment = () => {
+    if (!fragment.childNodes.length) return;
+    if (insertBefore?.parentNode === messagesDiv) {
+      const previousScrollTop = messagesDiv.scrollTop;
+      const previousScrollHeight = messagesDiv.scrollHeight;
+      const wasAtBottom = previousScrollHeight - previousScrollTop - messagesDiv.clientHeight <= 10;
+      messagesDiv.insertBefore(fragment, insertBefore);
+      if (wasAtBottom) {
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      } else {
+        messagesDiv.scrollTop = previousScrollTop + messagesDiv.scrollHeight - previousScrollHeight;
+      }
+    } else {
+      messagesDiv.appendChild(fragment);
+    }
+  };
   const yieldToBrowser = () => new Promise(resolve => {
     if (!document.hidden && typeof window.requestAnimationFrame === 'function') {
       window.requestAnimationFrame(() => window.setTimeout(resolve, 0));
@@ -1907,6 +1983,7 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
       separator.className = 'date-separator';
       separator.innerHTML = `<span>${messageDate}</span>`;
       fragment.appendChild(separator);
+      collectNode(separator);
       prevDate = messageDate;
       prevName = null;
       prevType = null;
@@ -1926,18 +2003,19 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
     messageDiv.dataset.timestamp = timestamp;
     messageDiv.dataset.date = messageDate;
     fragment.appendChild(messageDiv);
+    collectNode(messageDiv);
     currentMessages[key] = messageDiv;
     renderMessageReactions(key, allMessageReactions[key] || {}, messageDiv);
     startupMessageRenderIndex += 1;
     batchCount += 1;
-    if (startupMessageRenderIndex % renderBatchSize === 0) {
+    if (!progressOptions.silent && startupMessageRenderIndex % renderBatchSize === 0) {
       updateStartupMessageProgress(
         startupMessageRenderIndex,
         startupMessageRenderTotal,
         progressOptions
       );
     }
-    if (!isOwnMessage) {
+    if (!isOwnMessage && progressOptions.markSeen !== false) {
       // Collect candidates for marking as seen later in a batch
       initialSeenCandidates.push(key);
     }
@@ -1961,22 +2039,25 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
       batchCount >= renderBatchSize ||
       (batchCount > 0 && performance.now() - batchStartedAt >= renderBudgetMs)
     ) {
-      messagesDiv.appendChild(fragment);
+      appendFragment();
       batchCount = 0;
       await yieldToBrowser();
       batchStartedAt = performance.now();
     }
   }
 
-  messagesDiv.appendChild(fragment);
-  updateStartupMessageProgress(
-    startupMessageRenderTotal,
-    startupMessageRenderTotal,
-    progressOptions
-  );
+  appendFragment();
+  if (!progressOptions.silent) {
+    updateStartupMessageProgress(
+      startupMessageRenderTotal,
+      startupMessageRenderTotal,
+      progressOptions
+    );
+  }
 
   // Batch mark a limited number of most recent non-own messages as seen
   try {
+    if (progressOptions.markSeen === false) return;
     const toMark = initialSeenCandidates.slice(-20); // mark last 20
     if (toMark.length > 0) {
       const updates = {};
@@ -2181,6 +2262,8 @@ let startupMessageRenderTotal = 0;
 const STARTUP_CHECKPOINTS = {
   settings: 25,
   messages: 75,
+  recent: 85,
+  online: 88,
   sync: 90,
   ready: 100
 };
@@ -2188,13 +2271,15 @@ const STARTUP_CHECKPOINTS = {
 const startupCompleted = {
   settings: false,
   messages: false,
+  recent: false,
+  online: false,
   sync: false,
   ready: false
 };
 
 function markStartupCheckpoint(name, label) {
   if (!STARTUP_CHECKPOINTS[name]) return;
-  const readyRequirements = ['settings', 'messages', 'sync'];
+  const readyRequirements = ['settings', 'messages', 'recent', 'online'];
   if (name === 'ready' && !readyRequirements.every(checkpoint => startupCompleted[checkpoint])) {
     return;
   }
@@ -3808,7 +3893,7 @@ async function migrateSettingsToFirebase() {
   if (!username) return;
   
   try {
-    const settingsRef = db.ref(`users/${username}/settings`);
+    const settingsRef = db.ref(`users/${getFirebaseSafeUserKey(username)}/settings`);
     const snapshot = await settingsRef.once('value');
     
     // Only migrate if Firebase is empty
@@ -4331,6 +4416,21 @@ async function initializeChatApp() {
   const themeSwitch = document.getElementById('themeSwitch');
   const typingIndicator = document.getElementById('typingIndicator');
   let isAtBottom = true;
+  const presenceSessionId = `presence_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  let presenceConnectionRef = null;
+  let presenceConnectionHandler = null;
+  let presenceResumeHandler = null;
+  let presenceConnected = false;
+  let onlineUsersStatusRef = null;
+  let onlineUsersStatusHandler = null;
+  let adminChannelStatusRef = null;
+  let adminChannelStatusHandler = null;
+  let onlineUsersStartupResolved = false;
+  let onlineUsersInitialSnapshotReceived = false;
+  let resolveOnlineUsersReady;
+  const onlineUsersReady = new Promise(resolve => {
+    resolveOnlineUsersReady = resolve;
+  });
   const typingUserSpan = document.getElementById('typingUser');
   const onlineUsersList = document.getElementById('onlineUsers');
   let crazyModeUsers = {};
@@ -4370,12 +4470,13 @@ async function initializeChatApp() {
   
   // Load cross-device settings from Firebase and setup sync listener
   // AFTER DOM is cleared, so new settings apply cleanly
-  loadSettingsFromFirebase().then((settingsLoaded) => {
+  const settingsReady = loadSettingsFromFirebase().then(async (settingsLoaded) => {
     // If no settings found in Firebase, migrate existing localStorage settings
     if (!settingsLoaded) {
       migrateSettingsToFirebase();
     }
     setupSettingsSyncListener();
+    await getUserProfileImage(username);
     markStartupCheckpoint('settings', 'Settings sync ready');
     
     // Log notification diagnostics after settings are loaded
@@ -4383,6 +4484,10 @@ async function initializeChatApp() {
       console.log('🚀 Chat app initialized, running diagnostics...');
       logNotificationDiagnostics();
     }, 2000);
+  }).catch((error) => {
+    console.error('Unable to finish settings and profile startup:', error);
+    showNotification('Unable to load settings and profile updates.', true);
+    markStartupCheckpoint('settings', 'Settings sync unavailable');
   });
   const sidebarToggle = document.getElementById('sidebarToggle');
   const chatSidebar = document.getElementById('chatSidebar');
@@ -4537,6 +4642,7 @@ async function initializeChatApp() {
     }
   }
 
+  startPresenceMonitoring();
   startActivityRegistration();
 
   // Load settings from localStorage
@@ -5532,20 +5638,12 @@ async function initializeChatApp() {
   async function updateUserPresence(isOnline) {
     const safeKey = getFirebaseSafeUserKey(username || localStorage.getItem('chat_username') || 'unknown');
     const userRef = db.ref(`users/${safeKey}`);
-    const userStatusRef = db.ref(`status/${userId || safeKey}`);
+    const userStatusRef = db.ref(`status/${presenceSessionId}`);
 
     if (isOnline) {
-      const disconnectedStatus = {
-        username: username,
-        online: false,
-        lastActive: firebase.database.ServerValue.TIMESTAMP,
-        isAdmin: isAdmin,
-        channel: userChannel
-      };
-
       try {
         await Promise.all([
-          userStatusRef.onDisconnect().set(disconnectedStatus),
+          userStatusRef.onDisconnect().remove(),
           userRef.onDisconnect().update({
             online: false,
             lastSeen: firebase.database.ServerValue.TIMESTAMP,
@@ -5565,6 +5663,7 @@ async function initializeChatApp() {
           }),
           userStatusRef.set({
             username: username,
+            userId: userId,
             online: true,
             lastActive: firebase.database.ServerValue.TIMESTAMP,
             isAdmin: isAdmin,
@@ -5574,7 +5673,17 @@ async function initializeChatApp() {
 
         if (presenceHeartbeatTimer) clearInterval(presenceHeartbeatTimer);
         presenceHeartbeatTimer = setInterval(() => {
-          userStatusRef.update({ lastActive: firebase.database.ServerValue.TIMESTAMP })
+          Promise.all([
+            userStatusRef.update({
+              username,
+              userId,
+              online: true,
+              lastActive: firebase.database.ServerValue.TIMESTAMP,
+              isAdmin,
+              channel: userChannel
+            }),
+            userRef.update({ online: true, lastSeen: null })
+          ])
             .catch((error) => console.error('Unable to refresh user presence:', error));
         }, PRESENCE_HEARTBEAT_INTERVAL_MS);
       } catch (error) {
@@ -5587,13 +5696,7 @@ async function initializeChatApp() {
       }
       try {
         await Promise.all([
-          userStatusRef.set({
-            username: username,
-            online: false,
-            lastActive: firebase.database.ServerValue.TIMESTAMP,
-            isAdmin: isAdmin,
-            channel: userChannel
-          }),
+          userStatusRef.remove(),
           userRef.update({
             online: false,
             lastSeen: firebase.database.ServerValue.TIMESTAMP,
@@ -5606,15 +5709,65 @@ async function initializeChatApp() {
     }
   }
 
+  function startPresenceMonitoring() {
+    if (presenceConnectionRef) return;
+    presenceConnectionRef = db.ref('.info/connected');
+    presenceConnectionHandler = (snapshot) => {
+      presenceConnected = snapshot.val() === true;
+      if (presenceConnected) {
+        updateUserPresence(true);
+      } else if (presenceHeartbeatTimer) {
+        clearInterval(presenceHeartbeatTimer);
+        presenceHeartbeatTimer = null;
+      }
+    };
+    presenceConnectionRef.on('value', presenceConnectionHandler, (error) => {
+      console.error('Unable to monitor Firebase connection state:', error);
+    });
+    presenceResumeHandler = () => {
+      if (presenceConnected && !document.hidden) updateUserPresence(true);
+    };
+    window.addEventListener('focus', presenceResumeHandler);
+    document.addEventListener('visibilitychange', presenceResumeHandler);
+  }
+
+  function stopPresenceMonitoring() {
+    if (presenceConnectionRef && presenceConnectionHandler) {
+      presenceConnectionRef.off('value', presenceConnectionHandler);
+    }
+    if (presenceResumeHandler) {
+      window.removeEventListener('focus', presenceResumeHandler);
+      document.removeEventListener('visibilitychange', presenceResumeHandler);
+    }
+    presenceConnectionRef = null;
+    presenceConnectionHandler = null;
+    presenceResumeHandler = null;
+    presenceConnected = false;
+    if (onlineUsersStatusRef && onlineUsersStatusHandler) {
+      onlineUsersStatusRef.off('value', onlineUsersStatusHandler);
+    }
+    if (adminChannelStatusRef && adminChannelStatusHandler) {
+      adminChannelStatusRef.off('value', adminChannelStatusHandler);
+    }
+    onlineUsersStatusRef = null;
+    onlineUsersStatusHandler = null;
+    adminChannelStatusRef = null;
+    adminChannelStatusHandler = null;
+    if (presenceHeartbeatTimer) {
+      clearInterval(presenceHeartbeatTimer);
+      presenceHeartbeatTimer = null;
+    }
+  }
+
   function isPresenceFresh(user) {
     const lastActive = Number(user?.lastActive);
     return Number.isFinite(lastActive) && Date.now() - lastActive <= PRESENCE_STALE_AFTER_MS;
   }
 
-  function markStalePresenceOffline(id) {
+  function removeStalePresence(id) {
     db.ref(`status/${id}`).transaction((user) => {
       if (!user || !user.online || isPresenceFresh(user)) return;
-      return { ...user, online: false };
+      return null;
     }).catch((error) => console.error(`Unable to clear stale presence for ${id}:`, error));
   }
 
@@ -5624,13 +5777,20 @@ async function initializeChatApp() {
 
   function getCrazyOnlineUsers(statusUsers) {
     const activeUsers = {};
-    Object.values(statusUsers).forEach((user) => {
+    const devicesByUser = new Map();
+    Object.entries(statusUsers).forEach(([statusId, user]) => {
       if (!user || !user.online || !isPresenceFresh(user) || typeof user.username !== 'string' || !user.username.trim()) return;
       const key = getCrazyModeUserKey(user.username);
       if (!activeUsers[key]) {
         activeUsers[key] = { username: user.username.trim(), deviceCount: 0, isAdmin: false };
+        devicesByUser.set(key, new Set());
       }
-      activeUsers[key].deviceCount += 1;
+      const devices = devicesByUser.get(key);
+      const deviceId = String(user.userId || statusId);
+      if (!devices.has(deviceId)) {
+        devices.add(deviceId);
+        activeUsers[key].deviceCount += 1;
+      }
       activeUsers[key].isAdmin = activeUsers[key].isAdmin || user.isAdmin === true;
     });
     return activeUsers;
@@ -5698,15 +5858,30 @@ async function initializeChatApp() {
   }
 
   // Listen for online users in the same channel
-  db.ref('status').on('value', (snapshot) => {
+  onlineUsersStatusRef = db.ref('status');
+  onlineUsersStatusHandler = (snapshot) => {
+    const isInitialOnlineSnapshot = !onlineUsersInitialSnapshotReceived;
+    if (isInitialOnlineSnapshot) onlineUsersInitialSnapshotReceived = true;
+    const initialProfileLoads = [];
     const users = snapshot.val() || {};
+    const inactiveStatusRemovals = {};
+    Object.entries(users).forEach(([statusId, user]) => {
+      if (!user || user.online !== true) inactiveStatusRemovals[statusId] = null;
+    });
+    if (Object.keys(inactiveStatusRemovals).length) {
+      db.ref('status').update(inactiveStatusRemovals).catch((error) => {
+        console.error('Unable to remove inactive presence records:', error);
+      });
+    }
     crazyOnlineUsers = getCrazyOnlineUsers(users);
     renderCrazyOnlineUsers();
     onlineUsers = {};
     onlineUsersList.innerHTML = '';
     
     // Count users in current channel
-    let usersInChannel = 0;
+    let usersInChannel = userChannel === 'admin' ? 0 : 1;
+    // userId is device-local, so username is the cross-device account identity.
+    const currentUserKey = `username:${getFirebaseSafeUserKey(username)}`;
     
     // Add current user first
     const currentUser = {
@@ -5714,9 +5889,10 @@ async function initializeChatApp() {
       online: true,
       userId: userId,
       isAdmin: isAdmin,
-      channel: userChannel
+      channel: userChannel,
+      presenceUserIds: [userId]
     };
-    onlineUsers[userId] = currentUser;
+    onlineUsers[currentUserKey] = currentUser;
     
     // Add current user to the list
     const currentUserLi = document.createElement('li');
@@ -5747,82 +5923,110 @@ async function initializeChatApp() {
     // Add other users from the same channel (or all channels for admin)
     Object.keys(users).forEach((id) => {
       const user = users[id];
-      if (user && user.online && !isPresenceFresh(user)) {
-        markStalePresenceOffline(id);
+      if (!user) return;
+      const stableUserId = String(user.userId || id);
+      if (user.online && !isPresenceFresh(user)) {
+        removeStalePresence(id);
       }
-      if (user && user.online && isPresenceFresh(user) && id !== userId) {
-        // Show user if: admin OR same channel
-        if (isAdmin || user.channel === userChannel) {
-          onlineUsers[id] = user;
-          
-          if (user.channel === userChannel) {
-            usersInChannel++;
-          }
-          
-          // Add to online users list
-          const li = document.createElement('li');
-          li.className = `user-item ${user.isAdmin ? 'admin' : ''}`;
-          
-          const avatarDiv = createUserAvatarElement(user.username, null);
-          getUserProfileImage(user.username).then((userProfileImg) => {
-            if (userProfileImg) {
-              avatarDiv.style.backgroundImage = `url(${userProfileImg})`;
-              avatarDiv.style.backgroundSize = 'cover';
-              avatarDiv.style.backgroundPosition = 'center';
-              avatarDiv.textContent = '';
-            }
-          }).catch(() => {});
-          
-          // Hide channel info from normal users
-          const statusText = user.online ? 'Online now' : 'Offline';
-          
-          const infoDiv = document.createElement('div');
-          infoDiv.className = 'user-info';
-          infoDiv.innerHTML = `
-            <h4>${user.username}</h4>
-            <p>${statusText}</p>
-          `;
-          
-          li.appendChild(avatarDiv);
-          li.appendChild(infoDiv);
-          
-          if (user.isAdmin) {
-            const adminBadge = document.createElement('span');
-            adminBadge.className = 'admin-badge';
-            adminBadge.textContent = 'Admin';
-            li.appendChild(adminBadge);
-          }
-          
-          if (isAdmin && id !== userId) {
-            li.classList.add('admin-visible');
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'admin-delete-btn';
-            deleteBtn.title = 'Remove User';
-            deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
-            li.appendChild(deleteBtn);
-            
-            deleteBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              if (confirm(`Remove ${user.username} from chat?`)) {
-                // Remove all messages from this user
-                db.ref('chat').orderByChild('userId').equalTo(id).once('value', (snap) => {
-                  const messages = snap.val();
-                  if (messages) {
-                    Object.keys(messages).forEach(key => {
-                      db.ref(`chat/${key}`).remove();
-                    });
-                  }
-                });
-                
-                // Remove user from status
-                db.ref(`status/${id}`).remove();
+      if (!user.online || !isPresenceFresh(user) ||
+          typeof user.username !== 'string' || !user.username.trim()) return;
+
+      const onlineUserKey = `username:${getFirebaseSafeUserKey(user.username)}`;
+      const statusChannel = String(user.channel || 'general');
+      if (!isAdmin && statusChannel !== userChannel) return;
+
+      const existingOnlineUser = onlineUsers[onlineUserKey];
+      if (existingOnlineUser) {
+        if (!existingOnlineUser.presenceUserIds.includes(stableUserId)) {
+          existingOnlineUser.presenceUserIds.push(stableUserId);
+        }
+        return;
+      }
+
+      const onlineUser = {
+        ...user,
+        channel: statusChannel,
+        userId: stableUserId,
+        presenceUserIds: [stableUserId]
+      };
+      onlineUsers[onlineUserKey] = onlineUser;
+      if (statusChannel === userChannel) usersInChannel++;
+
+      const li = document.createElement('li');
+      li.className = `user-item ${user.isAdmin ? 'admin' : ''}`;
+
+      const avatarDiv = createUserAvatarElement(user.username, null);
+      const profileLoad = getUserProfileImage(user.username).then((userProfileImg) => {
+        applyProfileImageToAvatarElement(avatarDiv, user.username, userProfileImg);
+      }).catch((error) => {
+        console.error(`Unable to load profile image for ${user.username}:`, error);
+      });
+      if (isInitialOnlineSnapshot) initialProfileLoads.push(profileLoad);
+
+      const infoDiv = document.createElement('div');
+      infoDiv.className = 'user-info';
+      infoDiv.innerHTML = `
+        <h4>${user.username}</h4>
+        <p>Online now</p>
+      `;
+
+      li.appendChild(avatarDiv);
+      li.appendChild(infoDiv);
+
+      if (user.isAdmin) {
+        const adminBadge = document.createElement('span');
+        adminBadge.className = 'admin-badge';
+        adminBadge.textContent = 'Admin';
+        li.appendChild(adminBadge);
+      }
+
+      if (isAdmin && onlineUserKey !== currentUserKey) {
+        li.classList.add('admin-visible');
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'admin-delete-btn';
+        deleteBtn.title = 'Remove User';
+        deleteBtn.innerHTML = '<i class="fas fa-times"></i>';
+        li.appendChild(deleteBtn);
+
+        deleteBtn.addEventListener('click', async (event) => {
+          event.stopPropagation();
+          if (!confirm(`Remove ${user.username} from chat?`)) return;
+
+          try {
+            const userIds = new Set(onlineUser.presenceUserIds);
+            const messageQueries = Array.from(userIds, id =>
+              db.ref('chat').orderByChild('userId').equalTo(id).once('value')
+            );
+            messageQueries.push(db.ref('chat').orderByChild('name').equalTo(user.username).once('value'));
+            const [statusSnapshot, ...messageSnapshots] = await Promise.all([
+              db.ref('status').once('value'),
+              ...messageQueries
+            ]);
+
+            const chatRemovals = {};
+            messageSnapshots.forEach((messageSnapshot) => {
+              messageSnapshot.forEach((message) => {
+                chatRemovals[`chat/${message.key}`] = null;
+              });
+            });
+            const statusRemovals = {};
+            statusSnapshot.forEach((statusChild) => {
+              const statusUser = statusChild.val();
+              if (`username:${getFirebaseSafeUserKey(statusUser?.username || '')}` === onlineUserKey) {
+                statusRemovals[`status/${statusChild.key}`] = null;
               }
             });
+
+            const removals = { ...chatRemovals, ...statusRemovals };
+            if (Object.keys(removals).length) await db.ref().update(removals);
+          } catch (error) {
+            console.error(`Unable to remove presence for ${user.username}:`, error);
+            showNotification(`Could not remove ${user.username} from online users.`, true);
           }
-          
-          onlineUsersList.appendChild(li);
-        }
+        });
       }
+
+      onlineUsersList.appendChild(li);
     });
     
     // Update online count
@@ -5834,8 +6038,38 @@ async function initializeChatApp() {
       onlineCount.textContent = `${usersInChannel} online`;
     }
 
-    if (isAdmin) {
-      populateRecentChatsList();
+    const populateRecentChats = isAdmin
+      ? populateRecentChatsList()
+      : Promise.resolve();
+    if (isInitialOnlineSnapshot) {
+      Promise.all([populateRecentChats, ...initialProfileLoads]).then(() => {
+        markStartupCheckpoint('online', 'Online users and profiles loaded');
+        if (!onlineUsersStartupResolved) {
+          onlineUsersStartupResolved = true;
+          resolveOnlineUsersReady(true);
+        }
+      }).catch((error) => {
+        console.error('Unable to finish online-user startup:', error);
+        showNotification('Unable to finish loading online users.', true);
+        markStartupCheckpoint('online', 'Online-user startup incomplete');
+        if (!onlineUsersStartupResolved) {
+          onlineUsersStartupResolved = true;
+          resolveOnlineUsersReady(false);
+        }
+      });
+    } else if (isAdmin) {
+      populateRecentChats.catch(error => {
+        console.error('Unable to populate recent chats from online users:', error);
+      });
+    }
+  };
+  onlineUsersStatusRef.on('value', onlineUsersStatusHandler, (error) => {
+    console.error('Unable to load online users:', error);
+    showNotification('Unable to load online users.', true);
+    if (!onlineUsersStartupResolved) {
+      onlineUsersStartupResolved = true;
+      markStartupCheckpoint('online', 'Online users unavailable');
+      resolveOnlineUsersReady(false);
     }
   });
 
@@ -6012,7 +6246,7 @@ async function initializeChatApp() {
     const recentChatMap = new Map(Object.entries(buildRecentChatUsers(messages, visits)));
     Object.values(recentChatUsers || {}).forEach((item) => addRecentChatEntryToMap(recentChatMap, item));
     recentChatUsers = Object.fromEntries(recentChatMap.entries());
-    populateRecentChatsList();
+    return populateRecentChatsList();
   }
 
 async function populateRecentChatsList() {
@@ -6256,6 +6490,42 @@ async function populateRecentChatsList() {
     channelsSection.style.display = 'block';
     adminChannelControls.style.display = 'block';
     document.querySelector('.channel-list').style.display = 'block';
+
+    let latestStatusUsers = {};
+    function getActiveUserCountsByChannel(statusUsers) {
+      const usersByChannel = new Map();
+      Object.entries(statusUsers).forEach(([statusId, user]) => {
+        if (!user || !user.online) return;
+        if (!isPresenceFresh(user)) {
+          removeStalePresence(statusId);
+          return;
+        }
+
+        const channel = String(user.channel || 'general');
+        const userKey = getFirebaseSafeUserKey(user.username || user.userId || statusId);
+        if (!usersByChannel.has(channel)) usersByChannel.set(channel, new Set());
+        usersByChannel.get(channel).add(userKey);
+      });
+      return new Map(Array.from(usersByChannel, ([channel, users]) => [channel, users.size]));
+    }
+
+    function updateLiveChannelCounts(statusUsers) {
+      const activeCounts = getActiveUserCountsByChannel(statusUsers);
+      channelsList.querySelectorAll('.channel-user-count').forEach((countElement) => {
+        const channel = countElement.dataset.channel;
+        countElement.textContent = `${activeCounts.get(channel) || 0} users`;
+      });
+    }
+
+    adminChannelStatusRef = db.ref('status');
+    adminChannelStatusHandler = (snapshot) => {
+      latestStatusUsers = snapshot.val() || {};
+      updateLiveChannelCounts(latestStatusUsers);
+    };
+    adminChannelStatusRef.on('value', adminChannelStatusHandler, (error) => {
+      console.error('Unable to update admin channel presence counts:', error);
+      showNotification('Unable to refresh channel online counts.', true);
+    });
     
     // Get all users to see what channels exist
     db.ref('status').once('value', (snapshot) => {
@@ -6263,15 +6533,13 @@ async function populateRecentChatsList() {
       const channels = {};
       
       // Count users per channel
-      Object.values(users).forEach(user => {
+      Object.values(users).forEach((user) => {
         if (user && user.channel) {
-          if (!channels[user.channel]) {
-            channels[user.channel] = 0;
-          }
-          if (user.online) {
-            channels[user.channel]++;
-          }
+          channels[String(user.channel)] = 0;
         }
+      });
+      getActiveUserCountsByChannel(users).forEach((count, channel) => {
+        channels[channel] = count;
       });
       
       // Also check recent messages to find existing channels
@@ -6295,6 +6563,7 @@ async function populateRecentChatsList() {
           <span>General Chat</span>
           <span class="channel-user-count">${channels['general'] || 0} users</span>
         `;
+        generalLi.querySelector('.channel-user-count').dataset.channel = 'general';
         generalLi.addEventListener('click', () => {
           if (userChannel !== 'general') {
             if (confirm('Switch to General Chat?')) {
@@ -6316,6 +6585,7 @@ async function populateRecentChatsList() {
               <span>Channel CH-${channel}</span>
               <span class="channel-user-count">${channels[channel] || 0} users</span>
             `;
+            channelLi.querySelector('.channel-user-count').dataset.channel = channel;
             channelLi.addEventListener('click', () => {
               if (userChannel !== channel) {
                 if (confirm(`Switch to Channel CH-${channel}?`)) {
@@ -6337,6 +6607,7 @@ async function populateRecentChatsList() {
           <span>Admin Panel</span>
           <span class="channel-user-count">${channels['admin'] || 0} users</span>
         `;
+        adminLi.querySelector('.channel-user-count').dataset.channel = 'admin';
         adminLi.addEventListener('click', () => {
           if (userChannel !== 'admin') {
             if (confirm('Switch to Admin Panel?')) {
@@ -6348,6 +6619,7 @@ async function populateRecentChatsList() {
           }
         });
         channelsList.appendChild(adminLi);
+        updateLiveChannelCounts(latestStatusUsers);
       });
     });
   }
@@ -8545,6 +8817,20 @@ async function populateRecentChatsList() {
     const snapshot = await query.once('value');
     return snapshot.val() || {};
   }
+
+  async function prefetchProfileImagesForMessages(entries) {
+    const senderNames = new Set(
+      entries
+        .map(([, message]) => message?.name)
+        .filter(name => typeof name === 'string' && name.trim())
+        .map(name => name.trim())
+    );
+    await Promise.all(Array.from(senderNames, senderName =>
+      getUserProfileImage(senderName).catch(error => {
+        console.error(`Unable to prefetch profile image for ${senderName}:`, error);
+      })
+    ));
+  }
   
   messageListener = null;
   
@@ -8553,13 +8839,28 @@ async function populateRecentChatsList() {
   let latestScrollOnLoaderDoneScheduled = false;
   let lastLoadedTimestamp = 0;
   let lastLoadedKey = null;
+  const INITIAL_CHAT_RENDER_LIMIT = CHAT_CACHE_MESSAGE_LIMIT;
   let renderedFromCache = false;
-  let cachedMessageValues = await readEncryptedChatCache();
+  let cachedMessageValues;
+  let visibleMessageEntries = [];
+  let deferredHistoryEntries = [];
+  let deferredHistoryMessages = {};
+  let backgroundHistoryNodes = [];
+  let backgroundHistoryRendered = false;
+  let backgroundHistoryRenderPending = false;
+  let backgroundHistoryGeneration = 0;
+  let historyAnchor = null;
+  let loaderAnimationDone = false;
+
+  updateAppLoaderProgress(20, 'Loading profile and online-user updates');
+  await Promise.all([settingsReady, onlineUsersReady]);
+  cachedMessageValues = await readEncryptedChatCache();
 
   function cacheChatMessage(key, message) {
     if (!key || !message) return;
     cachedMessageValues = cachedMessageValues || {};
     cachedMessageValues[key] = message;
+    cachedMessageValues = getLatestChatCacheMessages(cachedMessageValues);
     saveEncryptedChatCache(cachedMessageValues);
   }
 
@@ -8575,15 +8876,128 @@ async function populateRecentChatsList() {
     cacheChatMessage(key, { ...cachedMessage, ...updates });
   }
 
-  if (cachedMessageValues) {
-    await appendInitialMessages(cachedMessageValues, {
-      startPercent: 25,
-      endPercent: 60,
-      label: 'Loading cached messages'
+  function ensureHistoryAnchor() {
+    if (!messagesDiv) return null;
+    if (historyAnchor?.parentNode === messagesDiv) return historyAnchor;
+    historyAnchor = document.createComment('older-chat-history');
+    const firstTimelineNode = messagesDiv.querySelector('.date-separator, .message:not(.welcome)');
+    messagesDiv.insertBefore(historyAnchor, firstTimelineNode || null);
+    return historyAnchor;
+  }
+
+  function removeRenderedHistoryNodes(nodes) {
+    const nodeSet = new Set(nodes);
+    Object.entries(currentMessages).forEach(([key, messageDiv]) => {
+      if (nodeSet.has(messageDiv)) delete currentMessages[key];
     });
-    renderedFromCache = true;
-    const cachedChatApp = document.getElementById('chat-app');
-    if (cachedChatApp) cachedChatApp.style.display = 'flex';
+    nodes.forEach(node => {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+  }
+
+  function clearBackgroundHistory() {
+    const hadRenderedHistory = backgroundHistoryRendered;
+    backgroundHistoryGeneration += 1;
+    removeRenderedHistoryNodes(backgroundHistoryNodes);
+    backgroundHistoryNodes = [];
+    backgroundHistoryRendered = false;
+    if (hadRenderedHistory) {
+      refreshDateSeparators();
+      refreshMessageGroups();
+    }
+  }
+
+  async function renderDeferredHistory(generation) {
+    if (generation !== backgroundHistoryGeneration) {
+      backgroundHistoryRenderPending = false;
+      scheduleDeferredHistoryRender();
+      return;
+    }
+    if (!deferredHistoryEntries.length) {
+      backgroundHistoryRenderPending = false;
+      return;
+    }
+
+    const renderedNodes = [];
+    try {
+      await appendInitialMessages(deferredHistoryMessages, {
+        silent: true,
+        markSeen: false,
+        batchSize: 24,
+        insertBefore: ensureHistoryAnchor(),
+        collectNodes: renderedNodes
+      }, deferredHistoryEntries);
+      if (generation !== backgroundHistoryGeneration) {
+        removeRenderedHistoryNodes(renderedNodes);
+        return;
+      }
+      backgroundHistoryNodes = renderedNodes;
+      backgroundHistoryRendered = true;
+      refreshDateSeparators();
+      refreshMessageGroups();
+    } catch (error) {
+      removeRenderedHistoryNodes(renderedNodes);
+      console.error('Unable to render older chat history in the background:', error);
+    } finally {
+      backgroundHistoryRenderPending = false;
+      if (generation !== backgroundHistoryGeneration) {
+        scheduleDeferredHistoryRender();
+      }
+    }
+  }
+
+  function scheduleDeferredHistoryRender() {
+    if (
+      !loaderAnimationDone ||
+      backgroundHistoryRenderPending ||
+      backgroundHistoryRendered ||
+      !deferredHistoryEntries.length
+    ) return;
+
+    backgroundHistoryRenderPending = true;
+    const generation = backgroundHistoryGeneration;
+    const render = () => {
+      renderDeferredHistory(generation);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(render, { timeout: 1200 });
+    } else {
+      window.setTimeout(render, 0);
+    }
+  }
+
+  window.addEventListener('chatloader:done', () => {
+    loaderAnimationDone = true;
+    scheduleDeferredHistoryRender();
+  }, { once: true });
+
+  if (cachedMessageValues) {
+    const storedCacheMessages = cachedMessageValues;
+    const orderedCacheEntries = await sortChatEntriesWithWorker(
+      Object.entries(storedCacheMessages)
+        .filter(([, message]) => isMessageInCurrentChannel(message))
+    );
+    visibleMessageEntries = orderedCacheEntries.slice(-INITIAL_CHAT_RENDER_LIMIT);
+    deferredHistoryEntries = orderedCacheEntries.slice(0, -INITIAL_CHAT_RENDER_LIMIT);
+    deferredHistoryMessages = storedCacheMessages;
+    cachedMessageValues = Object.fromEntries(visibleMessageEntries);
+    await saveEncryptedChatCache(cachedMessageValues);
+    if (visibleMessageEntries.length) {
+      await prefetchProfileImagesForMessages(visibleMessageEntries);
+      await appendInitialMessages(storedCacheMessages, {
+        startPercent: 25,
+        endPercent: 60,
+        label: 'Loading latest cached messages'
+      }, visibleMessageEntries);
+      renderedFromCache = true;
+      await seedRecentChatsFromMessages(Object.fromEntries(visibleMessageEntries));
+      markStartupCheckpoint('messages', 'Latest cached messages loaded');
+      markStartupCheckpoint('recent', 'Recent chats loaded');
+      ensureHistoryAnchor();
+      scrollMessagesToBottom();
+      const cachedChatApp = document.getElementById('chat-app');
+      if (cachedChatApp) cachedChatApp.style.display = 'flex';
+    }
   }
 
   function setMenuOpenState(enabled) {
@@ -8683,59 +9097,89 @@ async function populateRecentChatsList() {
       hideAppLoader();
       return;
     }
-    const cacheMatchesFirebase = renderedFromCache &&
+    const firebaseVisibleEntries = initialPage.entries.slice(-INITIAL_CHAT_RENDER_LIMIT);
+    const firebaseHistoryEntries = initialPage.entries.slice(0, -INITIAL_CHAT_RENDER_LIMIT);
+    await prefetchProfileImagesForMessages(firebaseVisibleEntries);
+    const cacheLatestMatchesFirebase = renderedFromCache &&
       cachedMessagesMatchSnapshot(
         cachedMessageValues,
-        initialPage.entries,
+        firebaseVisibleEntries,
         isMessageInCurrentChannel
       );
+    const cachedHistoryMatchesFirebase = cachedMessagesMatchSnapshot(
+      Object.fromEntries(deferredHistoryEntries),
+      firebaseHistoryEntries,
+      isMessageInCurrentChannel
+    );
+    const renderedHistoryMatchesFirebase = backgroundHistoryRendered &&
+      cachedHistoryMatchesFirebase;
     if (renderedFromCache) {
       console.info('[Chat cache] Compared cached messages with Firebase snapshot.', {
         cachedMessages: Object.keys(cachedMessageValues || {}).length,
-        firebaseMessages: initialPage.entries.length,
-        match: cacheMatchesFirebase
+        cacheLimit: CHAT_CACHE_MESSAGE_LIMIT,
+        firebaseRecentMessages: firebaseVisibleEntries.length,
+        recentMatch: cacheLatestMatchesFirebase,
+        cachedHistoryMatch: cachedHistoryMatchesFirebase
       });
       updateAppLoaderProgress(
-        cacheMatchesFirebase ? 90 : 75,
-        cacheMatchesFirebase
-          ? 'Cached messages are up to date'
+        cacheLatestMatchesFirebase ? 90 : 75,
+        cacheLatestMatchesFirebase
+          ? 'Latest cached messages are up to date'
           : 'Applying Firebase message updates'
       );
     }
-    if (renderedFromCache && !cacheMatchesFirebase && messagesDiv) {
+    if (renderedFromCache && !cacheLatestMatchesFirebase && messagesDiv) {
+      clearBackgroundHistory();
       messagesDiv.querySelectorAll('.message:not(.welcome), .date-separator').forEach((element) => element.remove());
       currentMessages = {};
+      visibleMessageEntries = [];
       lastDateSeparator = '';
-    }
-    if (!cacheMatchesFirebase) {
       await appendInitialMessages(
         initialPage.messages,
-        renderedFromCache
-          ? {
-            startPercent: 75,
-            endPercent: 90,
-            label: 'Applying Firebase updates'
-          }
-          : {
-            startPercent: 30,
-            endPercent: 75,
-            label: 'Loading messages from Firebase'
-          },
-        initialPage.entries
+        {
+          startPercent: 75,
+          endPercent: 90,
+          label: 'Applying Firebase updates'
+        },
+        firebaseVisibleEntries
       );
+      visibleMessageEntries = firebaseVisibleEntries;
+      ensureHistoryAnchor();
+    } else if (!renderedFromCache) {
+      await appendInitialMessages(
+        initialPage.messages,
+        {
+          startPercent: 30,
+          endPercent: 75,
+          label: 'Loading latest messages from Firebase'
+        },
+        firebaseVisibleEntries
+      );
+      visibleMessageEntries = firebaseVisibleEntries;
+      ensureHistoryAnchor();
     } else {
-      console.info('[Chat cache] Cached messages match Firebase; skipped duplicate rendering.', {
-        messageCount: initialPage.entries.length
+      console.info('[Chat cache] Latest cached messages match Firebase; skipped duplicate rendering.', {
+        messageCount: firebaseVisibleEntries.length
       });
     }
-    cachedMessageValues = initialPage.messages;
+    if (backgroundHistoryRendered && !renderedHistoryMatchesFirebase) {
+      clearBackgroundHistory();
+    } else if (
+      backgroundHistoryRenderPending &&
+      (!cacheLatestMatchesFirebase || !cachedHistoryMatchesFirebase)
+    ) {
+      backgroundHistoryGeneration += 1;
+    }
+    deferredHistoryEntries = firebaseHistoryEntries;
+    deferredHistoryMessages = initialPage.messages;
+    cachedMessageValues = getLatestChatCacheMessages(initialPage.messages);
     saveEncryptedChatCache(cachedMessageValues);
-    // Reveal chat UI once initial messages are rendered so loader accurately reflects readiness
-    try {
-      const chatAppEl = document.getElementById('chat-app');
-      if (chatAppEl) chatAppEl.style.display = 'flex';
-    } catch (e) {}
-    markStartupCheckpoint('messages', 'Messages loaded');
+    const chatAppEl = document.getElementById('chat-app');
+    if (chatAppEl) chatAppEl.style.display = 'flex';
+    await seedRecentChatsFromMessages(Object.fromEntries(firebaseVisibleEntries));
+    markStartupCheckpoint('messages', 'Latest messages loaded');
+    markStartupCheckpoint('recent', 'Recent chats loaded');
+    scheduleDeferredHistoryRender();
 
     const filteredEntries = initialPage.entries;
     if (filteredEntries.length > 0) {
@@ -8747,8 +9191,7 @@ async function populateRecentChatsList() {
     initialLoadComplete = true;
     requestBugGhostQuestions({ preload: true });
     lastDateSeparator = '';
-    scrollMessagesToBottom();
-    seedRecentChatsFromMessages(initialPage.messages);
+    if (!renderedFromCache) scrollMessagesToBottom();
     // Load the local emoji dataset after initial UI is ready.
     setTimeout(() => {
       loadEmojiData().then(() => {
@@ -10772,9 +11215,12 @@ async function populateRecentChatsList() {
 
     try {
       const result = await uploadToCloudinary(file);
-      userProfileImage = result.secure_url;
-      localStorage.setItem(`profile_image_${username}`, result.secure_url);
-      await saveSettingsToFirebase();
+      const previousProfileImage = userProfileImage;
+      cacheUserProfileImage(username, result.secure_url);
+      if (!(await saveSettingsToFirebase())) {
+        cacheUserProfileImage(username, previousProfileImage);
+        throw new Error('Unable to save the profile image to Firebase.');
+      }
       
       // Update avatar
       userAvatar.style.backgroundImage = `url(${result.secure_url})`;
@@ -11339,9 +11785,12 @@ async function populateRecentChatsList() {
 
     try {
       const uploadedUrl = await uploadToCloudinary(file);
-      userProfileImage = uploadedUrl;
-      localStorage.setItem(`profile_image_${username}`, uploadedUrl);
-      await saveSettingsToFirebase();
+      const previousProfileImage = userProfileImage;
+      cacheUserProfileImage(username, uploadedUrl);
+      if (!(await saveSettingsToFirebase())) {
+        cacheUserProfileImage(username, previousProfileImage);
+        throw new Error('Unable to save the profile image to Firebase.');
+      }
       
       // Update avatar
       userAvatar.style.backgroundImage = `url(${uploadedUrl})`;
@@ -11677,6 +12126,7 @@ async function populateRecentChatsList() {
   // Back to login function
   function backToLogin() {
     finalizeActivityRegistration();
+    stopPresenceMonitoring();
     updateUserPresence(false);
     if (messageListener) {
       messageListener.off();
@@ -11731,7 +12181,6 @@ async function populateRecentChatsList() {
   async function initApp() {
     initEmojiPicker();
     // Defer loading the large emoji library until after chat UI is ready
-    updateUserPresence(true);
     cleanRecentChatVisits();
     
     // Hook reply cancel button after DOM is ready
@@ -11761,10 +12210,6 @@ async function populateRecentChatsList() {
 
     markChatVisited();
     
-    // Listen for window close/refresh to set offline
-    window.addEventListener('beforeunload', () => {
-      updateUserPresence(false);
-    });
   }
 
   // Start the app
@@ -11815,7 +12260,6 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('pagehide', () => {
   console.log('📵 Pagehide detected - forcing offline status for push delivery');
-  updateUserPresence(false);
   setUserOfflineStatus(true);
   sendOfflineBeacon();
 });
