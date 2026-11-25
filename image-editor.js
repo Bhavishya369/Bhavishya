@@ -789,7 +789,10 @@
 
   function closeEditor() {
     const modal = $('imageEditorModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.style.display = 'none';
+      modal.hidden = true;
+    }
 
     if (state.strokeCanvas) {
       state.strokeCanvas.width = 0;
@@ -1005,6 +1008,7 @@
     if (!modal) return;
 
     state.onSave = typeof options.onSave === 'function' ? options.onSave : null;
+    modal.hidden = false;
     modal.style.display = 'flex';
 
     // Let the modal lay out before measuring the container for fitWrapper()

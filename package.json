@@ -1,0 +1,10 @@
+{
+  "name": "bhavishya-frontend",
+  "private": true,
+  "scripts": {
+    "build:frontend": "terser login.js --compress --mangle --output login.min.js && terser image-editor.js --compress --mangle --output image-editor.min.js && terser video-editor.js --compress --mangle --output video-editor.min.js"
+  },
+  "devDependencies": {
+    "terser": "5.51.4"
+  }
+}

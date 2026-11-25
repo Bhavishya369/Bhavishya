@@ -76,6 +76,22 @@ $env:FIREBASE_DATABASE_URL = 'https://your-project-default-rtdb.firebaseio.com'
 node index.js
 ```
 
+Set every existing user's saved theme to light
+
+The migration updates only `users/{userKey}/settings/theme` and that settings
+record's `lastUpdated` timestamp, preserving other settings. It includes users
+without a settings record. Run it from `push-server` with the Firebase Admin
+credentials and database URL configured as above:
+
+```powershell
+npm run set-all-user-themes-light
+npm run set-all-user-themes-light -- --apply
+```
+
+The first command is read-only and reports how many records would change. Review
+that result before running the second command to apply the updates. The script
+processes existing users in batches; it does not change users created afterward.
+
 On Windows PowerShell using base64:
 
 ```powershell

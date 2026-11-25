@@ -654,6 +654,7 @@
       notify('Could not load this video', true);
     };
 
+    s.els.modal.hidden = false;
     s.els.modal.style.display = 'flex';
     s.els.player.src = videoUrl || '';
     s.els.player.load();
@@ -677,6 +678,7 @@
       e.player.load();
     }
     e.modal.style.display = 'none';
+    e.modal.hidden = true;
 
     s.videoUrl  = null;
     s.videoBlob = null;
