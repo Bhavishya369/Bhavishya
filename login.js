@@ -5760,8 +5760,11 @@ async function initializeChatApp() {
   }
 
   function isPresenceFresh(user) {
-    const lastActive = Number(user?.lastActive);
-    return Number.isFinite(lastActive) && Date.now() - lastActive <= PRESENCE_STALE_AFTER_MS;
+    const lastActiveValue = user?.lastActive;
+    if (lastActiveValue === null || lastActiveValue === undefined || lastActiveValue === '') return true;
+
+    const lastActive = Number(lastActiveValue);
+    return !Number.isFinite(lastActive) || Date.now() - lastActive <= PRESENCE_STALE_AFTER_MS;
   }
 
   function removeStalePresence(id) {
