@@ -883,6 +883,24 @@ function syncBetterUiStyleVars() {
   root.style.setProperty('--better-ui-border-opacity', borderOpacity.toString());
 }
 
+let loadingThemeDynamic = localStorage.getItem('loader_theme_dynamic') !== 'false';
+let loadingTheme = localStorage.getItem('loader_theme') === 'light' ? 'light' : 'dark';
+
+function applyLoadingThemeSettings(dynamic = loadingThemeDynamic, theme = loadingTheme) {
+  loadingThemeDynamic = dynamic === true;
+  loadingTheme = theme === 'light' ? 'light' : 'dark';
+  localStorage.setItem('loader_theme_dynamic', loadingThemeDynamic.toString());
+  localStorage.setItem('loader_theme', loadingTheme);
+  window.ChatLoader?.setLoadingTheme(loadingThemeDynamic, loadingTheme);
+
+  const dynamicToggle = document.getElementById('loaderDynamicThemeToggle');
+  const manualThemeOption = document.getElementById('loaderManualThemeOption');
+  const manualThemeToggle = document.getElementById('loaderThemeToggle');
+  if (dynamicToggle) dynamicToggle.checked = loadingThemeDynamic;
+  if (manualThemeOption) manualThemeOption.style.display = loadingThemeDynamic ? 'none' : '';
+  if (manualThemeToggle) manualThemeToggle.checked = loadingTheme === 'dark';
+}
+
 async function saveSettingsToFirebase() {
   if (!username) return false;
   
@@ -897,6 +915,8 @@ async function saveSettingsToFirebase() {
       betterUiEnabled: betterUiEnabled,
       betterUi: getBetterUiSettingsSnapshot(),
       theme: localStorage.getItem('theme') || 'dark',
+      loadingThemeDynamic,
+      loadingTheme,
       lastUpdated: firebase.database.ServerValue.TIMESTAMP
     };
     
@@ -917,6 +937,12 @@ async function loadSettingsFromFirebase() {
     const settingsRef = db.ref(`users/${safeKey}/settings`);
     const snapshot = await settingsRef.once('value');
     const settings = snapshot.val();
+    if (settings) {
+      applyLoadingThemeSettings(
+        Object.prototype.hasOwnProperty.call(settings, 'loadingThemeDynamic') ? settings.loadingThemeDynamic !== false : true,
+        settings.loadingTheme === 'light' ? 'light' : settings.loadingTheme === 'dark' ? 'dark' : loadingTheme
+      );
+    }
     if (!settings || (settings.theme !== 'dark' && settings.theme !== 'light')) {
       localStorage.setItem('theme', 'dark');
       document.documentElement.classList.remove('--dark-theme', '--light-theme');
@@ -1045,6 +1071,13 @@ function setupSettingsSyncListener() {
       if (settings && settings.lastUpdated) {
         // Only apply if settings are from a different source (not just saved locally)
         if (Date.now() - settings.lastUpdated > 2000) {
+          if (Object.prototype.hasOwnProperty.call(settings, 'loadingThemeDynamic') || Object.prototype.hasOwnProperty.call(settings, 'loadingTheme')) {
+            applyLoadingThemeSettings(
+              Object.prototype.hasOwnProperty.call(settings, 'loadingThemeDynamic') ? settings.loadingThemeDynamic !== false : true,
+              settings.loadingTheme === 'light' ? 'light' : settings.loadingTheme === 'dark' ? 'dark' : loadingTheme
+            );
+          }
+
           // Chat Background
           if (settings.chatBackground && settings.chatBackground !== chatBackground) {
             chatBackground = settings.chatBackground;
@@ -1936,6 +1969,14 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
   const renderBatchSize = Number.isInteger(progressOptions.batchSize)
     ? Math.max(1, progressOptions.batchSize)
     : 8;
+  let processedEntries = 0;
+  let lastReportedEntries = 0;
+  const reportProgress = (force = false) => {
+    if (typeof progressOptions.onProgress !== 'function') return;
+    if (!force && processedEntries - lastReportedEntries < renderBatchSize) return;
+    lastReportedEntries = processedEntries;
+    progressOptions.onProgress(processedEntries, entries.length);
+  };
   const renderBudgetMs = 4;
   const insertBefore = progressOptions.insertBefore?.parentNode === messagesDiv
     ? progressOptions.insertBefore
@@ -1975,7 +2016,11 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
   let batchStartedAt = performance.now();
 
   for (const [key, msg] of entries) {
-    if (currentMessages[key]) continue;
+    processedEntries += 1;
+    if (currentMessages[key]) {
+      reportProgress();
+      continue;
+    }
     const timestamp = Number(msg.timestamp || Date.now());
     const messageDate = formatDateSeparator(timestamp);
     if (messageDate !== prevDate) {
@@ -2041,12 +2086,16 @@ async function appendInitialMessages(snapshot, progressOptions = {}, orderedEntr
     ) {
       appendFragment();
       batchCount = 0;
+      reportProgress(true);
       await yieldToBrowser();
       batchStartedAt = performance.now();
     }
   }
 
   appendFragment();
+  if (typeof progressOptions.onProgress === 'function') {
+    progressOptions.onProgress(entries.length, entries.length);
+  }
   if (!progressOptions.silent) {
     updateStartupMessageProgress(
       startupMessageRenderTotal,
@@ -2279,7 +2328,7 @@ const startupCompleted = {
 
 function markStartupCheckpoint(name, label) {
   if (!STARTUP_CHECKPOINTS[name]) return;
-  const readyRequirements = ['settings', 'messages', 'recent', 'online'];
+  const readyRequirements = ['settings', 'messages', 'recent', 'online', 'sync'];
   if (name === 'ready' && !readyRequirements.every(checkpoint => startupCompleted[checkpoint])) {
     return;
   }
@@ -4256,6 +4305,7 @@ function renderMessageReactions(messageKey, reactions, messageDiv = document.que
 
     reactionsContainer.appendChild(badge);
   });
+  messageDiv.classList.toggle('has-reactions', reactionsContainer.childElementCount > 0);
 }
 
 // Show who reacted (modal)
@@ -4414,12 +4464,17 @@ async function initializeChatApp() {
   const emojiPicker = document.getElementById('emojiPicker');
   const emojiGrid = document.getElementById('emojiGrid');
   const themeSwitch = document.getElementById('themeSwitch');
+  const loadingThemeDynamicToggle = document.getElementById('loaderDynamicThemeToggle');
+  const loadingThemeToggle = document.getElementById('loaderThemeToggle');
   const typingIndicator = document.getElementById('typingIndicator');
   let isAtBottom = true;
   const presenceSessionId = `presence_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   let presenceConnectionRef = null;
   let presenceConnectionHandler = null;
   let presenceResumeHandler = null;
+  let serverTimeOffsetRef = null;
+  let serverTimeOffsetHandler = null;
+  let serverTimeOffsetMs = null;
   let presenceConnected = false;
   let onlineUsersStatusRef = null;
   let onlineUsersStatusHandler = null;
@@ -4714,6 +4769,16 @@ async function initializeChatApp() {
     }
     localStorage.setItem('theme', newTheme);
     syncBetterUiStyleVars();
+    await saveSettingsToFirebase();
+  });
+
+  applyLoadingThemeSettings();
+  loadingThemeDynamicToggle.addEventListener('change', async () => {
+    applyLoadingThemeSettings(loadingThemeDynamicToggle.checked, loadingTheme);
+    await saveSettingsToFirebase();
+  });
+  loadingThemeToggle.addEventListener('change', async () => {
+    applyLoadingThemeSettings(false, loadingThemeToggle.checked ? 'dark' : 'light');
     await saveSettingsToFirebase();
   });
 
@@ -5525,7 +5590,11 @@ async function initializeChatApp() {
   }
 
   // Toggle emoji picker
-  emojiBtn.addEventListener('click', () => {
+  emojiBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearSelectedMessage();
+
     if (emojiPicker.classList.contains('show')) {
       closeEmojiPicker();
       return;
@@ -5711,6 +5780,16 @@ async function initializeChatApp() {
 
   function startPresenceMonitoring() {
     if (presenceConnectionRef) return;
+    serverTimeOffsetRef = db.ref('.info/serverTimeOffset');
+    serverTimeOffsetHandler = (snapshot) => {
+      const offset = snapshot.val();
+      if (typeof offset === 'number' && Number.isFinite(offset)) {
+        serverTimeOffsetMs = offset;
+      }
+    };
+    serverTimeOffsetRef.on('value', serverTimeOffsetHandler, (error) => {
+      console.error('Unable to monitor Firebase server time offset:', error);
+    });
     presenceConnectionRef = db.ref('.info/connected');
     presenceConnectionHandler = (snapshot) => {
       presenceConnected = snapshot.val() === true;
@@ -5742,6 +5821,12 @@ async function initializeChatApp() {
     presenceConnectionRef = null;
     presenceConnectionHandler = null;
     presenceResumeHandler = null;
+    if (serverTimeOffsetRef && serverTimeOffsetHandler) {
+      serverTimeOffsetRef.off('value', serverTimeOffsetHandler);
+    }
+    serverTimeOffsetRef = null;
+    serverTimeOffsetHandler = null;
+    serverTimeOffsetMs = null;
     presenceConnected = false;
     if (onlineUsersStatusRef && onlineUsersStatusHandler) {
       onlineUsersStatusRef.off('value', onlineUsersStatusHandler);
@@ -5764,7 +5849,8 @@ async function initializeChatApp() {
     if (lastActiveValue === null || lastActiveValue === undefined || lastActiveValue === '') return true;
 
     const lastActive = Number(lastActiveValue);
-    return !Number.isFinite(lastActive) || Date.now() - lastActive <= PRESENCE_STALE_AFTER_MS;
+    return !Number.isFinite(lastActive) || !Number.isFinite(serverTimeOffsetMs) ||
+      Date.now() + serverTimeOffsetMs - lastActive <= PRESENCE_STALE_AFTER_MS;
   }
 
   function removeStalePresence(id) {
@@ -6045,20 +6131,14 @@ async function initializeChatApp() {
       ? populateRecentChatsList()
       : Promise.resolve();
     if (isInitialOnlineSnapshot) {
-      Promise.all([populateRecentChats, ...initialProfileLoads]).then(() => {
-        markStartupCheckpoint('online', 'Online users and profiles loaded');
-        if (!onlineUsersStartupResolved) {
-          onlineUsersStartupResolved = true;
-          resolveOnlineUsersReady(true);
-        }
-      }).catch((error) => {
-        console.error('Unable to finish online-user startup:', error);
-        showNotification('Unable to finish loading online users.', true);
-        markStartupCheckpoint('online', 'Online-user startup incomplete');
-        if (!onlineUsersStartupResolved) {
-          onlineUsersStartupResolved = true;
-          resolveOnlineUsersReady(false);
-        }
+      markStartupCheckpoint('online', 'Online users loaded');
+      if (!onlineUsersStartupResolved) {
+        onlineUsersStartupResolved = true;
+        resolveOnlineUsersReady(true);
+      }
+      Promise.all([populateRecentChats, ...initialProfileLoads]).catch((error) => {
+        console.error('Unable to finish loading online-user details:', error);
+        showNotification('Unable to finish loading online-user details.', true);
       });
     } else if (isAdmin) {
       populateRecentChats.catch(error => {
@@ -8854,6 +8934,33 @@ async function populateRecentChatsList() {
   let backgroundHistoryGeneration = 0;
   let historyAnchor = null;
   let loaderAnimationDone = false;
+  const historyProgressIndicator = document.getElementById('backgroundHistoryProgress');
+  const historyProgressRing = document.getElementById('backgroundHistoryProgressRing');
+  const historyProgressLabel = document.getElementById('backgroundHistoryProgressLabel');
+  const historyProgressCircumference = 2 * Math.PI * 16;
+  let historyProgressHideTimer = 0;
+
+  function setBackgroundHistoryProgress(processed, total) {
+    if (!historyProgressIndicator || !total) return;
+    const percent = processed >= total ? 100 : Math.floor((processed / total) * 100);
+    historyProgressIndicator.setAttribute('aria-valuenow', String(percent));
+    historyProgressIndicator.setAttribute('aria-valuetext', `Loading older messages: ${percent}%`);
+    historyProgressIndicator.title = 'Loading older messages';
+    if (historyProgressLabel) historyProgressLabel.textContent = `${percent}%`;
+    if (historyProgressRing) {
+      historyProgressRing.style.strokeDashoffset = String(
+        historyProgressCircumference * (1 - percent / 100)
+      );
+    }
+  }
+
+  function hideBackgroundHistoryProgress() {
+    if (historyProgressHideTimer) {
+      clearTimeout(historyProgressHideTimer);
+      historyProgressHideTimer = 0;
+    }
+    if (historyProgressIndicator) historyProgressIndicator.hidden = true;
+  }
 
   updateAppLoaderProgress(20, 'Loading profile and online-user updates');
   await Promise.all([settingsReady, onlineUsersReady]);
@@ -8901,6 +9008,7 @@ async function populateRecentChatsList() {
   function clearBackgroundHistory() {
     const hadRenderedHistory = backgroundHistoryRendered;
     backgroundHistoryGeneration += 1;
+    hideBackgroundHistoryProgress();
     removeRenderedHistoryNodes(backgroundHistoryNodes);
     backgroundHistoryNodes = [];
     backgroundHistoryRendered = false;
@@ -8921,6 +9029,16 @@ async function populateRecentChatsList() {
       return;
     }
 
+    if (historyProgressHideTimer) {
+      clearTimeout(historyProgressHideTimer);
+      historyProgressHideTimer = 0;
+    }
+    if (historyProgressIndicator) {
+      historyProgressIndicator.classList.remove('is-complete');
+      historyProgressIndicator.hidden = false;
+    }
+    setBackgroundHistoryProgress(0, deferredHistoryEntries.length);
+
     const renderedNodes = [];
     try {
       await appendInitialMessages(deferredHistoryMessages, {
@@ -8928,18 +9046,34 @@ async function populateRecentChatsList() {
         markSeen: false,
         batchSize: 24,
         insertBefore: ensureHistoryAnchor(),
-        collectNodes: renderedNodes
+        collectNodes: renderedNodes,
+        onProgress: setBackgroundHistoryProgress
       }, deferredHistoryEntries);
       if (generation !== backgroundHistoryGeneration) {
         removeRenderedHistoryNodes(renderedNodes);
+        hideBackgroundHistoryProgress();
         return;
       }
       backgroundHistoryNodes = renderedNodes;
       backgroundHistoryRendered = true;
       refreshDateSeparators();
       refreshMessageGroups();
+      setBackgroundHistoryProgress(deferredHistoryEntries.length, deferredHistoryEntries.length);
+      if (historyProgressIndicator) {
+        historyProgressIndicator.classList.add('is-complete');
+        historyProgressIndicator.setAttribute('aria-valuetext', 'Older messages loaded');
+        historyProgressIndicator.title = 'Older messages loaded';
+        if (historyProgressLabel) historyProgressLabel.textContent = '✓';
+        historyProgressHideTimer = setTimeout(() => {
+          historyProgressHideTimer = 0;
+          if (generation === backgroundHistoryGeneration && backgroundHistoryRendered) {
+            historyProgressIndicator.hidden = true;
+          }
+        }, 850);
+      }
     } catch (error) {
       removeRenderedHistoryNodes(renderedNodes);
+      hideBackgroundHistoryProgress();
       console.error('Unable to render older chat history in the background:', error);
     } finally {
       backgroundHistoryRenderPending = false;
@@ -9249,6 +9383,9 @@ async function populateRecentChatsList() {
       const renderedTime = msg.timestamp ? formatMessageTime(msg.timestamp) : msg.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       const messageDiv = createChatMessageElement(msg, key, showAvatar, profileImage, renderedTime);
+      if (!loaderAnimationDone) {
+        messageDiv.classList.add('message--initial-render');
+      }
       insertMessageByFirebaseOrder(messageDiv, msg, prevChildKey, true);
       currentMessages[key] = messageDiv;
       scheduleBugGhostQuestionRefresh();
@@ -9744,6 +9881,11 @@ async function populateRecentChatsList() {
       return;
     }
 
+    if (e.target.closest('.message__reactions')) {
+      e.stopPropagation();
+      return;
+    }
+
     const messageDiv = e.target.closest('.message');
     if (messageDiv && !e.target.closest('.message-action')) {
       setActiveMessage(messageDiv);
@@ -9763,7 +9905,15 @@ async function populateRecentChatsList() {
 
   function setActiveMessage(messageDiv) {
     if (!messageDiv) return;
-    clearSelectedMessage();
+    if (!messageDiv.classList.contains('active')) clearSelectedMessage();
+    const reactions = messageDiv.querySelector('.message__reactions');
+    if (reactions && reactions.childElementCount && !reactions.classList.contains('message__reactions--pinned')) {
+      const messageRect = messageDiv.getBoundingClientRect();
+      const reactionsRect = reactions.getBoundingClientRect();
+      reactions.style.left = `${reactionsRect.left - messageRect.left}px`;
+      reactions.style.right = 'auto';
+      reactions.classList.add('message__reactions--pinned');
+    }
     messageDiv.classList.add('active');
     hideSelectedMessageActionsAfterDelay();
   }

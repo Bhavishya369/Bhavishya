@@ -651,11 +651,108 @@ input[type="submit"] {
   min-height: 0;
 }
 
+.background-history-progress {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(24, 27, 38, 0.34);
+  color: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.background-history-progress[hidden] {
+  display: none;
+}
+
+.background-history-progress svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.background-history-progress__track,
+.background-history-progress__ring {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.background-history-progress__track {
+  stroke: rgba(255, 255, 255, 0.24);
+}
+
+.background-history-progress__ring {
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.16s ease;
+}
+
+.background-history-progress.is-complete {
+  color: #4ade80;
+  background: rgba(20, 83, 45, 0.72);
+  border-color: rgba(74, 222, 128, 0.72);
+  box-shadow: 0 0 18px rgba(74, 222, 128, 0.38);
+  animation: background-history-progress-complete 0.48s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.background-history-progress.is-complete .background-history-progress__track {
+  stroke: rgba(74, 222, 128, 0.24);
+}
+
+.background-history-progress.is-complete .background-history-progress__ring {
+  stroke: #4ade80;
+}
+
+#backgroundHistoryProgressLabel {
+  position: relative;
+  z-index: 1;
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.background-history-progress.is-complete #backgroundHistoryProgressLabel {
+  font-size: 20px;
+  text-shadow: 0 1px 4px rgba(20, 83, 45, 0.7);
+  animation: background-history-check-pop 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes background-history-progress-complete {
+  0% { transform: scale(0.82); opacity: 0.65; }
+  65% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes background-history-check-pop {
+  0% { transform: scale(0.35); opacity: 0; }
+  75% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .background-history-progress.is-complete,
+  .background-history-progress.is-complete #backgroundHistoryProgressLabel {
+    animation: none;
+  }
+}
+
 .chat__messages {
   flex: 1;
   min-height: 0;
-  padding: 10px;
+  padding: 10px 10px 38px;
   overflow-y: auto;
+  overflow-anchor: none;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -667,19 +764,21 @@ input[type="submit"] {
   position: absolute;
   right: 16px;
   bottom: 86px;
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 1;
   border-radius: 50%;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.45);
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(124, 58, 237, 0.95);
-  color: var(--text-primary);
-  box-shadow: 0 14px 30px rgba(0,0,0,0.25);
+  background: linear-gradient(145deg, #a78bfa, #7c3aed 58%, #5b21b6);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(31, 18, 56, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.22);
   cursor: pointer;
   z-index: 30;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   backdrop-filter: blur(10px);
 }
 
@@ -688,6 +787,20 @@ input[type="submit"] {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+.scroll-to-bottom-btn.show:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 7px 18px rgba(31, 18, 56, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.scroll-to-bottom-btn.show:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.scroll-to-bottom-btn:focus-visible {
+  outline: 3px solid rgba(167, 139, 250, 0.65);
+  outline-offset: 3px;
 }
 
 .scroll-to-bottom-btn.hidden {
@@ -703,7 +816,7 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 .scroll-to-bottom-btn i {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .date-separator {
@@ -1336,7 +1449,6 @@ body.menu-open .scroll-to-bottom-btn {
   transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 }
 
-.message:hover .message__actions,
 .message.active .message__actions {
   opacity: 1;
   visibility: visible;
@@ -1344,17 +1456,19 @@ body.menu-open .scroll-to-bottom-btn {
   transform: translateY(0);
 }
 
-.message:hover,
 .message.active {
   min-width: 180px;
   padding-right: 60px;
-  transition: min-width 0.2s ease, padding-right 0.2s ease;
+  transition: min-width 0.2s ease, padding-right 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, background-color 0.15s ease;
 }
 
-.message.sent:hover,
 .message.sent.active {
   min-width: 220px;
   padding-right: 70px;
+}
+
+.message.has-reactions {
+  margin-bottom: 22px;
 }
 
 .message.active {
@@ -1434,6 +1548,18 @@ body.menu-open .scroll-to-bottom-btn {
   pointer-events: auto;
   flex-direction: row-reverse;
   justify-content: flex-end;
+}
+
+.message__reactions--pinned {
+  transition: transform 0.2s ease;
+}
+
+.message.active.received .message__reactions--pinned {
+  transform: translateX(-12px);
+}
+
+.message.active.sent .message__reactions--pinned {
+  transform: translateX(12px);
 }
 
 .reaction-badge {
@@ -2487,9 +2613,9 @@ body.menu-open .scroll-to-bottom-btn {
   border-radius: 18px;
   padding: 18px 18px 16px;
   width: min(320px, calc(100% - 12px));
-  max-height: 520px;
+  max-height: min(520px, calc(100vh - 110px));
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
-  z-index: 99999;
+  z-index: 2147482000;
   display: none;
   overflow: hidden;
   backdrop-filter: blur(22px);
@@ -4355,7 +4481,9 @@ html.bug-mode .bug-random-disturbance {
   .emoji-picker {
     width: min(320px, calc(100% - 24px));
     left: 16px;
-    bottom: 86px;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    max-height: min(520px, calc(100vh - 110px - env(safe-area-inset-bottom, 0px)));
+    max-height: min(520px, calc(100dvh - 110px - env(safe-area-inset-bottom, 0px)));
   }
   
   .emoji-grid {
@@ -4510,7 +4638,7 @@ html.bug-mode .bug-random-disturbance {
   .emoji-picker {
     width: calc(100% - 20px);
     left: 10px;
-    bottom: 86px;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
   }
 
   .emoji-grid {
@@ -5011,6 +5139,7 @@ html.bug-mode .bug-random-disturbance {
 
 .toggle-slider {
   position: absolute;
+  box-sizing: border-box;
   cursor: pointer;
   top: 0;
   left: 0;
@@ -5028,7 +5157,9 @@ html.bug-mode .bug-random-disturbance {
   height: 20px;
   width: 20px;
   left: 3px;
-  bottom: 2px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
   background-color: var(--text-secondary);
   transition: 0.3s;
   border-radius: 50%;
@@ -5040,7 +5171,7 @@ html.bug-mode .bug-random-disturbance {
 }
 
 .toggle-switch input:checked + .toggle-slider:before {
-  transform: translateX(22px);
+  transform: translate(22px, -50%);
   background-color: white;
 }
 

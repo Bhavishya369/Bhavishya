@@ -18,8 +18,9 @@
    ============================================================================= */
 (()=>{
 const THEME_STORAGE_KEY='theme';   // <<< CHANGE to the localStorage key your site uses for dark mode (values like "dark"/"light")
-const d=document.documentElement,qs=new URLSearchParams(location.search);let manual=null;
+const d=document.documentElement,qs=new URLSearchParams(location.search);let manual=null,loaderThemeOverride=null;
 const ok=v=>v==='dark'||v==='light'?v:null;
+try{if(localStorage.getItem('loader_theme_dynamic')==='false')loaderThemeOverride=ok(localStorage.getItem('loader_theme'))||'dark'}catch(e){}
 function detect(){
   let t=ok(qs.get('theme'))||manual;
   if(t)return t;
@@ -28,21 +29,24 @@ function detect(){
   try{const s=String(localStorage.getItem(THEME_STORAGE_KEY)||'').replace(/["']/g,'').toLowerCase();t=ok(s)}catch(e){}
   return t||'dark';
 }
-function apply(){const t=detect();if(d.getAttribute('data-cbl-theme')!==t)d.setAttribute('data-cbl-theme',t)}
+function apply(){const t=loaderThemeOverride||detect();if(d.getAttribute('data-cbl-theme')!==t)d.setAttribute('data-cbl-theme',t)}
 apply();
 new MutationObserver(apply).observe(d,{attributes:true,attributeFilter:['class','data-theme','data-bs-theme']});
 window.ChatLoader=window.ChatLoader||{};
 window.ChatLoader.setTheme=m=>{manual=ok(m);apply()};   // setTheme('dark'|'light'|'auto')
+window.ChatLoader.setLoadingTheme=(dynamic,theme)=>{loaderThemeOverride=dynamic?null:ok(theme)||'dark';apply()};
 })();
 </script>
 <script>
 (()=>{
-const VERSION='v40';
+const VERSION='v44';
+const CACHE_TIMEOUT_MS=10000;
 const pageUrl=new URL(location.href);
 pageUrl.search='';
 pageUrl.hash='';
 const cacheUrl=new URL('chat-loader-screen-'+VERSION+'.html',new URL('./',pageUrl));
 window.ChatLoader=window.ChatLoader||{};
+window.ChatLoader.cacheTimeoutMs=CACHE_TIMEOUT_MS;
 window.ChatLoader.prepare=async()=>{
   const controller=new AbortController();
   let timeout;
@@ -66,22 +70,18 @@ window.ChatLoader.prepare=async()=>{
       throw new Error('Downloaded page does not contain the expected loader version.');
     }
     await cache.put(cacheUrl.href,response.clone());
-    const verified=await cache.match(cacheUrl.href);
-    if(!verified||(await verified.text()).indexOf('data-chat-loader-version="'+VERSION+'"')===-1){
-      throw new Error('The loader page could not be verified in Cache Storage.');
-    }
     return true;
   })();
   const timeoutPromise=new Promise((_,reject)=>{
     timeout=setTimeout(()=>{
       controller.abort();
       reject(new Error('Caching the loading screen timed out.'));
-    },12000);
+    },CACHE_TIMEOUT_MS);
   });
   return Promise.race([task,timeoutPromise]).finally(()=>clearTimeout(timeout));
 };
 window.ChatLoader.cacheReady=window.ChatLoader.prepare().catch(error=>{
-  console.warn('[ChatLoader] The inline loader is ready; its optional cache copy failed.',error);
+  console.warn('[ChatLoader] Cache preparation failed; the inline loader remains available.',error);
   return false;
 });
 })();
@@ -89,12 +89,16 @@ window.ChatLoader.cacheReady=window.ChatLoader.prepare().catch(error=>{
 <!-- Google tag (gtag.js) removed to avoid mobile Google overlayy / ask-bar behavior -->
 
   <!-- Font Awesome and Google Fonts -->
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 
   <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js" defer></script>
   <!-- Optional SDKs are loaded only when their features are used. -->
   <script>
     window.OneSignalDeferred = window.OneSignalDeferred || [];
@@ -104,7 +108,7 @@ window.ChatLoader.cacheReady=window.ChatLoader.prepare().catch(error=>{
   </script>
 
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="login.css?v=20">
+  <link rel="stylesheet" href="login.css?v=24">
   <link rel="stylesheet" href="morse-keyboard.css">
   
   <style>
@@ -589,17 +593,17 @@ html.cbl-loading,html.cbl-loading body{overflow:hidden}
 /* #site = THE WEBSITE (currently a blank white placeholder). It renders normally behind the loader so images/fonts/data keep loading. */
 
 /* #loader = this whole animation, a fixed layer on top of the site. Box matches the old body box (safe-area aware). */
-#loader{display:none;position:fixed;z-index:2147483000;left:0;right:0;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);animation:cblFailsafe 0s linear 60s forwards;contain:layout paint}#loader.is-active{display:block;animation:none}
-#loader-status{position:absolute;z-index:3;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);display:flex;align-items:center;justify-content:center;gap:7px;color:var(--ink);font:500 14px/1.3 system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 1px 5px rgba(0,0,0,.14);pointer-events:none}
+#loader{display:none;position:fixed;z-index:2147483000;left:0;right:0;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);background:#e5e9ff;isolation:isolate;animation:cblFailsafe 0s linear 60s forwards;contain:layout paint}#loader.is-active{display:block;animation:none}
+#loader-status{position:absolute;z-index:3;left:50%;right:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);display:flex;align-items:center;justify-content:center;gap:7px;max-width:calc(100vw - 32px);color:#4930a8;font:600 14px/1.3 system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 1px 5px rgba(255,255,255,.7);transform:translateX(-50%);pointer-events:none}
 #loader-status .dot{width:4px;height:4px;flex:none;border-radius:50%;background:currentColor}
-#loader-status-text{max-width:calc(100vw - 48px);text-align:center;animation:cblStatusText 1.8s ease-in-out infinite}
-@keyframes cblStatusText{0%,100%{opacity:.48}50%{opacity:1}}
+#loader-status-text{max-width:calc(100vw - 80px);text-align:center;animation:cblStatusText 1.8s ease-in-out infinite}
+@keyframes cblStatusText{0%,100%{opacity:.82}50%{opacity:1}}
 @media (prefers-reduced-motion:reduce){#loader-status-text{animation:none;opacity:1}}
 /* CSS-only safety net: if JS never starts (blocked/crashed) the loader hides itself after 60s. JS cancels this on start. */
 @keyframes cblFailsafe{to{visibility:hidden;pointer-events:none}}
 /* #curtain = loader background (gradient + shapes). At the end the balloon lifts it up like a window shade and the site is revealed from the bottom up. */
 #curtain{position:absolute;inset:0;--lift:calc(-100vh - 220px);animation:revealM var(--T) 1 both;will-change:transform}
-#curtain .cbg{position:absolute;left:0;right:0;top:calc(-1*env(safe-area-inset-top,0px));bottom:calc(-1*env(safe-area-inset-bottom,0px));background:linear-gradient(180deg,#fefeff,#f3f2ff)}
+#curtain .cbg{position:absolute;left:0;right:0;top:calc(-1*env(safe-area-inset-top,0px));bottom:calc(-1*env(safe-area-inset-bottom,0px));background:linear-gradient(180deg,#eef0ff,#dfe4ff)}
 /* soft wavy hem hanging under the curtain, so the lifting edge looks like cloth (drifts sideways) */
 #curtain .cbg::after{content:"";position:absolute;left:0;right:0;top:calc(100% - 1px);height:64px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='64' viewBox='0 0 320 64'%3E%3Cpath fill='%23f3f2ff' d='M0 0H320V28Q280 52 240 28T160 28T80 28T0 28Z'/%3E%3Cpath fill='none' stroke='%238d99f0' stroke-width='3' stroke-linecap='round' d='M0 28Q40 4 80 28Q120 52 160 28Q200 4 240 28Q280 52 320 28'/%3E%3C/svg%3E") repeat-x 0 0/320px 64px;filter:drop-shadow(0 6px 7px rgba(106,89,231,.22));animation:cblHem 3.2s linear infinite}
 @keyframes cblHem{to{background-position-x:-320px}}
@@ -629,6 +633,9 @@ html.cbl-loading,html.cbl-loading body{overflow:hidden}
 .cbl-wait .feedL{visibility:hidden}
 .cbl-wait .gzW{animation:gW 2.4s ease-in-out infinite;will-change:transform}
 .cbl-wait .scene{animation:waitBob 2.8s ease-in-out infinite;will-change:transform}
+#loader.cbl-wait .feedW,
+#loader.cbl-wait .gzW,
+#loader.cbl-wait .scene{animation-play-state:running!important}
 @keyframes waitBob{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-5px,0)}}
 @keyframes fW{
  0%{transform:translate3d(0,0,0)}
@@ -673,10 +680,11 @@ html[data-cbl-theme="dark"]{
   --d-shine:#3d3f4c;            /* highlight on bubble */
   --d-mouth:#43297f;            /* mouth + cheeks tint */
   --d-juice:#6d45dc;            /* juice in the cup */
-  --d-bg1:#1d1e23;--d-bg2:#111215; /* loader background gradient (top -> bottom) */
+  --d-bg1:#292537;--d-bg2:#111215; /* loader background gradient (top -> bottom) */
 }
-html[data-cbl-theme="dark"] #loader{color-scheme:dark}
+html[data-cbl-theme="dark"] #loader{color-scheme:dark;background-color:#111215}
 html[data-cbl-theme="dark"] #loader #curtain .cbg{background:linear-gradient(180deg,var(--d-bg1),var(--d-bg2))}
+html[data-cbl-theme="dark"] #loader-status{color:#decfff;text-shadow:0 1px 6px rgba(0,0,0,.8)}
 html[data-cbl-theme="dark"] #loader #curtain .cbg::after{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='64' viewBox='0 0 320 64'%3E%3Cpath fill='%23111215' d='M0 0H320V28Q280 52 240 28T160 28T80 28T0 28Z'/%3E%3Cpath fill='none' stroke='%23a98bff' stroke-width='3' stroke-linecap='round' d='M0 28Q40 4 80 28Q120 52 160 28Q200 4 240 28Q280 52 320 28'/%3E%3C/svg%3E");filter:drop-shadow(0 7px 9px rgba(0,0,0,.55)) drop-shadow(0 0 10px rgba(139,92,246,.35))}
 /* surfaces (fill attributes and inline fills) */
 html[data-cbl-theme="dark"] #loader [fill="#fff"]{fill:var(--d-card)}
@@ -717,11 +725,11 @@ html[data-cbl-theme="dark"] #loader .moon{display:block;position:absolute;left:1
 </style>
   <!-- Custom JavaScript -->
   <script src="site-cache.js?v=6" defer></script>
-  <script src="login.js?v=48" defer></script>
+  <script src="login.js?v=52" defer></script>
 </head>
 
 <body>
-<div id="loader" data-chat-loader-version="v40" aria-busy="true" aria-hidden="true">
+<div id="loader" data-chat-loader-version="v44" aria-busy="true" aria-hidden="true">
 <div id="curtain"><div class="cbg"></div><div class="bgw" aria-hidden="true"><div class="par" data-d="6"><i class="glow g1"></i><i class="glow g2"></i><i class="moon"></i></div><div class="par" data-d="10"><svg class="bg bgL" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"><g class="drift"><path fill="#8d99f0" opacity="0.28" d="M1440 0V420C1360 430 1290 380 1235 320C1180 260 1110 240 1040 180C990 135 930 60 880 0Z"><animate attributeName="d" dur="17s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M1440 0V420C1360 430 1290 380 1235 320C1180 260 1110 240 1040 180C990 135 930 60 880 0Z;M1440 0V434C1385 400 1284 414 1219 297C1211 263 1077 258 1061 148C989 167 910 41 913 0Z;M1440 0V420C1360 430 1290 380 1235 320C1180 260 1110 240 1040 180C990 135 930 60 880 0Z"/></path><path fill="#8d99f0" opacity="0.28" d="M0 900V620C80 610 170 670 260 710C350 750 430 760 500 900Z"><animate attributeName="d" dur="19s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M0 900V620C80 610 170 670 260 710C350 750 430 760 500 900Z;M0 900V654C74 580 195 683 226 718C378 723 419 794 489 900Z;M0 900V620C80 610 170 670 260 710C350 750 430 760 500 900Z"/></path></g><path fill="#6a59e7" d="M1440 0V330C1380 345 1330 300 1290 240C1250 180 1170 170 1110 120C1060 80 1010 30 960 0Z"><animate attributeName="d" dur="13s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M1440 0V330C1380 345 1330 300 1290 240C1250 180 1170 170 1110 120C1060 80 1010 30 960 0Z;M1440 0V316C1405 343 1306 317 1303 214C1254 203 1151 159 1136 114C1038 100 1019 4 968 0Z;M1440 0V330C1380 345 1330 300 1290 240C1250 180 1170 170 1110 120C1060 80 1010 30 960 0Z"/></path><path fill="#6a59e7" d="M0 900V690C70 680 140 730 210 760C290 795 360 780 420 900Z"><animate attributeName="d" dur="15s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M0 900V690C70 680 140 730 210 760C290 795 360 780 420 900Z;M0 900V707C46 678 165 715 194 785C290 770 376 794 395 900Z;M0 900V690C70 680 140 730 210 760C290 795 360 780 420 900Z"/></path></svg><svg class="bg bgP" viewBox="0 0 600 1000" preserveAspectRatio="xMidYMid slice"><g class="drift"><path fill="#8d99f0" opacity="0.28" d="M0 0H600V250C520 270 430 230 340 190C260 155 170 170 100 205C60 225 30 225 0 215Z"><animate attributeName="d" dur="17s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M0 0H600V250C520 270 430 230 340 190C260 155 170 170 100 205C60 225 30 225 0 215Z;M0 0H600V266C501 266 452 220 325 210C262 134 182 184 79 205C81 212 18 246 0 195Z;M0 0H600V250C520 270 430 230 340 190C260 155 170 170 100 205C60 225 30 225 0 215Z"/></path><path fill="#8d99f0" opacity="0.28" d="M0 1000V790C90 775 190 830 290 860C400 895 500 860 600 810V1000Z"><animate attributeName="d" dur="19s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M0 1000V790C90 775 190 830 290 860C400 895 500 860 600 810V1000Z;M0 1000V812C86 756 206 839 268 865C418 878 493 882 600 793V1000Z;M0 1000V790C90 775 190 830 290 860C400 895 500 860 600 810V1000Z"/></path></g><path fill="#6a59e7" d="M0 0H600V150C540 175 470 150 400 118C330 86 250 90 180 125C110 160 50 150 0 120Z"><animate attributeName="d" dur="13s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M0 0H600V150C540 175 470 150 400 118C330 86 250 90 180 125C110 160 50 150 0 120Z;M0 0H600V167C539 158 482 159 382 121C346 73 242 108 176 110C124 166 32 155 0 105Z;M0 0H600V150C540 175 470 150 400 118C330 86 250 90 180 125C110 160 50 150 0 120Z"/></path><path fill="#6a59e7" d="M0 1000V860C70 840 150 880 240 905C330 930 440 900 600 860V1000Z"><animate attributeName="d" dur="15s" repeatCount="indefinite" calcMode="spline" keyTimes="0;.5;1" keySplines=".45 0 .55 1;.45 0 .55 1" values="M0 1000V860C70 840 150 880 240 905C330 930 440 900 600 860V1000Z;M0 1000V872C53 839 167 870 229 922C330 913 451 910 600 862V1000Z;M0 1000V860C70 840 150 880 240 905C330 930 440 900 600 860V1000Z"/></path></svg></div><div class="par" data-d="4"><div class="wv w1"><svg viewBox="0 0 2880 200" preserveAspectRatio="none"><path fill="#c9d0f8" fill-opacity="0.5" d="M0 110Q180 76 360 110Q540 144 720 110Q900 76 1080 110Q1260 144 1440 110Q1620 76 1800 110Q1980 144 2160 110Q2340 76 2520 110Q2700 144 2880 110V200H0Z"/></svg></div><div class="wv w2"><svg viewBox="0 0 2880 200" preserveAspectRatio="none"><path fill="#8d99f0" fill-opacity="0.28" d="M0 126Q180 100 360 126Q540 152 720 126Q900 100 1080 126Q1260 152 1440 126Q1620 100 1800 126Q1980 152 2160 126Q2340 100 2520 126Q2700 152 2880 126V200H0Z"/></svg></div><div class="wv w3"><svg viewBox="0 0 2880 200" preserveAspectRatio="none"><path fill="#6a59e7" fill-opacity="0.16" d="M0 142Q180 122 360 142Q540 162 720 142Q900 122 1080 142Q1260 162 1440 142Q1620 122 1800 142Q1980 162 2160 142Q2340 122 2520 142Q2700 162 2880 142V200H0Z"/></svg></div></div><div class="par" data-d="16"><div class="fl" style="left:60%;width:26px;animation-duration:38s;animation-delay:-28s"><div class="fli" style="animation-duration:8s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:78%;width:40px;animation-duration:30s;animation-delay:-11s"><div class="fli" style="animation-duration:8s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:63%;width:58px;animation-duration:29s;animation-delay:-6s"><div class="fli" style="animation-duration:7s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:41%;width:32px;animation-duration:28s;animation-delay:-5s"><div class="fli" style="animation-duration:8s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:91%;width:70px;animation-duration:25s;animation-delay:-38s"><div class="fli" style="animation-duration:7s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:60%;width:22px;animation-duration:29s;animation-delay:-0s"><div class="fli" style="animation-duration:8s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:11%;width:46px;animation-duration:25s;animation-delay:-2s"><div class="fli" style="animation-duration:5s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:33%;width:34px;animation-duration:24s;animation-delay:-29s"><div class="fli" style="animation-duration:6s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div><div class="fl" style="left:59%;width:52px;animation-duration:30s;animation-delay:-33s"><div class="fli" style="animation-duration:5s"><svg viewBox="-86 -86 172 172"><path d="M74 30.3L80 80L28 74.9A80 80 0 1 1 74 30.3Z"/></svg></div></div></div><div class="par" data-d="8"><i class="sk" style="left:83%;top:40%;--s:15px;animation-duration:3.0s;animation-delay:-4.2s"></i><i class="sk" style="left:12%;top:61%;--s:12px;animation-duration:5.6s;animation-delay:-3.5s"></i><i class="sk" style="left:12%;top:93%;--s:12px;animation-duration:5.0s;animation-delay:-4.8s"></i><i class="sk" style="left:31%;top:68%;--s:12px;animation-duration:3.1s;animation-delay:-0.4s"></i><i class="sk" style="left:74%;top:16%;--s:14px;animation-duration:3.6s;animation-delay:-1.8s"></i><i class="sk" style="left:51%;top:11%;--s:8px;animation-duration:3.0s;animation-delay:-1.3s"></i><i class="sk" style="left:28%;top:9%;--s:15px;animation-duration:5.4s;animation-delay:-4.5s"></i><i class="sk" style="left:52%;top:56%;--s:9px;animation-duration:6.6s;animation-delay:-4.0s"></i><i class="sk" style="left:27%;top:89%;--s:12px;animation-duration:5.1s;animation-delay:-0.5s"></i><i class="sk" style="left:41%;top:45%;--s:8px;animation-duration:5.6s;animation-delay:-4.8s"></i><i class="sk" style="left:17%;top:20%;--s:11px;animation-duration:3.6s;animation-delay:-0.0s"></i><i class="sk" style="left:9%;top:62%;--s:15px;animation-duration:4.1s;animation-delay:-4.3s"></i><i class="sk" style="left:73%;top:27%;--s:15px;animation-duration:6.2s;animation-delay:-1.2s"></i><i class="sk" style="left:95%;top:19%;--s:14px;animation-duration:5.4s;animation-delay:-0.7s"></i><i class="sk" style="left:52%;top:56%;--s:11px;animation-duration:3.0s;animation-delay:-1.7s"></i><i class="sk" style="left:77%;top:41%;--s:8px;animation-duration:4.3s;animation-delay:-1.1s"></i></div><div class="hw"><i class="halo"></i><i class="halo2"></i></div></div></div>
 <!-- speed-lines layer: kept OUTSIDE #curtain so the streaks keep falling while the curtain rises -->
 <div class="bgw" aria-hidden="true"><div class="par" data-d="0"><i class="stk" style="left:6%;height:20vh;animation-delay:0.05s"></i><i class="stk" style="left:17%;height:28vh;animation-delay:0.14s"></i><i class="stk" style="left:29%;height:18vh;animation-delay:0s"></i><i class="stk" style="left:41%;height:24vh;animation-delay:0.2s"></i><i class="stk" style="left:58%;height:26vh;animation-delay:0.08s"></i><i class="stk" style="left:71%;height:19vh;animation-delay:0.17s"></i><i class="stk" style="left:83%;height:27vh;animation-delay:0.02s"></i><i class="stk" style="left:94%;height:22vh;animation-delay:0.11s"></i></div></div>
@@ -852,10 +860,10 @@ document.addEventListener('visibilitychange',()=>{
 window.ChatLoader=window.ChatLoader||{};
 (()=>{
 const root=document.documentElement,loader=document.getElementById('loader'),statusText=document.getElementById('loader-status-text'),api=window.ChatLoader;
-const CFG=api.config={LOOP_DEMO:false,REQUIRE_MANUAL_READY:true,MAX_WAIT_MS:120000};
+const CFG=api.config={LOOP_DEMO:false,REQUIRE_MANUAL_READY:true,WAIT_WARNING_MS:30000};
 const loaderAnimationNames=new Set(['bubM','shM','balM','cupM','eyeShift','juiceM','oohM','dotsM','arcsM','smileM','openM','capM','nM0','nM1','nM2','nM3','rp1','rp2','rp3','fl2','stk','bubX','shX','gaze','feed','gigE','gigM','oohN','haA','woohM','excM','miniB','revealM','revealFade']);
 const loaderAnimationSelector=Array.from(loaderAnimationNames,name=>'.'+name).join(',')+',#curtain,.sb';
-let site=null,started=false,done=false,loaded=document.readyState==='complete',fonts=!document.fonts,manual=!CFG.REQUIRE_MANUAL_READY,forceReady=false,pending=0,poke=()=>{},timer=0,poll=0,handoffTimer=0,failsafeTimer=0,revealFallbackTimer=0,loaderStartedAt=0,monitorFrame=0,monitorWindowStart=0,monitorLastFrame=0,monitorFrameCount=0,monitorFrameTotal=0,monitorLongFrames=0,lowPowerMode=false,minimalMode=false;
+let site=null,started=false,done=false,startPromise=null,loaded=document.readyState==='complete',fonts=!document.fonts,manual=!CFG.REQUIRE_MANUAL_READY,pending=0,poke=()=>{},timer=0,poll=0,handoffTimer=0,waitWarningTimer=0,revealFallbackTimer=0,loaderStartedAt=0,monitorFrame=0,monitorWindowStart=0,monitorLastFrame=0,monitorFrameCount=0,monitorFrameTotal=0,monitorLongFrames=0,lowPowerMode=false,minimalMode=false;
 if(!loaded)addEventListener('load',()=>{loaded=true;poke()},{once:true});
 if(document.fonts)document.fonts.ready.then(()=>{fonts=true;poke()},()=>{fonts=true;poke()});
 function getAnimationsForTargets(scope,selector){
@@ -871,7 +879,7 @@ function getBackgroundAnimations(){
   return getAnimationsForTargets(loader,'.bgw .drift,.bgw .glow,.bgw .wv,.bgw .sk');
 }
 function siteReady(){
-  return forceReady||(loaded&&fonts&&manual&&pending===0);
+  return loaded&&fonts&&manual&&pending===0;
 }
 function cleanup(){
   if(done)return;
@@ -880,7 +888,7 @@ function cleanup(){
   if(timer)clearTimeout(timer);
   if(poll)clearInterval(poll);
   if(handoffTimer)clearTimeout(handoffTimer);
-  if(failsafeTimer)clearTimeout(failsafeTimer);
+  if(waitWarningTimer)clearTimeout(waitWarningTimer);
   if(revealFallbackTimer)clearTimeout(revealFallbackTimer);
   root.classList.remove('cbl-loading');
   if(site){site.removeAttribute('inert');site.removeAttribute('aria-hidden')}
@@ -992,34 +1000,53 @@ function startFrameRateMonitor(){
 Object.assign(api,{
   start(){
     if(started||done)return Promise.resolve(true);
+    if(startPromise)return startPromise;
     if(!loader||!loader.isConnected||!loader.querySelector('#curtain')){
       console.error('[ChatLoader] Inline loader markup is unavailable.');
       return Promise.resolve(false);
     }
-    started=true;
-    loaderStartedAt=performance.now();
-    failsafeTimer=setTimeout(()=>{
-      if(done)return;
-      console.error('[ChatLoader] Hard timeout reached; finishing the reveal.');
-      loaded=true;fonts=true;manual=true;forceReady=true;poke();
-      failsafeTimer=setTimeout(()=>{
+    startPromise=(async()=>{
+      const cacheReady=api.cacheReady;
+      if(cacheReady){
+        let timeoutId=0,timedOut=false;
+        const cached=await Promise.race([
+          Promise.resolve(cacheReady).then(value=>value===true,()=>false),
+          new Promise(resolve=>{
+            timeoutId=setTimeout(()=>{timedOut=true;resolve(false)},api.cacheTimeoutMs||10000);
+          })
+        ]);
+        if(timeoutId)clearTimeout(timeoutId);
+        if(!cached){
+          console.warn(timedOut
+            ?'[ChatLoader] Cache preparation exceeded 10 seconds; using the inline loader.'
+            :'[ChatLoader] Cache preparation did not complete; using the inline loader.');
+        }
+      }else{
+        console.warn('[ChatLoader] Cache preparation is unavailable; using the inline loader.');
+      }
+      if(done)return true;
+      started=true;
+      loaderStartedAt=performance.now();
+      waitWarningTimer=setTimeout(()=>{
+        waitWarningTimer=0;
         if(done)return;
-        console.error('[ChatLoader] Reveal timed out; restoring the messenger.');
-        cleanup();
-      },20000);
-    },CFG.MAX_WAIT_MS+20000);
-    setStatus('Loading messages');
-    root.classList.add('cbl-loading');
-    site=document.getElementById('chat-app');
-    if(!site)console.error('[ChatLoader] Messenger container #chat-app is missing.');
-    if(site){site.setAttribute('inert','');site.setAttribute('aria-hidden','true')}
-    loader.classList.add('is-active');
-    enableLowPowerMode('optimized loader');
-    loader.setAttribute('aria-hidden','false');
-    loader.setAttribute('aria-busy','true');
-    window.dispatchEvent(new CustomEvent('chatloader:start'));
-    requestAnimationFrame(begin);
-    return Promise.resolve(true);
+        console.warn('[ChatLoader] Site readiness is taking longer than expected; continuing the animated wait.');
+        setStatus('Still loading; waiting for chat');
+      },CFG.WAIT_WARNING_MS);
+      setStatus('Loading messages');
+      root.classList.add('cbl-loading');
+      site=document.getElementById('chat-app');
+      if(!site)console.error('[ChatLoader] Messenger container #chat-app is missing.');
+      if(site){site.setAttribute('inert','');site.setAttribute('aria-hidden','true')}
+      loader.classList.add('is-active');
+      enableLowPowerMode('optimized loader');
+      loader.setAttribute('aria-hidden','false');
+      loader.setAttribute('aria-busy','true');
+      window.dispatchEvent(new CustomEvent('chatloader:start'));
+      requestAnimationFrame(begin);
+      return true;
+    })();
+    return startPromise;
   },
   markSiteReady(){manual=true;poke()},
   setStatus,
@@ -1031,7 +1058,7 @@ function begin(){
  try{
   if(!document.getAnimations){console.error('[ChatLoader] Web Animations API is unavailable; using a timed fallback.');finishAfterReveal();return}
   const raw=getComputedStyle(root).getPropertyValue('--T').trim();
-  const T=(/ms$/.test(raw)?parseFloat(raw):parseFloat(raw)*1000)||15000,ms=p=>p/100*T;
+  const T=(/ms$/.test(raw)?parseFloat(raw):parseFloat(raw)*1000)||16000,ms=p=>p/100*T;
   const A={G:47.74,REV0:89.063,REV1:94.391},G=ms(A.G),REV0=ms(A.REV0),REV1=ms(A.REV1);
   const animations=getLoaderSceneAnimations();
   if(!animations.length)throw new Error('No loader scene animations were found.');
@@ -1187,6 +1214,30 @@ function begin(){
         </div>
         
         <div class="chat__main">
+          <div
+            id="backgroundHistoryProgress"
+            class="background-history-progress"
+            role="progressbar"
+            aria-label="Loading older messages"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            aria-valuetext="Loading older messages: 0%"
+            title="Loading older messages"
+            hidden>
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+              <circle class="background-history-progress__track" cx="20" cy="20" r="16"></circle>
+              <circle
+                id="backgroundHistoryProgressRing"
+                class="background-history-progress__ring"
+                cx="20"
+                cy="20"
+                r="16"
+                stroke-dasharray="100.531"
+                stroke-dashoffset="100.531"></circle>
+            </svg>
+            <span id="backgroundHistoryProgressLabel">0%</span>
+          </div>
           <div class="chat__messages" id="messages">
             <!-- Messages will appear here -->
             <div class="date-separator">
@@ -1201,7 +1252,7 @@ function begin(){
               </div>
             </div>
           </div>
-          <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="Jump to latest chat">
+          <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="Jump to latest chat" aria-label="Jump to latest message">
             <i class="fas fa-chevron-down"></i>
           </button>
           
@@ -1253,7 +1304,7 @@ function begin(){
                 <button class="input-tool" id="voiceBtn" title="Voice Message">
                   <i class="fas fa-microphone"></i>
                 </button>
-                <button class="input-tool" id="emojiBtn" title="Emoji">
+                <button class="input-tool" id="emojiBtn" type="button" title="Emoji">
                   <i class="far fa-smile"></i>
                 </button>
                 <textarea id="chatInput" placeholder="Type a secret message..." autocomplete="off" rows="1"></textarea>
@@ -1292,7 +1343,7 @@ function begin(){
                       <h4 id="emojiPickerTitle">Emoji</h4>
                       <input type="text" id="emojiSearchInput" class="emoji-search-input" placeholder="Search emoji, GIFs, stickers...">
                     </div>
-                    <button class="input-tool" id="closeEmojiBtn">
+                    <button class="input-tool" id="closeEmojiBtn" type="button">
                       <i class="fas fa-times"></i>
                     </button>
                   </div>
@@ -1746,6 +1797,30 @@ function begin(){
                 <i class="fas fa-gear"></i>
                 <span>Configure</span>
               </button>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Loading Screen</div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Match site theme</span>
+                <p class="settings-option-desc">Keep the loading screen in sync with your messenger theme.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="loaderDynamicThemeToggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-option" id="loaderManualThemeOption" style="display: none;">
+              <div class="settings-option-label">
+                <span>Dark loading screen</span>
+                <p class="settings-option-desc">Choose dark or light when theme matching is off.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="loaderThemeToggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
             </div>
           </div>
 
