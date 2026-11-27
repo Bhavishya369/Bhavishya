@@ -417,10 +417,11 @@ input[type="submit"] {
 }
 
 :root.better-ui .chat__sidebar {
-  background: rgba(255, 255, 255, 0.02) !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.14) !important;
-  backdrop-filter: blur(24px) !important;
+  background: var(--better-ui-soft-background) !important;
+  border-color: var(--better-ui-surface-border) !important;
+  box-shadow: var(--better-ui-inner-shadow), 0 18px 45px rgba(0, 0, 0, 0.14) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .sidebar__section {
@@ -455,15 +456,22 @@ input[type="submit"] {
 }
 
 :root.better-ui .user-item {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
-  backdrop-filter: blur(16px) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  box-shadow: var(--better-ui-inner-shadow), 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
+  -webkit-backdrop-filter: var(--better-ui-glass-filter) !important;
+}
+
+:root.better-ui #onlineUsers > .user-item,
+:root.better-ui #recentChats > .user-item {
+  backdrop-filter: var(--better-ui-lens-backdrop-filter, blur(var(--better-ui-blur))) !important;
+  -webkit-backdrop-filter: var(--better-ui-lens-backdrop-filter, blur(var(--better-ui-blur))) !important;
 }
 
 :root.better-ui .user-item:hover,
 :root.better-ui .user-item.active {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-surface-background) !important;
   transform: translateY(-1px) !important;
 }
 
@@ -631,11 +639,11 @@ input[type="submit"] {
   font-weight: 600;
 }
 :root.better-ui #customModal .modal-content {
-  background: rgba(255, 255, 255, 0.09) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2) !important;
   border-radius: 18px !important;
-  backdrop-filter: blur(16px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   padding: 18px !important;
 }
 :root.better-ui #customModal .modal-close {
@@ -742,7 +750,8 @@ input[type="submit"] {
 
 @media (prefers-reduced-motion: reduce) {
   .background-history-progress.is-complete,
-  .background-history-progress.is-complete #backgroundHistoryProgressLabel {
+  .background-history-progress.is-complete #backgroundHistoryProgressLabel,
+  .message {
     animation: none;
   }
 }
@@ -847,11 +856,12 @@ body.menu-open .scroll-to-bottom-btn {
 
 .message {
   max-width: 85%;
+  flex: 0 0 auto;
   padding: 10px 14px 28px 14px;
   border-radius: 18px;
   position: relative;
   word-wrap: break-word;
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   overflow: visible;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.15s ease;
   display: flex;
@@ -963,8 +973,8 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .message.received {
@@ -1502,17 +1512,17 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .message__actions {
-  background: rgba(0, 0, 0, 0.25) !important;
-  border: none !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
   padding: 4px 6px !important;
   gap: 4px !important;
   border-radius: 16px !important;
-  backdrop-filter: blur(12px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 :root.better-ui .message-action {
-  background: rgba(0, 0, 0, 0.15) !important;
+  background: var(--better-ui-soft-background) !important;
   border: none !important;
   border-radius: 12px !important;
   min-width: 28px !important;
@@ -1523,16 +1533,16 @@ body.menu-open .scroll-to-bottom-btn {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  backdrop-filter: blur(10px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   font-size: 13px !important;
 }
 
 :root.better-ui .message-action:hover {
-  background: rgba(0, 0, 0, 0.25) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 :root.better-ui .message-action:active {
-  background: rgba(0, 0, 0, 0.3) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 /* ===== MESSAGE REACTIONS ===== */
@@ -1629,19 +1639,7 @@ body.menu-open .scroll-to-bottom-btn {
   right: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 1500;
-  animation: slideUp 0.3s ease;
   backdrop-filter: blur(5px);
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .reaction-picker-modal.show {
@@ -1805,7 +1803,6 @@ body.menu-open .scroll-to-bottom-btn {
 
 .reaction-users-modal.show {
   display: flex;
-  animation: popIn 0.3s ease;
 }
 
 .reaction-users-header {
@@ -1851,14 +1848,34 @@ body.menu-open .scroll-to-bottom-btn {
   padding: 8px;
 }
 
-/* Global Better UI liquid glass theme */
-:root.better-ui {
-  --better-ui-tint-rgb: 0, 0, 0;
+:root {
+  --better-ui-tint-rgb: 255, 255, 255;
   --better-ui-transparency: 0.72;
   --better-ui-tint-intensity: 0.18;
   --better-ui-blur: 18px;
-  --better-ui-magnification: 1.2;
   --better-ui-border-opacity: 1;
+  --better-ui-shadow-rgb: 255, 255, 255;
+  --better-ui-shadow-intensity: 1;
+  --better-ui-inner-shadow: inset 0 0 5px 1px rgba(var(--better-ui-shadow-rgb), 0.36);
+}
+
+/* Global Better UI liquid glass theme */
+:root.better-ui {
+  --better-ui-transparency: 0.72;
+  --better-ui-tint-intensity: 0.18;
+  --better-ui-blur: 18px;
+  --better-ui-border-opacity: 1;
+  --better-ui-surface-background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity))),
+    rgba(var(--better-ui-tint-rgb), var(--better-ui-transparency));
+  --better-ui-soft-background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
+    rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.11));
+  --better-ui-sent-background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
+    rgba(124, 58, 237, calc(var(--better-ui-transparency) * 0.25));
+  --better-ui-surface-border: rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.18));
+  --better-ui-glass-filter: var(--better-ui-lens-backdrop-filter, blur(var(--better-ui-blur)));
   --primary-bg: rgba(15, 23, 42, 0.95);
   --secondary-bg: rgba(20, 25, 40, 0.90);
   --message-bg: rgba(255, 255, 255, 0.08);
@@ -1876,6 +1893,293 @@ body.menu-open .scroll-to-bottom-btn {
   --emoji-search-bg: rgba(255, 255, 255, 0.08);
   --reply-bg: rgba(255, 255, 255, 0.09);
   --date-separator: rgba(255, 255, 255, 0.12);
+}
+
+.better-ui-preview {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.better-ui-preview__caption,
+.better-ui-preview__header,
+.better-ui-preview__composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.better-ui-preview__caption {
+  margin-bottom: 9px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.better-ui-preview__caption span {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.better-ui-preview__stage {
+  display: grid;
+  min-height: 132px;
+  place-items: center;
+  overflow: hidden;
+  padding: 12px;
+  border-radius: 11px;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(124, 58, 237, 0.75), transparent 34%),
+    radial-gradient(circle at 82% 72%, rgba(14, 165, 233, 0.7), transparent 38%),
+    linear-gradient(135deg, #29344f, #172033 60%, #3b3155);
+}
+
+.better-ui-preview__window {
+  display: grid;
+  width: min(100%, 340px);
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.2));
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity))),
+    rgba(var(--better-ui-tint-rgb), var(--better-ui-transparency));
+  box-shadow: var(--better-ui-inner-shadow), 0 12px 28px rgba(0, 0, 0, 0.2);
+  -webkit-backdrop-filter: var(--better-ui-lens-backdrop-filter, var(--better-ui-glass-filter));
+  backdrop-filter: var(--better-ui-lens-backdrop-filter, var(--better-ui-glass-filter));
+  transition: background 0.18s ease, border-color 0.18s ease, backdrop-filter 0.18s ease;
+}
+
+.better-ui-preview__header {
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 5px 7px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.18));
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.better-ui-preview__avatar {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.82);
+}
+
+.better-ui-preview__online {
+  margin-left: auto;
+  color: #86efac;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.better-ui-preview__message {
+  justify-self: start;
+  max-width: 82%;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.16));
+  border-radius: 9px 9px 9px 3px;
+  background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
+    rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.11));
+  color: #fff;
+  font-size: 9px;
+}
+
+.better-ui-preview__message--sent {
+  justify-self: end;
+  border-radius: 9px 9px 3px 9px;
+  background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
+    rgba(124, 58, 237, calc(var(--better-ui-transparency) * 0.25));
+}
+
+.better-ui-preview__composer {
+  min-height: 25px;
+  padding: 3px 5px 3px 9px;
+  border: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.18));
+  border-radius: 8px;
+  background: rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-transparency) * 0.45));
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 9px;
+}
+
+.better-ui-preview__send {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(124, 58, 237, 0.82);
+  color: #fff;
+  font-size: 12px;
+}
+
+.better-ui-shadow-picker {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: start;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.better-ui-shadow-picker legend,
+.better-ui-shadow-color-picker legend {
+  padding: 0;
+}
+
+.better-ui-shadow-option,
+.better-ui-shadow-color-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.better-ui-shadow-option {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 3px 5px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.better-ui-shadow-option small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+}
+
+.better-ui-shadow-option input,
+.better-ui-shadow-color-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.better-ui-shadow-option span {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 7px;
+  background: linear-gradient(145deg, #a0a5ae, #737985);
+}
+
+.better-ui-shadow-option input:checked + span {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+
+.better-ui-shadow-option input:focus-visible + span,
+.better-ui-shadow-color-option input:focus-visible + span {
+  outline: 2px solid #a78bfa;
+  outline-offset: 3px;
+}
+
+.better-ui-shadow-option input[value="soft"] + span {
+  box-shadow: inset 0 0 5px 1px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="topLeft"] + span {
+  box-shadow: inset 3px 3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.48 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="top"] + span {
+  box-shadow: inset 0 3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.48 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="topRight"] + span {
+  box-shadow: inset -3px 3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.48 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="deep"] + span {
+  box-shadow: inset 0 0 8px 2px rgba(var(--better-ui-shadow-rgb), calc(0.58 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="left"] + span {
+  box-shadow: inset 3px 0 5px rgba(var(--better-ui-shadow-rgb), calc(0.48 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="right"] + span {
+  box-shadow: inset -3px 0 5px rgba(var(--better-ui-shadow-rgb), calc(0.48 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-option input[value="bottomRight"] + span {
+  box-shadow: inset -3px -3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.48 * var(--better-ui-shadow-intensity, 1)));
+}
+
+.better-ui-shadow-color-picker {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.better-ui-shadow-color-option {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+}
+
+.better-ui-shadow-color-option span {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(148, 163, 184, 0.8);
+  border-radius: 50%;
+}
+
+.better-ui-shadow-color-option input[value="white"] + span {
+  background: #fff;
+}
+
+.better-ui-shadow-color-option input[value="black"] + span {
+  background: #111827;
+}
+
+.better-ui-shadow-color-option input:checked + span {
+  outline: 2px solid #a78bfa;
+  outline-offset: 2px;
+}
+
+.better-ui-tint-toggle-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.better-ui-settings-modal .better-ui-setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.better-ui-settings-modal .better-ui-shadow-setting {
+  align-items: start;
 }
 
 :root.better-ui .better-ui-setting-row {
@@ -1933,12 +2237,11 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .better-ui-user-picker,
 :root.better-ui .better-ui-settings-modal .settings-text-input,
 :root.better-ui .better-ui-settings-modal .modal-input {
-  background: rgba(var(--better-ui-tint-rgb), 0.04);
-  border: 1px solid rgba(var(--better-ui-tint-rgb), 0.12);
+  background: var(--better-ui-soft-background);
+  border: 1px solid var(--better-ui-surface-border);
   color: var(--text-primary);
 }
 
-:root.better-ui body,
 :root.better-ui .login-container,
 :root.better-ui .verification-box,
 :root.better-ui .chat-window,
@@ -1956,28 +2259,29 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .input-area,
 :root.better-ui .chat-footer,
 :root.better-ui .top-bar {
-  background: rgba(var(--better-ui-tint-rgb), var(--better-ui-transparency)) !important;
-  border: 1px solid rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-border-opacity) * 0.18)) !important;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.14) !important;
-  backdrop-filter: blur(var(--better-ui-blur)) saturate(1.2) brightness(1.05) !important;
-  -webkit-backdrop-filter: blur(var(--better-ui-blur)) saturate(1.2) brightness(1.05) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  box-shadow: var(--better-ui-inner-shadow), 0 18px 45px rgba(0, 0, 0, 0.14) !important;
+  backdrop-filter: var(--better-ui-glass-filter) brightness(1.05) !important;
+  -webkit-backdrop-filter: var(--better-ui-glass-filter) brightness(1.05) !important;
 }
 
 :root.better-ui .message {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12) !important;
-  backdrop-filter: blur(18px) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  box-shadow: var(--better-ui-inner-shadow), 0 12px 30px rgba(0, 0, 0, 0.12) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
+  -webkit-backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 :root.better-ui .message.sent {
-  background: rgba(124, 58, 237, 0.18) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-sent-background) !important;
+  border-color: var(--better-ui-surface-border) !important;
 }
 
 :root.better-ui .message.received {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-soft-background) !important;
+  border-color: var(--better-ui-surface-border) !important;
 }
 
 :root.better-ui .message__content,
@@ -1995,18 +2299,18 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .emoji-picker {
-  background: rgba(8, 12, 24, 0.78) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.42) !important;
-  backdrop-filter: blur(28px) !important;
-  -webkit-backdrop-filter: blur(28px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
+  -webkit-backdrop-filter: var(--better-ui-glass-filter) !important;
   background-clip: padding-box !important;
 }
 
 :root.better-ui .emoji-search-input,
 :root.better-ui .reaction-search-input {
-  background: rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   color: var(--text-primary) !important;
 }
 
@@ -2014,8 +2318,8 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .emoji-tab,
 :root.better-ui .emoji-item,
 :root.better-ui .emoji-item.media-item {
-  background: rgba(255, 255, 255, 0.14) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   color: var(--text-primary) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
 }
@@ -2024,8 +2328,8 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .emoji-category.active,
 :root.better-ui .emoji-tab.active,
 :root.better-ui .emoji-tab:hover {
-  background: rgba(124, 58, 237, 0.28) !important;
-  border-color: rgba(255, 255, 255, 0.22) !important;
+  background: var(--better-ui-sent-background) !important;
+  border-color: var(--better-ui-surface-border) !important;
   color: var(--text-primary) !important;
 }
 
@@ -2052,16 +2356,16 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .scroll-to-bottom-btn {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-soft-background) !important;
   color: var(--text-primary) !important;
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28) !important;
-  border: 1px solid rgba(255, 255, 255, 0.22) !important;
-  backdrop-filter: blur(18px) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   z-index: 30 !important;
 }
 
 :root.better-ui .scroll-to-bottom-btn.show {
-  background: rgba(255, 255, 255, 0.14) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 :root.better-ui .scroll-to-bottom-btn i {
@@ -2083,24 +2387,24 @@ body.menu-open .scroll-to-bottom-btn {
 
 :root.better-ui .menu-container,
 :root.better-ui .menu-overlay {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   color: var(--text-primary) !important;
-  backdrop-filter: blur(18px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 :root.better-ui .menu-item:hover,
 :root.better-ui .message:hover,
 :root.better-ui .reaction-option:hover,
 :root.better-ui .reaction-user-item:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 :root.better-ui .top-bar,
 :root.better-ui .chat-footer,
 :root.better-ui .menu-header,
 :root.better-ui .reaction-users-header {
-  background: rgba(255, 255, 255, 0.10) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 :root.better-ui body {
@@ -2196,12 +2500,6 @@ body.menu-open .scroll-to-bottom-btn {
   align-items: center;
   gap: 10px;
   font-size: 14px;
-  animation: popIn 0.3s ease;
-}
-
-@keyframes popIn {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-  100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
 .copy-notification i {
@@ -2403,7 +2701,6 @@ body.menu-open .scroll-to-bottom-btn {
   gap: 15px;
   z-index: 100;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
   min-width: 280px;
 }
 
@@ -2624,12 +2921,6 @@ body.menu-open .scroll-to-bottom-btn {
 
 .emoji-picker.show {
   display: block;
-  animation: slideUp 0.2s ease;
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .emoji-header {
@@ -2918,13 +3209,7 @@ input:checked + .theme-slider:before {
   align-items: center;
   gap: 10px;
   z-index: 1000;
-  animation: slideIn 0.3s ease;
   max-width: 250px;
-}
-
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
 }
 
 .notification-icon {
@@ -2946,7 +3231,6 @@ input:checked + .theme-slider:before {
   background: var(--modal-bg);
   z-index: 2000;
   display: none;
-  animation: fadeIn 0.3s ease;
 }
 
 .search-container {
@@ -2967,30 +3251,30 @@ input:checked + .theme-slider:before {
 }
 
 :root.better-ui .search-overlay {
-  background: rgba(255, 255, 255, 0.05) !important;
-  backdrop-filter: blur(22px) !important;
+  background: rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-transparency) * 0.15)) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 :root.better-ui .search-container {
-  background: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12) !important;
-  backdrop-filter: blur(20px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   border-radius: 22px !important;
 }
 
 :root.better-ui .search-results {
-  background: rgba(255, 255, 255, 0.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
-  backdrop-filter: blur(18px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   border-radius: 18px !important;
   padding: 10px 0 !important;
 }
 
 :root.better-ui .search-input-wrapper {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   border-radius: 999px !important;
 }
 
@@ -3000,12 +3284,12 @@ input:checked + .theme-slider:before {
 }
 
 :root.better-ui .search-result-item {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--better-ui-soft-background) !important;
+  border-bottom: 1px solid var(--better-ui-surface-border) !important;
 }
 
 :root.better-ui .search-result-item:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 .search-header {
@@ -3113,9 +3397,9 @@ input[type="search"]::placeholder,
 
 
 :root.better-ui .chat__messages {
-  background: rgba(255, 255, 255, 0.07) !important;
-  border: 1px solid rgba(255, 255, 255, 0.14) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 30px 60px rgba(0, 0, 0, 0.18) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  box-shadow: var(--better-ui-inner-shadow), 0 30px 60px rgba(0, 0, 0, 0.18) !important;
 }
 
 #joinChannelInput {
@@ -3136,10 +3420,10 @@ input[type="search"]::placeholder,
 }
 
 :root.better-ui #joinChannelInput {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12) !important;
-  backdrop-filter: blur(18px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   color: var(--text-primary) !important;
   padding: 10px 14px !important;
   border-radius: 14px !important;
@@ -3179,7 +3463,6 @@ input[type="search"]::placeholder,
   display: none;
   justify-content: center;
   align-items: center;
-  animation: fadeIn 0.3s ease;
   flex-direction: column;
 }
 
@@ -3939,7 +4222,6 @@ html.bug-mode .bug-random-disturbance {
   background: var(--modal-bg);
   z-index: 2000;
   display: none;
-  animation: fadeIn 0.3s ease;
 }
 
 .menu-container {
@@ -3951,7 +4233,7 @@ html.bug-mode .bug-random-disturbance {
   border-radius: 20px 20px 0 0;
   z-index: 2001;
   transform: translateY(100%);
-  transition: transform 0.3s ease;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   max-height: 80vh;
   overflow-y: auto;
 }
@@ -4045,7 +4327,6 @@ html.bug-mode .bug-random-disturbance {
   display: none;
   align-items: center;
   justify-content: center;
-  animation: fadeIn 0.3s ease;
 }
 
 .modal {
@@ -4055,15 +4336,14 @@ html.bug-mode .bug-random-disturbance {
   width: 90%;
   max-width: 400px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  animation: popIn 0.3s ease;
 }
 
 :root.better-ui .modal {
-  background: rgba(255, 255, 255, 0.09) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  box-shadow: var(--better-ui-inner-shadow), 0 12px 30px rgba(0, 0, 0, 0.2) !important;
   border-radius: 18px !important;
-  backdrop-filter: blur(16px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
   padding: 28px !important;
 }
 
@@ -4171,16 +4451,16 @@ html.bug-mode .bug-random-disturbance {
 }
 
 :root.better-ui .modal-btn.primary {
-  background: rgba(124, 58, 237, 0.7) !important;
-  border: 1px solid rgba(124, 58, 237, 0.8) !important;
-  backdrop-filter: blur(10px) !important;
+  background: var(--better-ui-sent-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 :root.better-ui .modal-btn.secondary {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: var(--better-ui-soft-background) !important;
   color: rgba(255, 255, 255, 0.9) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 .modal-btn:hover {
@@ -4296,7 +4576,6 @@ html.bug-mode .bug-random-disturbance {
   padding: 10px;
   margin-top: 5px;
   display: none;
-  animation: slideUp 0.2s ease;
   z-index: 99;
 }
 
@@ -4759,11 +5038,11 @@ html.bug-mode .bug-random-disturbance {
 }
 
 :root.better-ui .sidebar-toggle {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-soft-background) !important;
   color: var(--text-primary) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28) !important;
-  backdrop-filter: blur(18px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 .sidebar-toggle:active {
@@ -4789,10 +5068,11 @@ html.bug-mode .bug-random-disturbance {
   }
 
   :root.better-ui .chat__sidebar {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18) !important;
-    backdrop-filter: blur(20px) !important;
+    background: var(--better-ui-soft-background) !important;
+    border: 1px solid var(--better-ui-surface-border) !important;
+    box-shadow: var(--better-ui-inner-shadow), 0 18px 45px rgba(0, 0, 0, 0.18) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
   
   .chat__sidebar.mobile-open {
@@ -4807,10 +5087,11 @@ html.bug-mode .bug-random-disturbance {
   }
 
   :root.better-ui .chat__sidebar.mobile-open {
-    background: rgba(255, 255, 255, 0.08) !important;
-    border-color: rgba(255, 255, 255, 0.14) !important;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18) !important;
-    backdrop-filter: blur(20px) !important;
+    background: var(--better-ui-soft-background) !important;
+    border-color: var(--better-ui-surface-border) !important;
+    box-shadow: var(--better-ui-inner-shadow), 0 18px 45px rgba(0, 0, 0, 0.18) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 
@@ -5474,32 +5755,32 @@ html.bug-mode .bug-random-disturbance {
 }
 
 :root.better-ui #backgroundSelectionModal {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: var(--better-ui-surface-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24) !important;
-  backdrop-filter: blur(20px) !important;
+  backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
 :root.better-ui #backgroundSelectionModal .background-grid-menu {
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: var(--better-ui-soft-background) !important;
   border-radius: 20px !important;
   padding: 16px !important;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
 }
 
 :root.better-ui #backgroundSelectionModal .bg-option {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12) !important;
 }
 
 :root.better-ui #backgroundSelectionModal .bg-option:hover,
 :root.better-ui #backgroundSelectionModal .bg-option.active {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: var(--better-ui-surface-background) !important;
 }
 
 :root.better-ui #backgroundSelectionModal .bg-preview {
-  border-color: rgba(255, 255, 255, 0.14) !important;
+  border-color: var(--better-ui-surface-border) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -5526,6 +5807,19 @@ html.bug-mode .bug-random-disturbance {
   .background-grid-menu {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+button,
+.user-item,
+.message,
+.message__actions,
+.message-action,
+.reaction-badge,
+.emoji-item,
+.menu-item,
+.media-gallery-item,
+.sidebar-toggle {
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 

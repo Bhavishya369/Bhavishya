@@ -108,7 +108,7 @@ window.ChatLoader.cacheReady=window.ChatLoader.prepare().catch(error=>{
   </script>
 
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="login.css?v=24">
+  <link rel="stylesheet" href="login.css?v=32">
   <link rel="stylesheet" href="morse-keyboard.css">
   
   <style>
@@ -725,7 +725,7 @@ html[data-cbl-theme="dark"] #loader .moon{display:block;position:absolute;left:1
 </style>
   <!-- Custom JavaScript -->
   <script src="site-cache.js?v=6" defer></script>
-  <script src="login.js?v=52" defer></script>
+  <script src="login.js?v=58" defer></script>
 </head>
 
 <body>
@@ -1921,6 +1921,27 @@ function begin(){
       <div class="modal settings-modal better-ui-settings-modal">
         <div class="modal-header">Better UI Settings</div>
         <div class="modal-body settings-body">
+          <div class="better-ui-preview" aria-label="Live Better UI preview">
+            <div class="better-ui-preview__caption">
+              <strong>Live preview</strong>
+              <span>Updates as you adjust settings</span>
+            </div>
+            <div class="better-ui-preview__stage">
+              <div class="better-ui-preview__window">
+                <div class="better-ui-preview__header">
+                  <span class="better-ui-preview__avatar" aria-hidden="true">B</span>
+                  <span>Bhavishya Chat</span>
+                  <span class="better-ui-preview__online">Online</span>
+                </div>
+                <div class="better-ui-preview__message">The glass effect updates with your settings.</div>
+                <div class="better-ui-preview__message better-ui-preview__message--sent">Looks good!</div>
+                <div class="better-ui-preview__composer">
+                  <span>Write a message</span>
+                  <span class="better-ui-preview__send" aria-hidden="true">↑</span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="settings-section">
             <div class="settings-section-title">Appearance</div>
 
@@ -1936,10 +1957,10 @@ function begin(){
             <div class="better-ui-setting-row" data-better-ui-setting="magnification">
               <div class="settings-option-label">
                 <span>Magnification</span>
-                <p class="settings-option-desc">Adjust how strongly Better UI magnifies the content behind it.</p>
+                <p class="settings-option-desc">Zoom and bend the background seen through glass panels, like a convex lens.</p>
               </div>
-              <div class="better-ui-setting-value" id="betterUiMagnificationValue">20%</div>
-              <input type="range" id="betterUiMagnification" class="better-ui-slider" min="0" max="100" value="20">
+              <div class="better-ui-setting-value" id="betterUiMagnificationValue">1.10×</div>
+              <input type="range" id="betterUiMagnification" class="better-ui-slider" min="0" max="100" value="20" aria-label="Magnification">
             </div>
 
             <div class="better-ui-setting-row" data-better-ui-setting="blur">
@@ -1959,6 +1980,70 @@ function begin(){
               <div class="better-ui-setting-value" id="betterUiTintIntensityValue">18%</div>
               <input type="range" id="betterUiTintIntensity" class="better-ui-slider" min="0" max="100" value="18">
             </div>
+
+            <div class="better-ui-setting-row better-ui-shadow-setting" data-better-ui-setting="shadow">
+              <div class="settings-option-label">
+                <span>Inner shadow</span>
+                <p class="settings-option-desc">Choose an inset shadow style, or select None.</p>
+              </div>
+              <fieldset class="better-ui-shadow-picker" aria-label="Inner shadow style">
+                <legend class="sr-only">Inner shadow style</legend>
+                <label class="better-ui-shadow-option" title="No inner shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="none" aria-label="None">
+                  <span aria-hidden="true"></span>
+                  <small>None</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Soft centered shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="soft" aria-label="Soft">
+                  <span aria-hidden="true"></span>
+                  <small>Soft</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Top-left shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="topLeft" aria-label="Top left">
+                  <span aria-hidden="true"></span>
+                  <small>Top left</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Top shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="top" aria-label="Top">
+                  <span aria-hidden="true"></span>
+                  <small>Top</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Top-right shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="topRight" aria-label="Top right">
+                  <span aria-hidden="true"></span>
+                  <small>Top right</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Deep centered shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="deep" aria-label="Deep">
+                  <span aria-hidden="true"></span>
+                  <small>Deep</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Left shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="left" aria-label="Left">
+                  <span aria-hidden="true"></span>
+                  <small>Left</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Right shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="right" aria-label="Right">
+                  <span aria-hidden="true"></span>
+                  <small>Right</small>
+                </label>
+                <label class="better-ui-shadow-option" title="Bottom-right shadow">
+                  <input type="radio" name="betterUiShadowStyle" value="bottomRight" aria-label="Bottom right">
+                  <span aria-hidden="true"></span>
+                  <small>Bottom right</small>
+                </label>
+              </fieldset>
+            </div>
+
+            <div class="better-ui-setting-row" data-better-ui-setting="shadowIntensity">
+              <div class="settings-option-label">
+                <span>Inner shadow intensity</span>
+                <p class="settings-option-desc">Adjust the strength of the selected inner shadow.</p>
+              </div>
+              <div class="better-ui-setting-value" id="betterUiShadowIntensityValue">100%</div>
+              <input type="range" id="betterUiShadowIntensity" class="better-ui-slider" min="0" max="100" value="100" aria-label="Inner shadow intensity">
+            </div>
           </div>
 
           <div class="settings-section">
@@ -1972,6 +2057,44 @@ function begin(){
                 <input type="checkbox" id="betterUiBorderToggle" checked>
                 <span class="toggle-slider"></span>
               </label>
+            </div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Dynamic tint color</span>
+                <p class="settings-option-desc">Automatically switch between light and dark tint with the site theme.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="betterUiDynamicTintToggle">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="settings-option" id="betterUiTintColorOption">
+              <div class="settings-option-label">
+                <span>Manual tint color</span>
+                <p class="settings-option-desc">Choose light or dark tint when dynamic tint is off.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="betterUiTintColorToggle" checked>
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="better-ui-tint-toggle-label" id="betterUiTintColorLabel">Light tint</span>
+            </div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Shadow color</span>
+                <p class="settings-option-desc">Choose white or black for the inner shadow.</p>
+              </div>
+              <fieldset class="better-ui-shadow-color-picker" aria-label="Inner shadow color">
+                <legend class="sr-only">Inner shadow color</legend>
+                <label class="better-ui-shadow-color-option" title="White shadow">
+                  <input type="radio" name="betterUiShadowColor" value="white" aria-label="White">
+                  <span aria-hidden="true"></span>
+                </label>
+                <label class="better-ui-shadow-color-option" title="Black shadow">
+                  <input type="radio" name="betterUiShadowColor" value="black" aria-label="Black">
+                  <span aria-hidden="true"></span>
+                </label>
+              </fieldset>
             </div>
             <div class="settings-option better-ui-import-option">
               <div class="settings-option-label">
@@ -1991,6 +2114,7 @@ function begin(){
           </div>
         </div>
         <div class="modal-buttons">
+          <button class="modal-btn secondary" id="resetBetterUiSettingsBtn" type="button">Restore defaults</button>
           <button class="modal-btn primary" id="closeBetterUiSettingsBtn" type="button">Close</button>
         </div>
       </div>

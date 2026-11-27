@@ -16,6 +16,16 @@ services:
         sync: false
       - key: ONESIGNAL_REST_API_KEY
         sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        value: https://aouzfetjvfmvqrnswseq.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: ALLOWED_ORIGINS
         value: https://bhavishya369.github.io,http://localhost:8000,http://127.0.0.1:8000
       - key: NOTIFICATION_ICON_URL

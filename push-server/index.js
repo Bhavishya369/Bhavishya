@@ -36,6 +36,11 @@ const ADMIN_API_KEY = process.env.ADMIN_API_KEY || '';
 const NOTIFICATION_ICON_URL = process.env.NOTIFICATION_ICON_URL || '';
 const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID || '';
 const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY || '';
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME || '';
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY || '';
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 let adminApp = null;
 let db = null;
@@ -185,14 +190,135 @@ app.get('/health', (req, res) => {
     ok: true,
     initialized: !!db,
     databaseUrl: DATABASE_URL || null,
+    storageCleanup: {
+      cloudinary: !!(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET),
+      supabase: !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+    },
     message: db ? 'Push sender ready' : 'Push sender waiting for Firebase credentials'
   });
 });
+
+function getCloudinaryAssetFromMessage(message) {
+  const fileData = message?.fileData || {};
+  const storage = fileData.storage || message?.storage;
+  const url = fileData.url || message?.mediaUrl || message?.voiceMessage?.url || '';
+  let publicId = fileData.publicId || message?.publicId || '';
+  let resourceType = fileData.resourceType || message?.resourceType || '';
+
+  if ((!publicId || !resourceType) && typeof url === 'string') {
+    try {
+      const parsedUrl = new URL(url);
+      if (!parsedUrl.hostname.endsWith('res.cloudinary.com')) return null;
+      const match = parsedUrl.pathname.match(/\/(image|video|raw)\/upload\/(?:v\d+\/)?(.+)$/);
+      if (!match) return null;
+      resourceType = resourceType || match[1];
+      if (!publicId) {
+        publicId = decodeURIComponent(match[2]);
+        if (resourceType !== 'raw') publicId = publicId.replace(/\.[^.]+$/, '');
+      }
+    } catch (error) {
+      console.warn('Unable to parse Cloudinary asset URL:', error.message);
+      return null;
+    }
+  }
+
+  if (storage && storage !== 'cloudinary') return null;
+  if (!publicId || !['image', 'video', 'raw'].includes(resourceType)) return null;
+  return { publicId, resourceType };
+}
+
+async function deleteCloudinaryAsset(message) {
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) return;
+  const asset = getCloudinaryAssetFromMessage(message);
+  if (!asset) return;
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const parameters = `invalidate=true&public_id=${asset.publicId}&timestamp=${timestamp}`;
+  const signature = require('crypto')
+    .createHash('sha1')
+    .update(`${parameters}${CLOUDINARY_API_SECRET}`)
+    .digest('hex');
+  const body = new URLSearchParams({
+    api_key: CLOUDINARY_API_KEY,
+    timestamp: String(timestamp),
+    public_id: asset.publicId,
+    invalidate: 'true',
+    signature
+  });
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${asset.resourceType}/destroy`,
+    { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }
+  );
+  const result = await response.json();
+  if (!response.ok || !['ok', 'not found'].includes(result.result)) {
+    throw new Error(result.error?.message || `Cloudinary delete failed (HTTP ${response.status}).`);
+  }
+}
+
+function getSupabaseStoragePath(message) {
+  const fileData = message?.fileData || {};
+  const storage = fileData.storage || message?.storage;
+  if (storage && storage !== 'supabase') return null;
+  const savedPath = fileData.storagePath || message?.storagePath;
+  if (savedPath) return String(savedPath).split('/').filter(Boolean).map(encodeURIComponent).join('/');
+
+  const url = fileData.url || '';
+  if (!url || !SUPABASE_URL) return null;
+  try {
+    const parsedUrl = new URL(url);
+    const base = new URL(SUPABASE_URL);
+    if (parsedUrl.hostname !== base.hostname) return null;
+    const marker = '/storage/v1/object/public/chat-files/';
+    const index = parsedUrl.pathname.indexOf(marker);
+    return index === -1 ? null : parsedUrl.pathname.slice(index + marker.length);
+  } catch (error) {
+    console.warn('Unable to parse Supabase storage URL:', error.message);
+    return null;
+  }
+}
+
+async function deleteSupabaseAsset(message) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+  const storagePath = getSupabaseStoragePath(message);
+  if (!storagePath) return;
+  const response = await fetch(
+    `${SUPABASE_URL.replace(/\/+$/, '')}/storage/v1/object/chat-files/${storagePath}`,
+    {
+      method: 'DELETE',
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+      }
+    }
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Supabase delete failed (HTTP ${response.status}): ${errorText}`);
+  }
+}
+
+async function cleanupDeletedChatAsset(snapshot) {
+  const message = snapshot.val();
+  if (!message) return;
+  const fileData = message.fileData || {};
+  const storage = fileData.storage || message.storage;
+  if (storage === 'supabase') {
+    await deleteSupabaseAsset(message);
+  } else {
+    await deleteCloudinaryAsset(message);
+  }
+}
 
 // Listen for new chat messages and send notifications
 const pendingOfflineNotifications = new Set();
 
 if (db) {
+  if (!(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET)) {
+    console.warn('Cloudinary deletion is disabled until CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are configured.');
+  }
+  if (!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)) {
+    console.warn('Supabase deletion is disabled until SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.');
+  }
   const listenerStartedAt = Date.now();
   console.log('Listening for new messages at', CHAT_DB_PATH);
   db.ref(CHAT_DB_PATH).on('child_added', async (snap) => {
@@ -295,6 +421,12 @@ if (db) {
         console.log('⚠️ No users to notify (nobody offline with notifications enabled)');
       }
     }
+  });
+
+  db.ref(CHAT_DB_PATH).on('child_removed', (snap) => {
+    cleanupDeletedChatAsset(snap).catch(error => {
+      console.error(`Unable to remove storage asset for deleted chat message ${snap.key}:`, error);
+    });
   });
 }
 

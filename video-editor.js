@@ -426,6 +426,13 @@
      CLOUDINARY UPLOAD (with progress)
      ========================================================= */
   function uploadVideo(blob, onProgress) {
+    if (typeof window.uploadToCloudinary === 'function') {
+      const file = blob instanceof File
+        ? blob
+        : new File([blob], 'edited_video_' + Date.now() + '.mp4', { type: blob.type || 'video/mp4' });
+      return window.uploadToCloudinary(file, (percent) => onProgress(percent / 100));
+    }
+
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const form = new FormData();

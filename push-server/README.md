@@ -12,6 +12,12 @@ Required environment variables (set these in Render -> Environment):
 - `ADMIN_API_KEY` — (optional) secret to protect `/send-test` endpoint.
 - `NOTIFICATION_ICON_URL` — (optional) URL to notification icon image.
 - `CHAT_DB_PATH` — (optional) DB path to chat messages (default `/chat`).
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` — enable permanent Cloudinary asset cleanup when its chat message is deleted.
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` — enable permanent deletion from the `chat-files` bucket when its chat message is deleted. Keep the service-role key only in the server environment.
+
+The chat client uses resumable Supabase uploads for raw files larger than 6 MB and chunked Cloudinary uploads for files larger than 20 MB. Actual maximum file size depends on the configured Supabase bucket/project limits, the Cloudinary plan and upload preset, and available browser memory/network. Set the Supabase bucket's file-size limit and Cloudinary upload preset to the sizes your account supports.
+
+Storage cleanup listens for deleted Firebase chat records. The push server must be online when a record is deleted, and the matching provider credentials above must be configured. Without them, the chat record can be removed while the stored asset remains.
 
 For local development, you can also use `FIREBASE_SERVICE_ACCOUNT_PATH` instead of `FIREBASE_SERVICE_ACCOUNT_BASE64` to point at a local JSON file.
 
@@ -117,6 +123,7 @@ Deploy to Render
    - Start Command: `cd push-server && npm start`
 3. Add environment variables in Render as listed above.
 4. Deploy and check logs.
+5. Add the Cloudinary and Supabase storage cleanup environment variables if you want deleted chat attachments to release provider storage.
 
 Notes
 

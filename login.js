@@ -37,7 +37,244 @@ const supabaseUrl = 'https://aouzfetjvfmvqrnswseq.supabase.co';
 const supabaseKey = 'sb_publishable_p8Bp4oomauG6Sszp5cvY5Q_88wJrPyt';
 let supabaseClient = null;
 let supabaseClientPromise = null;
+let tusClientPromise = null;
 let emailJsClientPromise = null;
+
+const UI_MOTION_SELECTOR = [
+  '#backgroundHistoryProgress',
+  '#scrollToBottomBtn',
+  '#menuOverlay',
+  '#menuContainer',
+  '#exportMenuContainer',
+  '#emojiPicker',
+  '#reactionPickerModal',
+  '#reactionUsersModal',
+  '#mediaGalleryModal',
+  '#profilePreview',
+  '#mediaViewer',
+  '#imageEditorModal',
+  '#videoEditorModal',
+  '#searchOverlay',
+  '#searchContainer',
+  '#copyNotification',
+  '#voiceRecording',
+  '#typingIndicator',
+  '#uploadProgress',
+  '#replyPreview',
+  '#linkPreviewInput',
+  '#customModal',
+  '.modal-overlay'
+].join(',');
+const UI_MOTION_STATES = new WeakMap();
+const UI_MOTION_OBSERVERS = [];
+const UI_MOTION_REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const UI_MOTION_ENTER_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const UI_MOTION_EXIT_EASING = 'cubic-bezier(0.4, 0, 1, 1)';
+
+function isUiMotionVisible(element) {
+  if (element.hidden || getComputedStyle(element).display === 'none') return false;
+  if (element.matches('#menuContainer, #exportMenuContainer, #emojiPicker, #reactionPickerModal, #reactionUsersModal, #mediaGalleryModal, #searchContainer')) {
+    return element.classList.contains('show');
+  }
+  if (element.matches('#scrollToBottomBtn')) {
+    return element.classList.contains('show') && !element.classList.contains('hidden');
+  }
+  return true;
+}
+
+function getUiMotionDisplay(element, fallback = '') {
+  if (fallback && fallback !== 'none') return fallback;
+  if (element.matches('#backgroundHistoryProgress')) return 'grid';
+  if (element.matches('#menuOverlay, #searchOverlay, #menuContainer, #exportMenuContainer, #emojiPicker, #searchContainer')) return 'block';
+  if (element.matches('#copyNotification, #voiceRecording, #typingIndicator, #uploadProgress, #scrollToBottomBtn')) return 'flex';
+  return 'flex';
+}
+
+function getUiMotionKind(element) {
+  if (element.matches('#backgroundHistoryProgress, #scrollToBottomBtn')) return 'circle';
+  if (element.matches('.chat__sidebar')) return 'drawer';
+  if (element.matches('#menuOverlay, #searchOverlay')) return 'overlay';
+  if (element.matches('#menuContainer, #exportMenuContainer, #reactionPickerModal')) return 'sheet';
+  if (element.matches('#searchContainer')) return 'search';
+  if (element.matches('.notification, #copyNotification')) return 'toast';
+  if (element.matches('.modal-overlay, #mediaGalleryModal, #profilePreview, #mediaViewer, #imageEditorModal, #videoEditorModal')) return 'dialog';
+  return 'popover';
+}
+
+function playUiMotion(element, direction, kind, onFinish) {
+  const state = UI_MOTION_STATES.get(element) || {};
+  const animations = state.animations || [];
+  animations.forEach(animation => animation.cancel());
+  state.animations = [];
+  UI_MOTION_STATES.set(element, state);
+
+  if (UI_MOTION_REDUCED || typeof element.animate !== 'function') {
+    if (onFinish) onFinish();
+    return;
+  }
+
+  const opening = direction === 'enter';
+  const duration = kind === 'overlay' ? (opening ? 220 : 180)
+    : kind === 'circle' ? (opening ? 360 : 300)
+      : kind === 'sheet' ? (opening ? 400 : 320)
+        : kind === 'drawer' ? (opening ? 360 : 280)
+        : opening ? 360 : 260;
+  let frames;
+  if (kind === 'overlay') {
+    frames = opening ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }];
+  } else if (kind === 'circle') {
+    frames = opening
+      ? [{ opacity: 0, scale: 0.16, translate: '0px 8px' }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+      : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.04, translate: '0px 5px' }];
+  } else if (kind === 'sheet') {
+    const fullHeightSheet = element.matches('#menuContainer, #exportMenuContainer');
+    const sheetOffset = fullHeightSheet ? '0px 0px' : '0px 42px';
+    frames = opening
+      ? [{ opacity: 0, scale: 0.98, translate: sheetOffset }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+      : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.97, translate: sheetOffset }];
+  } else if (kind === 'search') {
+    frames = opening
+      ? [{ opacity: 0, translate: '0px -28px' }, { opacity: 1, translate: '0px 0px' }]
+      : [{ opacity: 1, translate: '0px 0px' }, { opacity: 0, translate: '0px -28px' }];
+  } else if (kind === 'drawer') {
+    frames = opening
+      ? [{ opacity: 0, scale: 0.99, translate: '-28px 0px' }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+      : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.99, translate: '-28px 0px' }];
+  } else if (kind === 'toast') {
+    frames = opening
+      ? [{ opacity: 0, scale: 0.94, translate: '22px 4px' }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+      : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.82, translate: '15px 3px' }];
+  } else {
+    frames = opening
+      ? [{ opacity: 0, scale: 0.94, translate: '0px 12px' }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+      : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.82, translate: '0px 8px' }];
+  }
+
+  const targets = [{ element, keyframes: frames }];
+  if (kind === 'dialog') {
+    const surface = element.querySelector('.modal, .media-gallery-dialog, .profile-preview-card, .editor-container, .media-viewer-content, .video-editor-player, .modal-content');
+    if (surface) {
+      targets.push({
+        element: surface,
+        keyframes: opening
+          ? [{ opacity: 0, scale: 0.94, translate: '0px 14px' }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+          : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.84, translate: '0px 8px' }]
+      });
+    }
+  } else if (kind === 'sheet') {
+    const surface = element.querySelector('.reaction-picker-content');
+    if (surface) {
+      targets.push({
+        element: surface,
+        keyframes: opening
+          ? [{ opacity: 0, scale: 0.97, translate: '0px 18px' }, { opacity: 1, scale: 1, translate: '0px 0px' }]
+          : [{ opacity: 1, scale: 1, translate: '0px 0px' }, { opacity: 0, scale: 0.96, translate: '0px 18px' }]
+      });
+    }
+  }
+
+  let primaryAnimation = null;
+  targets.forEach((target, index) => {
+    const animation = target.element.animate(target.keyframes, {
+      duration,
+      easing: opening ? UI_MOTION_ENTER_EASING : UI_MOTION_EXIT_EASING,
+      fill: 'both'
+    });
+    state.animations.push(animation);
+    if (index === 0) primaryAnimation = animation;
+  });
+
+  if (primaryAnimation && onFinish) {
+    primaryAnimation.onfinish = onFinish;
+  }
+}
+
+function finishUiMotionHide(element, state, generation) {
+  if (state.generation !== generation || state.phase !== 'exiting') return;
+  state.animations.forEach(animation => animation.cancel());
+  state.animations = [];
+  state.internalMutation = true;
+  if (state.hideMode === 'hidden') {
+    element.style.display = state.inlineDisplay;
+    element.hidden = true;
+  } else if (state.hideMode === 'inline') {
+    element.style.display = 'none';
+  } else {
+    element.style.display = state.inlineDisplay;
+    if (state.hadHiddenClass) element.classList.add('hidden');
+  }
+  state.phase = 'hidden';
+}
+
+function syncUiMotionElement(element) {
+  const state = UI_MOTION_STATES.get(element);
+  if (!state) return;
+  if (state.internalMutation) {
+    state.internalMutation = false;
+    return;
+  }
+  const visible = isUiMotionVisible(element);
+  if (state.phase === 'exiting') {
+    if (!visible) return;
+    state.generation += 1;
+    state.phase = 'visible';
+    state.visible = true;
+    if (state.hideMode === 'class') {
+      element.style.display = state.inlineDisplay;
+    }
+    state.display = getComputedStyle(element).display;
+    state.inlineDisplay = element.style.display;
+    playUiMotion(element, 'enter', getUiMotionKind(element));
+    return;
+  }
+  if (visible === state.visible) return;
+
+  state.generation += 1;
+  const generation = state.generation;
+  if (visible) {
+    state.visible = true;
+    state.phase = 'visible';
+    state.display = getComputedStyle(element).display;
+    state.inlineDisplay = element.style.display;
+    playUiMotion(element, 'enter', getUiMotionKind(element));
+    return;
+  }
+
+  state.visible = false;
+  state.phase = 'exiting';
+  state.inlineDisplay = element.style.display;
+  state.hideMode = element.hidden ? 'hidden' : element.style.display === 'none' ? 'inline' : 'class';
+  state.hadHiddenClass = element.classList.contains('hidden');
+  const display = getUiMotionDisplay(element, state.display);
+  state.internalMutation = true;
+  element.hidden = false;
+  if (state.hadHiddenClass) element.classList.remove('hidden');
+  if (element.style.display === 'none' || getComputedStyle(element).display === 'none') {
+    element.style.display = display;
+  }
+  const complete = () => finishUiMotionHide(element, state, generation);
+  playUiMotion(element, 'exit', getUiMotionKind(element), complete);
+  if (UI_MOTION_REDUCED || typeof element.animate !== 'function') {
+    complete();
+  }
+}
+
+function observeUiMotionElement(element) {
+  const visible = isUiMotionVisible(element);
+  UI_MOTION_STATES.set(element, {
+    visible,
+    phase: visible ? 'visible' : 'hidden',
+    generation: 0,
+    display: visible ? getComputedStyle(element).display : getUiMotionDisplay(element),
+    inlineDisplay: element.style.display,
+    animations: []
+  });
+  const observer = new MutationObserver(() => syncUiMotionElement(element));
+  observer.observe(element, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+  UI_MOTION_OBSERVERS.push(observer);
+}
+
+document.querySelectorAll(UI_MOTION_SELECTOR).forEach(observeUiMotionElement);
 
 let username = '';
 let userId = '';
@@ -134,6 +371,20 @@ function getSupabaseClient() {
   return supabaseClientPromise;
 }
 
+function getTusClient() {
+  if (!tusClientPromise) {
+    tusClientPromise = loadOptionalScript(
+      'tus-js-client',
+      'https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js',
+      () => typeof window.tus?.Upload === 'function'
+    ).then(() => window.tus).catch(error => {
+      tusClientPromise = null;
+      throw error;
+    });
+  }
+  return tusClientPromise;
+}
+
 function getEmailJsClient() {
   if (!emailJsClientPromise) {
     emailJsClientPromise = loadOptionalScript(
@@ -169,7 +420,7 @@ function loadVideoEditor() {
     loadOptionalStylesheet('video-editor.css'),
     loadOptionalScript(
       'video-editor',
-      new URL('./video-editor.min.js?v=34', window.location.href).href,
+      new URL('./video-editor.min.js?v=35', window.location.href).href,
       () => Boolean(window.VideoEditor)
     )
   ]).then(() => window.VideoEditor);
@@ -719,9 +970,98 @@ const DEFAULT_BETTER_UI_SETTINGS = Object.freeze({
   magnification: 20,
   blur: 18,
   tintIntensity: 18,
-  border: true
+  border: true,
+  shadowStyle: 'soft',
+  shadowIntensity: 100,
+  shadowColor: 'white',
+  tintColor: 'white',
+  dynamicTint: false
 });
+const BETTER_UI_SHADOW_STYLES = Object.freeze({
+  none: 'inset 0 0 0 transparent',
+  soft: 'inset 0 0 5px 1px rgba(var(--better-ui-shadow-rgb), calc(0.36 * var(--better-ui-shadow-intensity, 1)))',
+  topLeft: 'inset 3px 3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)))',
+  top: 'inset 0 3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)))',
+  topRight: 'inset -3px 3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)))',
+  left: 'inset 3px 0 5px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)))',
+  deep: 'inset 0 0 8px 2px rgba(var(--better-ui-shadow-rgb), calc(0.5 * var(--better-ui-shadow-intensity, 1)))',
+  right: 'inset -3px 0 5px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)))',
+  bottomRight: 'inset -3px -3px 5px rgba(var(--better-ui-shadow-rgb), calc(0.42 * var(--better-ui-shadow-intensity, 1)))'
+});
+const BETTER_UI_LENS_FILTER_ID = 'betterUiConvexLensFilter';
+let betterUiLensDisplacementMap = null;
 let betterUiSettings = { ...DEFAULT_BETTER_UI_SETTINGS };
+
+function initializeBetterUiLensFilter() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    console.error('Unable to initialize the Better UI convex lens filter.');
+    return null;
+  }
+
+  const imageData = context.createImageData(canvas.width, canvas.height);
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const dx = ((x / (canvas.width - 1)) - 0.5) * 2;
+      const dy = ((y / (canvas.height - 1)) - 0.5) * 2;
+      const radius = Math.hypot(dx, dy);
+      const falloff = radius < 1 ? Math.pow(1 - (radius * radius), 2) : 0;
+      const index = (y * canvas.width + x) * 4;
+      imageData.data[index] = Math.round(128 - (dx * falloff * 127));
+      imageData.data[index + 1] = Math.round(128 - (dy * falloff * 127));
+      imageData.data[index + 2] = 128;
+      imageData.data[index + 3] = 255;
+    }
+  }
+  context.putImageData(imageData, 0, 0);
+
+  const svgNamespace = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNamespace, 'svg');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.style.cssText = 'position:fixed;width:0;height:0;overflow:hidden;pointer-events:none';
+  const filter = document.createElementNS(svgNamespace, 'filter');
+  filter.setAttribute('id', BETTER_UI_LENS_FILTER_ID);
+  filter.setAttribute('x', '0%');
+  filter.setAttribute('y', '0%');
+  filter.setAttribute('width', '100%');
+  filter.setAttribute('height', '100%');
+  filter.setAttribute('filterUnits', 'objectBoundingBox');
+  filter.setAttribute('primitiveUnits', 'userSpaceOnUse');
+  filter.setAttribute('color-interpolation-filters', 'sRGB');
+
+  const image = document.createElementNS(svgNamespace, 'feImage');
+  const displacementMap = document.createElementNS(svgNamespace, 'feDisplacementMap');
+  image.setAttribute('x', '0%');
+  image.setAttribute('y', '0%');
+  image.setAttribute('width', '100%');
+  image.setAttribute('height', '100%');
+  image.setAttribute('preserveAspectRatio', 'none');
+  let imageUrl;
+  try {
+    imageUrl = canvas.toDataURL('image/png');
+  } catch (error) {
+    console.error('Unable to prepare the Better UI convex lens displacement map:', error);
+    return null;
+  }
+  image.setAttribute('href', imageUrl);
+  image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', imageUrl);
+  image.setAttribute('result', 'lensMap');
+  displacementMap.setAttribute('in', 'SourceGraphic');
+  displacementMap.setAttribute('in2', 'lensMap');
+  displacementMap.setAttribute('xChannelSelector', 'R');
+  displacementMap.setAttribute('yChannelSelector', 'G');
+  displacementMap.setAttribute('scale', '0');
+  filter.append(image, displacementMap);
+  svg.appendChild(filter);
+  document.body.appendChild(svg);
+  betterUiLensDisplacementMap = displacementMap;
+  return displacementMap;
+}
+
+initializeBetterUiLensFilter();
 let secretNotificationSent = false;
 let userProfileImage = null;
 let chatBackground = 'default';
@@ -830,7 +1170,18 @@ function normalizeBetterUiSettings(rawSettings = {}) {
   normalized.blur = clampBetterUiNumber(normalized.blur, 0, 60, DEFAULT_BETTER_UI_SETTINGS.blur);
   normalized.tintIntensity = clampBetterUiNumber(normalized.tintIntensity, 0, 100, DEFAULT_BETTER_UI_SETTINGS.tintIntensity);
   normalized.border = normalized.border !== false;
+  normalized.shadowIntensity = clampBetterUiNumber(normalized.shadowIntensity, 0, 100, DEFAULT_BETTER_UI_SETTINGS.shadowIntensity);
+  normalized.shadowStyle = Object.prototype.hasOwnProperty.call(BETTER_UI_SHADOW_STYLES, normalized.shadowStyle)
+    ? normalized.shadowStyle
+    : DEFAULT_BETTER_UI_SETTINGS.shadowStyle;
+  normalized.shadowColor = normalized.shadowColor === 'black' ? 'black' : 'white';
+  normalized.tintColor = normalized.tintColor === 'black' ? 'black' : 'white';
+  normalized.dynamicTint = normalized.dynamicTint === true;
   return normalized;
+}
+
+function getBetterUiLensDisplacementScale() {
+  return (betterUiSettings.magnification / 100) * 100;
 }
 
 function getBetterUiSettingsSnapshot() {
@@ -841,6 +1192,11 @@ function getBetterUiSettingsSnapshot() {
     blur: betterUiSettings.blur,
     tintIntensity: betterUiSettings.tintIntensity,
     border: betterUiSettings.border,
+    shadowStyle: betterUiSettings.shadowStyle,
+    shadowIntensity: betterUiSettings.shadowIntensity,
+    shadowColor: betterUiSettings.shadowColor,
+    tintColor: betterUiSettings.tintColor,
+    dynamicTint: betterUiSettings.dynamicTint,
     tintMode: localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
   };
 }
@@ -855,32 +1211,98 @@ function updateBetterUiSettingsFromControls() {
   const magnificationInput = document.getElementById('betterUiMagnification');
   const blurInput = document.getElementById('betterUiBlur');
   const tintIntensityInput = document.getElementById('betterUiTintIntensity');
+  const shadowIntensityInput = document.getElementById('betterUiShadowIntensity');
   const borderToggle = document.getElementById('betterUiBorderToggle');
+  const dynamicTintToggle = document.getElementById('betterUiDynamicTintToggle');
+  const tintColorToggle = document.getElementById('betterUiTintColorToggle');
+  const selectedShadowStyle = document.querySelector('input[name="betterUiShadowStyle"]:checked');
+  const selectedShadowColor = document.querySelector('input[name="betterUiShadowColor"]:checked');
 
   betterUiSettings.transparency = clampBetterUiNumber(transparencyInput ? transparencyInput.value : betterUiSettings.transparency, 0, 100, DEFAULT_BETTER_UI_SETTINGS.transparency);
   betterUiSettings.magnification = clampBetterUiNumber(magnificationInput ? magnificationInput.value : betterUiSettings.magnification, 0, 100, DEFAULT_BETTER_UI_SETTINGS.magnification);
   betterUiSettings.blur = clampBetterUiNumber(blurInput ? blurInput.value : betterUiSettings.blur, 0, 60, DEFAULT_BETTER_UI_SETTINGS.blur);
   betterUiSettings.tintIntensity = clampBetterUiNumber(tintIntensityInput ? tintIntensityInput.value : betterUiSettings.tintIntensity, 0, 100, DEFAULT_BETTER_UI_SETTINGS.tintIntensity);
+  betterUiSettings.shadowIntensity = clampBetterUiNumber(shadowIntensityInput ? shadowIntensityInput.value : betterUiSettings.shadowIntensity, 0, 100, DEFAULT_BETTER_UI_SETTINGS.shadowIntensity);
   betterUiSettings.border = borderToggle ? borderToggle.checked : betterUiSettings.border;
+  betterUiSettings.shadowStyle = selectedShadowStyle && Object.prototype.hasOwnProperty.call(BETTER_UI_SHADOW_STYLES, selectedShadowStyle.value)
+    ? selectedShadowStyle.value
+    : betterUiSettings.shadowStyle;
+  betterUiSettings.shadowColor = selectedShadowColor && selectedShadowColor.value === 'black' ? 'black' : 'white';
+  betterUiSettings.tintColor = tintColorToggle
+    ? (tintColorToggle.checked ? 'white' : 'black')
+    : betterUiSettings.tintColor;
+  betterUiSettings.dynamicTint = dynamicTintToggle ? dynamicTintToggle.checked : betterUiSettings.dynamicTint;
+}
+
+function syncBetterUiPreviewVars() {
+  const preview = document.querySelector('.better-ui-preview');
+  if (!preview) return;
+
+  const theme = localStorage.getItem('theme') || 'dark';
+  const tintRgb = betterUiSettings.dynamicTint
+    ? (theme === 'light' ? '255, 255, 255' : '0, 0, 0')
+    : (betterUiSettings.tintColor === 'black' ? '0, 0, 0' : '255, 255, 255');
+  const transparencyValue = betterUiSettings.transparency / 100;
+  const tintIntensityValue = betterUiSettings.tintIntensity / 100;
+  const lensScale = getBetterUiLensDisplacementScale();
+  const borderOpacity = betterUiSettings.border ? 1 : 0;
+  const shadowIntensity = (betterUiSettings.shadowIntensity / 100).toFixed(3);
+  const shadowRgb = betterUiSettings.shadowColor === 'black' ? '0, 0, 0' : '255, 255, 255';
+  const innerShadow = BETTER_UI_SHADOW_STYLES[betterUiSettings.shadowStyle];
+
+  if (betterUiLensDisplacementMap) {
+    betterUiLensDisplacementMap.setAttribute('scale', lensScale.toFixed(3));
+  }
+  preview.style.setProperty('--better-ui-tint-rgb', tintRgb);
+  preview.style.setProperty('--better-ui-transparency', transparencyValue.toFixed(3));
+  preview.style.setProperty('--better-ui-tint-intensity', tintIntensityValue.toFixed(3));
+  preview.style.setProperty('--better-ui-blur', `${betterUiSettings.blur || 0}px`);
+  preview.style.setProperty('--better-ui-lens-backdrop-filter', `${lensScale > 0 ? `url(#${BETTER_UI_LENS_FILTER_ID}) ` : ''}blur(${betterUiSettings.blur || 0}px)`);
+  preview.style.setProperty('--better-ui-border-opacity', borderOpacity.toString());
+  preview.style.setProperty('--better-ui-shadow-rgb', shadowRgb);
+  preview.style.setProperty('--better-ui-shadow-intensity', shadowIntensity);
+  preview.style.setProperty('--better-ui-inner-shadow', innerShadow);
+  const shadowPicker = document.querySelector('.better-ui-shadow-picker');
+  if (shadowPicker) shadowPicker.style.setProperty('--better-ui-shadow-intensity', shadowIntensity);
+}
+
+function saveBetterUiSettingsLocally() {
   localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
   syncBetterUiStyleVars();
+}
+
+function resetBetterUiSettingsToDefaults() {
+  betterUiSettings = { ...DEFAULT_BETTER_UI_SETTINGS };
+  saveBetterUiSettingsLocally();
 }
 
 function syncBetterUiStyleVars() {
   const root = document.documentElement;
   const theme = localStorage.getItem('theme') || 'dark';
-  const tintRgb = theme === 'light' ? '255, 255, 255' : '0, 0, 0';
+  const tintRgb = betterUiSettings.dynamicTint
+    ? (theme === 'light' ? '255, 255, 255' : '0, 0, 0')
+    : (betterUiSettings.tintColor === 'black' ? '0, 0, 0' : '255, 255, 255');
   const transparencyValue = betterUiSettings.transparency / 100;
   const tintIntensityValue = betterUiSettings.tintIntensity / 100;
-  const magnificationValue = 1 + (betterUiSettings.magnification / 100) * 0.6;
+  const lensScale = getBetterUiLensDisplacementScale();
   const borderOpacity = betterUiSettings.border ? 1 : 0;
+  const shadowIntensity = (betterUiSettings.shadowIntensity / 100).toFixed(3);
+  const shadowRgb = betterUiSettings.shadowColor === 'black' ? '0, 0, 0' : '255, 255, 255';
+  const innerShadow = BETTER_UI_SHADOW_STYLES[betterUiSettings.shadowStyle];
 
+  if (betterUiLensDisplacementMap) {
+    betterUiLensDisplacementMap.setAttribute('scale', lensScale.toFixed(3));
+  }
   root.style.setProperty('--better-ui-tint-rgb', tintRgb);
   root.style.setProperty('--better-ui-transparency', transparencyValue.toFixed(3));
   root.style.setProperty('--better-ui-tint-intensity', tintIntensityValue.toFixed(3));
   root.style.setProperty('--better-ui-blur', `${betterUiSettings.blur || 0}px`);
-  root.style.setProperty('--better-ui-magnification', magnificationValue.toFixed(3));
+  root.style.setProperty('--better-ui-lens-backdrop-filter', `${lensScale > 0 ? `url(#${BETTER_UI_LENS_FILTER_ID}) ` : ''}blur(${betterUiSettings.blur || 0}px)`);
   root.style.setProperty('--better-ui-border-opacity', borderOpacity.toString());
+  root.style.setProperty('--better-ui-shadow-rgb', shadowRgb);
+  root.style.setProperty('--better-ui-shadow-intensity', shadowIntensity);
+  root.style.setProperty('--better-ui-inner-shadow', innerShadow);
+  syncBetterUiPreviewVars();
 }
 
 let loadingThemeDynamic = localStorage.getItem('loader_theme_dynamic') !== 'false';
@@ -2297,9 +2719,10 @@ function showNotification(message, isError = false) {
     </div>
   `;
   document.getElementById('chat-app').appendChild(notification);
+  playUiMotion(notification, 'enter', 'toast');
   
   setTimeout(() => {
-    notification.remove();
+    playUiMotion(notification, 'exit', 'toast', () => notification.remove());
   }, 3000);
 }
 
@@ -2496,6 +2919,7 @@ function showDownloadLinkNotification(url, filename) {
 
   const container = document.getElementById('chat-app');
   container.appendChild(notification);
+  playUiMotion(notification, 'enter', 'toast');
 
   const copyBtn = notification.querySelector('.copy-link-btn');
   const linkEl = notification.querySelector('.download-link');
@@ -2513,7 +2937,9 @@ function showDownloadLinkNotification(url, filename) {
     });
   });
 
-  setTimeout(() => notification.remove(), 12000);
+  setTimeout(() => {
+    playUiMotion(notification, 'exit', 'toast', () => notification.remove());
+  }, 12000);
 }
 
 // Show confirmation dialog (theme-matched)
@@ -3313,65 +3739,170 @@ function downloadMessageMedia(messageDiv) {
 }
 
 // Upload file to Cloudinary
-function uploadToCloudinary(file) {
-  return new Promise((resolve, reject) => {
-    const uploadProgress = document.getElementById('uploadProgress');
-    const progressFill = document.getElementById('progressFill');
-    const progressText = document.getElementById('progressText');
-    
-    uploadProgress.style.display = 'flex';
-    progressFill.style.width = '0%';
-    progressText.textContent = 'Uploading file...';
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', 'chat_upload');
-    formData.append('cloud_name', 'dbjmbf92h');
-    const rawExtensions = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar|7z)$/i;
-    const uploadResourceType = file.type.startsWith('image/')
-      ? 'image'
-      : file.type.startsWith('video/') || file.type.startsWith('audio/')
-        ? 'video'
-        : rawExtensions.test(file.name)
-          ? 'raw'
-          : 'raw';
-    formData.append('resource_type', uploadResourceType);
-    
-    const xhr = new XMLHttpRequest();
-    
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) {
-        const percentComplete = Math.round((e.loaded / e.total) * 100);
-        progressFill.style.width = percentComplete + '%';
-        progressText.textContent = `Uploading: ${percentComplete}%`;
-      }
-    });
-    
-    xhr.addEventListener('load', () => {
-      if (xhr.status === 200) {
-        const response = JSON.parse(xhr.responseText);
-        progressFill.style.width = '100%';
-        progressText.textContent = 'Upload complete!';
-        
-        setTimeout(() => {
-          uploadProgress.style.display = 'none';
-        }, 1000);
-        
+function uploadToCloudinary(file, onProgress) {
+  const uploadProgress = document.getElementById('uploadProgress');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  const uploadResourceType = file.type.startsWith('image/')
+    ? 'image'
+    : file.type.startsWith('video/') || file.type.startsWith('audio/')
+      ? 'video'
+      : 'raw';
+  const cloudName = 'dbjmbf92h';
+  const uploadPreset = 'chat_upload';
+  const chunkSize = 20 * 1024 * 1024;
+  const useChunkedUpload = file.size > chunkSize;
+
+  if (!uploadProgress || !progressFill || !progressText) {
+    return Promise.reject(new Error('Upload progress UI is unavailable.'));
+  }
+
+  uploadProgress.style.display = 'flex';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Uploading file...';
+
+  function setProgress(loaded, total) {
+    const percent = total ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+    progressFill.style.width = `${percent}%`;
+    progressText.textContent = `Uploading: ${percent}%`;
+    if (typeof onProgress === 'function') onProgress(percent);
+  }
+
+  function uploadChunk(blob, start, end, uploadId) {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', blob, file.name);
+      formData.append('upload_preset', uploadPreset);
+
+      const xhr = new XMLHttpRequest();
+      xhr.upload.addEventListener('progress', event => {
+        if (event.lengthComputable) setProgress(start + event.loaded, file.size);
+      });
+      xhr.addEventListener('load', () => {
+        let response;
+        try {
+          response = JSON.parse(xhr.responseText);
+        } catch (error) {
+          reject(new Error(`Cloudinary returned an invalid response (HTTP ${xhr.status}).`));
+          return;
+        }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(response.error?.message || `Cloudinary upload failed (HTTP ${xhr.status}).`));
+          return;
+        }
         resolve(response);
-      } else {
-        uploadProgress.style.display = 'none';
-        reject(new Error('Upload failed'));
+      });
+      xhr.addEventListener('error', () => reject(new Error('Network error during Cloudinary upload.')));
+      xhr.addEventListener('abort', () => reject(new Error('Cloudinary upload was cancelled.')));
+      xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/${uploadResourceType}/upload`);
+      if (useChunkedUpload) {
+        xhr.setRequestHeader('X-Unique-Upload-Id', uploadId);
+        xhr.setRequestHeader('Content-Range', `bytes ${start}-${end - 1}/${file.size}`);
       }
+      xhr.send(formData);
     });
-    
-    xhr.addEventListener('error', () => {
+  }
+
+  const upload = (async () => {
+    if (!useChunkedUpload) {
+      return uploadChunk(file, 0, file.size, '');
+    }
+
+    const uploadId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let response = null;
+    for (let start = 0; start < file.size; start += chunkSize) {
+      const end = Math.min(file.size, start + chunkSize);
+      response = await uploadChunk(file.slice(start, end), start, end, uploadId);
+      if (end < file.size && response.done === true) {
+        throw new Error('Cloudinary completed the upload before all file chunks were sent.');
+      }
+    }
+    if (!response || !response.secure_url || !response.public_id) {
+      throw new Error('Cloudinary did not confirm the completed chunked upload.');
+    }
+    return response;
+  })();
+
+  return upload.then(response => {
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Upload complete!';
+    if (typeof onProgress === 'function') onProgress(100);
+    window.setTimeout(() => {
       uploadProgress.style.display = 'none';
-      reject(new Error('Upload failed'));
-    });
-    
-    xhr.open('POST', 'https://api.cloudinary.com/v1_1/dbjmbf92h/upload');
-    xhr.send(formData);
+    }, 1000);
+    return response;
+  }).catch(error => {
+    uploadProgress.style.display = 'none';
+    throw error;
   });
+}
+
+async function uploadLargeFileToSupabase(file, fileName) {
+  const [client, tus] = await Promise.all([getSupabaseClient(), getTusClient()]);
+  const sessionResult = await client.auth.getSession();
+  if (sessionResult.error) throw sessionResult.error;
+
+  const projectId = new URL(supabaseUrl).hostname.split('.')[0];
+  const endpoint = `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`;
+  const uploadProgress = document.getElementById('uploadProgress');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  if (!uploadProgress || !progressFill || !progressText) {
+    throw new Error('Upload progress UI is unavailable.');
+  }
+  uploadProgress.style.display = 'flex';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Preparing resumable upload...';
+
+  const token = sessionResult.data.session?.access_token || supabaseKey;
+  await new Promise((resolve, reject) => {
+    const upload = new tus.Upload(file, {
+      endpoint,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${token}`,
+        apikey: supabaseKey,
+        'x-upsert': 'false'
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: 6 * 1024 * 1024,
+      metadata: {
+        bucketName: 'chat-files',
+        objectName: fileName,
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600'
+      },
+      onError: error => reject(error),
+      onProgress: (bytesUploaded, bytesTotal) => {
+        const percent = bytesTotal ? Math.round((bytesUploaded / bytesTotal) * 100) : 0;
+        progressFill.style.width = `${percent}%`;
+        progressText.textContent = `Uploading: ${percent}%`;
+      },
+      onSuccess: resolve
+    });
+
+    upload.findPreviousUploads().then(previousUploads => {
+      if (previousUploads.length) upload.resumeFromPreviousUpload(previousUploads[0]);
+      upload.start();
+    }).catch(reject);
+  }).catch(error => {
+    uploadProgress.style.display = 'none';
+    throw error;
+  });
+
+  progressFill.style.width = '100%';
+  progressText.textContent = 'Upload complete!';
+  window.setTimeout(() => {
+    uploadProgress.style.display = 'none';
+  }, 1000);
+  const publicUrlResult = client.storage.from('chat-files').getPublicUrl(fileName);
+  const storageUrl = publicUrlResult?.data?.publicUrl || publicUrlResult?.data?.publicURL;
+  if (publicUrlResult?.error) throw publicUrlResult.error;
+  if (!storageUrl) throw new Error('Unable to retrieve Supabase public URL.');
+  return { storage: 'supabase', storagePath: fileName, secure_url: storageUrl };
 }
 
 // Start voice recording
@@ -4051,6 +4582,7 @@ function showReactionPicker(messageDiv, event) {
     modal.id = 'reactionPickerModal';
     modal.className = 'reaction-picker-modal';
     document.body.appendChild(modal);
+    observeUiMotionElement(modal);
   }
 
   const recent = getRecentReactions();
@@ -4316,6 +4848,7 @@ function showReactionUsers(messageKey, emoji, users) {
     modal.id = 'reactionUsersModal';
     modal.className = 'reaction-users-modal';
     document.body.appendChild(modal);
+    observeUiMotionElement(modal);
   }
 
   let usersList = '';
@@ -4801,13 +5334,29 @@ async function initializeChatApp() {
   let sidebarDragMoved = false;
   let sidebarDragOffsetX = 0;
   let sidebarDragOffsetY = 0;
+  let sidebarClosing = false;
+
+  function setMobileSidebarOpen(open) {
+    if (open) {
+      sidebarClosing = false;
+      chatSidebar.classList.add('mobile-open');
+      playUiMotion(chatSidebar, 'enter', 'drawer');
+      return;
+    }
+    if (!chatSidebar.classList.contains('mobile-open') || sidebarClosing) return;
+    sidebarClosing = true;
+    playUiMotion(chatSidebar, 'exit', 'drawer', () => {
+      chatSidebar.classList.remove('mobile-open');
+      sidebarClosing = false;
+    });
+  }
 
   sidebarToggle.addEventListener('click', (e) => {
     if (sidebarDragMoved) {
       sidebarDragMoved = false;
       return;
     }
-    chatSidebar.classList.toggle('mobile-open');
+    setMobileSidebarOpen(!chatSidebar.classList.contains('mobile-open'));
   });
 
   sidebarToggle.addEventListener('pointerdown', (e) => {
@@ -4854,7 +5403,7 @@ async function initializeChatApp() {
         chatSidebar.classList.contains('mobile-open') &&
         !chatSidebar.contains(e.target) &&
         !sidebarToggle.contains(e.target)) {
-      chatSidebar.classList.remove('mobile-open');
+      setMobileSidebarOpen(false);
     }
   });
 
@@ -6178,7 +6727,8 @@ async function initializeChatApp() {
         const normalizedVisit = {
           name: String(visit.name).trim(),
           channel: visit.channel || 'general',
-          timestamp: Number(visit.timestamp) || 0,
+          timestamp: 0,
+          visitedAt: Number(visit.visitedAt) || Number(visit.timestamp) || 0,
           userId: visit.userId || null
         };
 
@@ -6222,10 +6772,12 @@ async function initializeChatApp() {
     const channel = user.channel || 'general';
     const key = normalizeRecentChatKey(user);
     if (!key) return;
+    const existing = recentChatUsers[key] || visits[key];
     visits[key] = {
       name: user.name.trim(),
       channel,
-      timestamp: Date.now(),
+      timestamp: Number(existing?.timestamp) || 0,
+      visitedAt: Date.now(),
       userId: user.userId || null
     };
     saveRecentChatVisits(visits);
@@ -6348,6 +6900,10 @@ async function populateRecentChatsList() {
         name: user.name.trim(),
         channel: user.channel || 'general',
         timestamp,
+        online: Object.values(onlineUsers).some(onlineUser =>
+          getRecentChatKey(onlineUser) === key ||
+          normalizeName(onlineUser.name || onlineUser.username || '') === normalizeName(user.name)
+        ),
         userId: user.userId || existing?.userId || null
       });
     }
@@ -6361,7 +6917,8 @@ async function populateRecentChatsList() {
         uniqueChats.set(key, {
           name: onlineUser.name || onlineUser.username || onlineUser.userName || onlineUser.sender || onlineUser.user || 'Unknown',
           channel: onlineUser.channel || 'general',
-          timestamp: Date.now(),
+          timestamp: Number(onlineUser.lastActive) || 0,
+          online: Boolean(onlineUser.online),
           userId: onlineUser.userId || null
         });
       }
@@ -6455,8 +7012,8 @@ async function populateRecentChatsList() {
       applyProfileImageToAvatarElement(avatarDiv, displayName, null);
     });
 
-    let lastOnlineText = 'Recently';
-    if (user.timestamp) {
+    let lastOnlineText = user.online ? 'Online now' : 'Recently';
+    if (!user.online && user.timestamp) {
       const timeDiff = Date.now() - user.timestamp;
       const minutes = Math.floor(timeDiff / 60000);
       const hours = Math.floor(timeDiff / 3600000);
@@ -9681,6 +10238,7 @@ async function populateRecentChatsList() {
       modal = document.createElement('div');
       modal.id = 'customModal';
       modal.className = 'modal custom-modal';
+      modal.style.display = 'none';
       modal.innerHTML = `
         <div class="modal-content">
           <div class="modal-header">
@@ -9691,6 +10249,7 @@ async function populateRecentChatsList() {
         </div>
       `;
       document.body.appendChild(modal);
+      observeUiMotionElement(modal);
       document.getElementById('customModalClose').addEventListener('click', () => {
         modal.style.display = 'none';
       });
@@ -9759,6 +10318,7 @@ async function populateRecentChatsList() {
       modal = document.createElement('div');
       modal.id = 'customModal';
       modal.className = 'modal custom-modal';
+      modal.style.display = 'none';
       modal.innerHTML = `
         <div class="modal-content">
           <div class="modal-header">
@@ -9769,6 +10329,7 @@ async function populateRecentChatsList() {
         </div>
       `;
       document.body.appendChild(modal);
+      observeUiMotionElement(modal);
       document.getElementById('customModalClose').addEventListener('click', () => {
         modal.style.display = 'none';
       });
@@ -11162,7 +11723,14 @@ async function populateRecentChatsList() {
   const betterUiMagnification = document.getElementById('betterUiMagnification');
   const betterUiBlur = document.getElementById('betterUiBlur');
   const betterUiTintIntensity = document.getElementById('betterUiTintIntensity');
+  const betterUiShadowIntensity = document.getElementById('betterUiShadowIntensity');
   const betterUiBorderToggle = document.getElementById('betterUiBorderToggle');
+  const betterUiDynamicTintToggle = document.getElementById('betterUiDynamicTintToggle');
+  const betterUiTintColorOption = document.getElementById('betterUiTintColorOption');
+  const betterUiTintColorToggle = document.getElementById('betterUiTintColorToggle');
+  const betterUiShadowOptions = document.querySelectorAll('input[name="betterUiShadowStyle"]');
+  const betterUiShadowColorOptions = document.querySelectorAll('input[name="betterUiShadowColor"]');
+  const resetBetterUiSettingsBtn = document.getElementById('resetBetterUiSettingsBtn');
   const betterUiUserPicker = document.getElementById('betterUiUserPicker');
   const applyBetterUiImportBtn = document.getElementById('applyBetterUiImportBtn');
 
@@ -11171,15 +11739,34 @@ async function populateRecentChatsList() {
     if (betterUiMagnification) betterUiMagnification.value = betterUiSettings.magnification;
     if (betterUiBlur) betterUiBlur.value = betterUiSettings.blur;
     if (betterUiTintIntensity) betterUiTintIntensity.value = betterUiSettings.tintIntensity;
+    if (betterUiShadowIntensity) betterUiShadowIntensity.value = betterUiSettings.shadowIntensity;
     if (betterUiBorderToggle) betterUiBorderToggle.checked = betterUiSettings.border;
+    if (betterUiDynamicTintToggle) betterUiDynamicTintToggle.checked = betterUiSettings.dynamicTint;
+    if (betterUiTintColorToggle) betterUiTintColorToggle.checked = betterUiSettings.tintColor === 'white';
+    if (betterUiTintColorOption) {
+      betterUiTintColorOption.style.display = betterUiSettings.dynamicTint ? 'none' : '';
+    }
+    betterUiShadowOptions.forEach(option => {
+      option.checked = option.value === betterUiSettings.shadowStyle;
+    });
+    betterUiShadowColorOptions.forEach(option => {
+      option.checked = option.value === betterUiSettings.shadowColor;
+    });
     const transparencyValue = document.getElementById('betterUiTransparencyValue');
     const magnificationValue = document.getElementById('betterUiMagnificationValue');
     const blurValue = document.getElementById('betterUiBlurValue');
     const tintIntensityValue = document.getElementById('betterUiTintIntensityValue');
+    const shadowIntensityValue = document.getElementById('betterUiShadowIntensityValue');
     if (transparencyValue) transparencyValue.textContent = `${betterUiSettings.transparency}%`;
-    if (magnificationValue) magnificationValue.textContent = `${betterUiSettings.magnification}%`;
+    if (magnificationValue) {
+      magnificationValue.textContent = `${(1 + (betterUiSettings.magnification / 100) * 0.5).toFixed(2)}×`;
+    }
     if (blurValue) blurValue.textContent = `${betterUiSettings.blur}px`;
     if (tintIntensityValue) tintIntensityValue.textContent = `${betterUiSettings.tintIntensity}%`;
+    if (shadowIntensityValue) shadowIntensityValue.textContent = `${betterUiSettings.shadowIntensity}%`;
+    const tintColorLabel = document.getElementById('betterUiTintColorLabel');
+    if (tintColorLabel) tintColorLabel.textContent = betterUiSettings.tintColor === 'white' ? 'Light tint' : 'Dark tint';
+    syncBetterUiStyleVars();
   }
 
   function loadBetterUiUserPicker() {
@@ -11261,7 +11848,8 @@ async function populateRecentChatsList() {
       });
       slider.addEventListener('change', async () => {
         setActiveBetterUiSettingRow(null);
-        localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
+        updateBetterUiSettingsFromControls();
+        saveBetterUiSettingsLocally();
         await saveSettingsToFirebase();
       });
     }
@@ -11270,7 +11858,42 @@ async function populateRecentChatsList() {
   if (betterUiBorderToggle) {
     betterUiBorderToggle.addEventListener('change', async () => {
       updateBetterUiSettingsFromControls();
+      saveBetterUiSettingsLocally();
       await saveSettingsToFirebase();
+    });
+  }
+
+  const saveBetterUiOptionChange = async () => {
+    updateBetterUiSettingsFromControls();
+    syncBetterUiControlValues();
+    saveBetterUiSettingsLocally();
+    await saveSettingsToFirebase();
+  };
+
+  if (betterUiDynamicTintToggle) {
+    betterUiDynamicTintToggle.addEventListener('change', saveBetterUiOptionChange);
+  }
+  if (betterUiTintColorToggle) {
+    betterUiTintColorToggle.addEventListener('change', saveBetterUiOptionChange);
+  }
+  betterUiShadowOptions.forEach(option => {
+    option.addEventListener('change', saveBetterUiOptionChange);
+  });
+  betterUiShadowColorOptions.forEach(option => {
+    option.addEventListener('change', saveBetterUiOptionChange);
+  });
+
+  if (resetBetterUiSettingsBtn) {
+    resetBetterUiSettingsBtn.addEventListener('click', async () => {
+      resetBetterUiSettingsToDefaults();
+      betterUiEnabled = DEFAULT_BETTER_UI_SETTINGS.enabled;
+      localStorage.setItem('better_ui_enabled', betterUiEnabled.toString());
+      menuBetterUiToggle.checked = betterUiEnabled;
+      applyBetterUi(betterUiEnabled);
+      syncBetterUiControlValues();
+      setActiveBetterUiSettingRow(null);
+      await saveSettingsToFirebase();
+      showNotification('Better UI restored to defaults');
     });
   }
 
@@ -12169,48 +12792,42 @@ async function populateRecentChatsList() {
   });
 
   async function shareChatFile(file) {
-    const isPdf = /\.pdf$/i.test(file.name);
-    const isRaw = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar)$/i.test(file.name);
+    const isRaw = /\.(pdf|docx?|xlsx?|pptx?|txt|csv|zip|rar|7z)$/i.test(file.name);
     const timestamp = Date.now();
-    const fileName = `${userId}_${timestamp}_${file.name.replace(/\s+/g, '_')}`;
+    const safeFileName = file.name.replace(/[\\/#?%*:|"<>]/g, '_').replace(/\s+/g, '_');
+    const fileName = `${userId}_${timestamp}_${safeFileName}`;
     let storageUrl = null;
     let uploadResult = null;
     let storageType = 'cloudinary';
+    let storagePath = '';
+    let resourceType = 'raw';
 
-    if (isPdf || isRaw) {
+    if (isRaw) {
       storageType = 'supabase';
-      let supabaseUpload = null;
-      let client = null;
-      try {
-        client = await getSupabaseClient();
-        supabaseUpload = await client.storage.from('chat-files').upload(fileName, file, {
+      if (file.size > 6 * 1024 * 1024) {
+        uploadResult = await uploadLargeFileToSupabase(file, fileName);
+        storageUrl = uploadResult.secure_url;
+        storagePath = uploadResult.storagePath;
+      } else {
+        const client = await getSupabaseClient();
+        const supabaseUpload = await client.storage.from('chat-files').upload(fileName, file, {
           cacheControl: '3600',
           upsert: false
         });
-      } catch (error) {
-        console.warn('Supabase upload unavailable, falling back to Cloudinary:', error);
-      }
-
-      if (!supabaseUpload || supabaseUpload.error) {
-        if (supabaseUpload?.error) {
-          console.warn('Supabase upload failed, falling back to Cloudinary:', supabaseUpload.error);
-        }
-        const result = await uploadToCloudinary(file);
-        uploadResult = result;
-        storageUrl = result.secure_url;
-        storageType = 'cloudinary';
-      } else {
+        if (supabaseUpload.error) throw supabaseUpload.error;
         uploadResult = supabaseUpload.data;
         const publicUrlResult = client.storage.from('chat-files').getPublicUrl(fileName);
         const publicData = publicUrlResult?.data || {};
         if (publicUrlResult?.error) throw publicUrlResult.error;
         storageUrl = publicData?.publicUrl || publicData?.publicURL || null;
         if (!storageUrl) throw new Error('Unable to retrieve Supabase public URL');
+        storagePath = fileName;
       }
     } else {
       const result = await uploadToCloudinary(file);
       uploadResult = result;
       storageUrl = result.secure_url;
+      resourceType = result.resource_type || 'raw';
     }
 
     let mediaType = 'file';
@@ -12232,7 +12849,11 @@ async function populateRecentChatsList() {
       channel: userChannel,
       ...(mediaType !== 'file' ? {
         mediaType,
-        mediaUrl: storageUrl
+        mediaUrl: storageUrl,
+        storage: storageType,
+        storagePath,
+        publicId: uploadResult?.public_id || '',
+        resourceType
       } : {
         fileData: {
           name: file.name,
@@ -12240,8 +12861,10 @@ async function populateRecentChatsList() {
           url: storageUrl,
           type: file.type,
           storage: storageType,
+          storagePath,
           publicId: uploadResult?.public_id || '',
-          format: uploadResult?.format || ''
+          format: uploadResult?.format || '',
+          resourceType
         }
       })
     };
