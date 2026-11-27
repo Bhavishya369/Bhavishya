@@ -1924,7 +1924,7 @@ function begin(){
           <div class="better-ui-preview" aria-label="Live Better UI preview">
             <div class="better-ui-preview__caption">
               <strong>Live preview</strong>
-              <span>Updates as you adjust settings</span>
+              <span>Updates when you release a slider</span>
             </div>
             <div class="better-ui-preview__stage">
               <div class="better-ui-preview__window">
@@ -2078,6 +2078,17 @@ function begin(){
                 <span class="toggle-slider"></span>
               </label>
               <span class="better-ui-tint-toggle-label" id="betterUiTintColorLabel">Light tint</span>
+            </div>
+            <div class="settings-option">
+              <div class="settings-option-label">
+                <span>Menu &amp; interface tint</span>
+                <p class="settings-option-desc">Choose a dark or light tint for menus and interface panels. Messages, online users, and recent chats keep their current tint.</p>
+              </div>
+              <select id="betterUiInterfaceTintMode" class="better-ui-interface-tint-select" aria-label="Menu and interface tint">
+                <option value="match">Match Better UI tint</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
             </div>
             <div class="settings-option">
               <div class="settings-option-label">

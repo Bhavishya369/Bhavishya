@@ -975,7 +975,8 @@ const DEFAULT_BETTER_UI_SETTINGS = Object.freeze({
   shadowIntensity: 100,
   shadowColor: 'white',
   tintColor: 'white',
-  dynamicTint: false
+  dynamicTint: false,
+  interfaceTintMode: 'match'
 });
 const BETTER_UI_SHADOW_STYLES = Object.freeze({
   none: 'inset 0 0 0 transparent',
@@ -1177,7 +1178,16 @@ function normalizeBetterUiSettings(rawSettings = {}) {
   normalized.shadowColor = normalized.shadowColor === 'black' ? 'black' : 'white';
   normalized.tintColor = normalized.tintColor === 'black' ? 'black' : 'white';
   normalized.dynamicTint = normalized.dynamicTint === true;
+  normalized.interfaceTintMode = ['match', 'dark', 'light'].includes(normalized.interfaceTintMode)
+    ? normalized.interfaceTintMode
+    : DEFAULT_BETTER_UI_SETTINGS.interfaceTintMode;
   return normalized;
+}
+
+function getBetterUiInterfaceTintRgb(themeTintRgb) {
+  if (betterUiSettings.interfaceTintMode === 'dark') return '0, 0, 0';
+  if (betterUiSettings.interfaceTintMode === 'light') return '255, 255, 255';
+  return themeTintRgb;
 }
 
 function getBetterUiLensDisplacementScale() {
@@ -1197,6 +1207,7 @@ function getBetterUiSettingsSnapshot() {
     shadowColor: betterUiSettings.shadowColor,
     tintColor: betterUiSettings.tintColor,
     dynamicTint: betterUiSettings.dynamicTint,
+    interfaceTintMode: betterUiSettings.interfaceTintMode,
     tintMode: localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
   };
 }
@@ -1215,6 +1226,7 @@ function updateBetterUiSettingsFromControls() {
   const borderToggle = document.getElementById('betterUiBorderToggle');
   const dynamicTintToggle = document.getElementById('betterUiDynamicTintToggle');
   const tintColorToggle = document.getElementById('betterUiTintColorToggle');
+  const interfaceTintModeSelect = document.getElementById('betterUiInterfaceTintMode');
   const selectedShadowStyle = document.querySelector('input[name="betterUiShadowStyle"]:checked');
   const selectedShadowColor = document.querySelector('input[name="betterUiShadowColor"]:checked');
 
@@ -1232,6 +1244,11 @@ function updateBetterUiSettingsFromControls() {
     ? (tintColorToggle.checked ? 'white' : 'black')
     : betterUiSettings.tintColor;
   betterUiSettings.dynamicTint = dynamicTintToggle ? dynamicTintToggle.checked : betterUiSettings.dynamicTint;
+  if (interfaceTintModeSelect) {
+    betterUiSettings.interfaceTintMode = ['match', 'dark', 'light'].includes(interfaceTintModeSelect.value)
+      ? interfaceTintModeSelect.value
+      : DEFAULT_BETTER_UI_SETTINGS.interfaceTintMode;
+  }
 }
 
 function syncBetterUiPreviewVars() {
@@ -1242,6 +1259,7 @@ function syncBetterUiPreviewVars() {
   const tintRgb = betterUiSettings.dynamicTint
     ? (theme === 'light' ? '255, 255, 255' : '0, 0, 0')
     : (betterUiSettings.tintColor === 'black' ? '0, 0, 0' : '255, 255, 255');
+  const interfaceTintRgb = getBetterUiInterfaceTintRgb(tintRgb);
   const transparencyValue = betterUiSettings.transparency / 100;
   const tintIntensityValue = betterUiSettings.tintIntensity / 100;
   const lensScale = getBetterUiLensDisplacementScale();
@@ -1254,6 +1272,7 @@ function syncBetterUiPreviewVars() {
     betterUiLensDisplacementMap.setAttribute('scale', lensScale.toFixed(3));
   }
   preview.style.setProperty('--better-ui-tint-rgb', tintRgb);
+  preview.style.setProperty('--better-ui-interface-tint-rgb', interfaceTintRgb);
   preview.style.setProperty('--better-ui-transparency', transparencyValue.toFixed(3));
   preview.style.setProperty('--better-ui-tint-intensity', tintIntensityValue.toFixed(3));
   preview.style.setProperty('--better-ui-blur', `${betterUiSettings.blur || 0}px`);
@@ -1282,6 +1301,7 @@ function syncBetterUiStyleVars() {
   const tintRgb = betterUiSettings.dynamicTint
     ? (theme === 'light' ? '255, 255, 255' : '0, 0, 0')
     : (betterUiSettings.tintColor === 'black' ? '0, 0, 0' : '255, 255, 255');
+  const interfaceTintRgb = getBetterUiInterfaceTintRgb(tintRgb);
   const transparencyValue = betterUiSettings.transparency / 100;
   const tintIntensityValue = betterUiSettings.tintIntensity / 100;
   const lensScale = getBetterUiLensDisplacementScale();
@@ -1294,6 +1314,7 @@ function syncBetterUiStyleVars() {
     betterUiLensDisplacementMap.setAttribute('scale', lensScale.toFixed(3));
   }
   root.style.setProperty('--better-ui-tint-rgb', tintRgb);
+  root.style.setProperty('--better-ui-interface-tint-rgb', interfaceTintRgb);
   root.style.setProperty('--better-ui-transparency', transparencyValue.toFixed(3));
   root.style.setProperty('--better-ui-tint-intensity', tintIntensityValue.toFixed(3));
   root.style.setProperty('--better-ui-blur', `${betterUiSettings.blur || 0}px`);
@@ -11728,6 +11749,7 @@ async function populateRecentChatsList() {
   const betterUiDynamicTintToggle = document.getElementById('betterUiDynamicTintToggle');
   const betterUiTintColorOption = document.getElementById('betterUiTintColorOption');
   const betterUiTintColorToggle = document.getElementById('betterUiTintColorToggle');
+  const betterUiInterfaceTintMode = document.getElementById('betterUiInterfaceTintMode');
   const betterUiShadowOptions = document.querySelectorAll('input[name="betterUiShadowStyle"]');
   const betterUiShadowColorOptions = document.querySelectorAll('input[name="betterUiShadowColor"]');
   const resetBetterUiSettingsBtn = document.getElementById('resetBetterUiSettingsBtn');
@@ -11743,6 +11765,7 @@ async function populateRecentChatsList() {
     if (betterUiBorderToggle) betterUiBorderToggle.checked = betterUiSettings.border;
     if (betterUiDynamicTintToggle) betterUiDynamicTintToggle.checked = betterUiSettings.dynamicTint;
     if (betterUiTintColorToggle) betterUiTintColorToggle.checked = betterUiSettings.tintColor === 'white';
+    if (betterUiInterfaceTintMode) betterUiInterfaceTintMode.value = betterUiSettings.interfaceTintMode;
     if (betterUiTintColorOption) {
       betterUiTintColorOption.style.display = betterUiSettings.dynamicTint ? 'none' : '';
     }
@@ -11843,8 +11866,15 @@ async function populateRecentChatsList() {
       slider.addEventListener('focus', () => setActiveBetterUiSettingRow(row));
       slider.addEventListener('input', () => {
         setActiveBetterUiSettingRow(row);
-        updateBetterUiSettingsFromControls();
-        syncBetterUiControlValues();
+        const valueDisplay = document.getElementById(`${slider.id}Value`);
+        if (valueDisplay) {
+          const value = Number(slider.value);
+          valueDisplay.textContent = slider.id === 'betterUiMagnification'
+            ? `${(1 + (value / 100) * 0.5).toFixed(2)}×`
+            : slider.id === 'betterUiBlur'
+              ? `${value}px`
+              : `${value}%`;
+        }
       });
       slider.addEventListener('change', async () => {
         setActiveBetterUiSettingRow(null);
@@ -11875,6 +11905,9 @@ async function populateRecentChatsList() {
   }
   if (betterUiTintColorToggle) {
     betterUiTintColorToggle.addEventListener('change', saveBetterUiOptionChange);
+  }
+  if (betterUiInterfaceTintMode) {
+    betterUiInterfaceTintMode.addEventListener('change', saveBetterUiOptionChange);
   }
   betterUiShadowOptions.forEach(option => {
     option.addEventListener('change', saveBetterUiOptionChange);

@@ -465,6 +465,7 @@ input[type="submit"] {
 
 :root.better-ui #onlineUsers > .user-item,
 :root.better-ui #recentChats > .user-item {
+  background: var(--better-ui-theme-soft-background) !important;
   backdrop-filter: var(--better-ui-lens-backdrop-filter, blur(var(--better-ui-blur))) !important;
   -webkit-backdrop-filter: var(--better-ui-lens-backdrop-filter, blur(var(--better-ui-blur))) !important;
 }
@@ -473,6 +474,13 @@ input[type="submit"] {
 :root.better-ui .user-item.active {
   background: var(--better-ui-surface-background) !important;
   transform: translateY(-1px) !important;
+}
+
+:root.better-ui #onlineUsers > .user-item:hover,
+:root.better-ui #onlineUsers > .user-item.active,
+:root.better-ui #recentChats > .user-item:hover,
+:root.better-ui #recentChats > .user-item.active {
+  background: var(--better-ui-theme-surface-background) !important;
 }
 
 .user-avatar {
@@ -1512,7 +1520,7 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .message__actions {
-  background: var(--better-ui-surface-background) !important;
+  background: var(--better-ui-theme-surface-background) !important;
   border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
   padding: 4px 6px !important;
@@ -1522,7 +1530,7 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .message-action {
-  background: var(--better-ui-soft-background) !important;
+  background: var(--better-ui-theme-soft-background) !important;
   border: none !important;
   border-radius: 12px !important;
   min-width: 28px !important;
@@ -1538,11 +1546,11 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .message-action:hover {
-  background: var(--better-ui-surface-background) !important;
+  background: var(--better-ui-theme-surface-background) !important;
 }
 
 :root.better-ui .message-action:active {
-  background: var(--better-ui-surface-background) !important;
+  background: var(--better-ui-theme-surface-background) !important;
 }
 
 /* ===== MESSAGE REACTIONS ===== */
@@ -1850,6 +1858,7 @@ body.menu-open .scroll-to-bottom-btn {
 
 :root {
   --better-ui-tint-rgb: 255, 255, 255;
+  --better-ui-interface-tint-rgb: var(--better-ui-tint-rgb);
   --better-ui-transparency: 0.72;
   --better-ui-tint-intensity: 0.18;
   --better-ui-blur: 18px;
@@ -1866,14 +1875,26 @@ body.menu-open .scroll-to-bottom-btn {
   --better-ui-blur: 18px;
   --better-ui-border-opacity: 1;
   --better-ui-surface-background:
+    linear-gradient(rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-tint-intensity))),
+    rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-transparency));
+  --better-ui-theme-surface-background:
     linear-gradient(rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity))),
     rgba(var(--better-ui-tint-rgb), var(--better-ui-transparency));
   --better-ui-soft-background:
+    linear-gradient(rgba(var(--better-ui-interface-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-interface-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
+    rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.11));
+  --better-ui-theme-soft-background:
     linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
     rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.11));
   --better-ui-sent-background:
-    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
+    linear-gradient(rgba(var(--better-ui-interface-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-interface-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
     rgba(124, 58, 237, calc(var(--better-ui-transparency) * 0.25));
+  --better-ui-message-background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5))),
+    rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.35));
+  --better-ui-sent-message-background:
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5))),
+    rgba(124, 58, 237, calc(var(--better-ui-transparency) * 0.4));
   --better-ui-surface-border: rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.18));
   --better-ui-glass-filter: var(--better-ui-lens-backdrop-filter, blur(var(--better-ui-blur)));
   --primary-bg: rgba(15, 23, 42, 0.95);
@@ -1947,8 +1968,8 @@ body.menu-open .scroll-to-bottom-btn {
   border: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.2));
   border-radius: 12px;
   background:
-    linear-gradient(rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-tint-rgb), var(--better-ui-tint-intensity))),
-    rgba(var(--better-ui-tint-rgb), var(--better-ui-transparency));
+    linear-gradient(rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-tint-intensity))),
+    rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-transparency));
   box-shadow: var(--better-ui-inner-shadow), 0 12px 28px rgba(0, 0, 0, 0.2);
   -webkit-backdrop-filter: var(--better-ui-lens-backdrop-filter, var(--better-ui-glass-filter));
   backdrop-filter: var(--better-ui-lens-backdrop-filter, var(--better-ui-glass-filter));
@@ -1988,8 +2009,8 @@ body.menu-open .scroll-to-bottom-btn {
   border: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.16));
   border-radius: 9px 9px 9px 3px;
   background:
-    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
-    rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.11));
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5))),
+    rgba(255, 255, 255, calc(var(--better-ui-transparency) * 0.35));
   color: #fff;
   font-size: 9px;
 }
@@ -1998,8 +2019,8 @@ body.menu-open .scroll-to-bottom-btn {
   justify-self: end;
   border-radius: 9px 9px 3px 9px;
   background:
-    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.18))),
-    rgba(124, 58, 237, calc(var(--better-ui-transparency) * 0.25));
+    linear-gradient(rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5)), rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-tint-intensity) * 0.5))),
+    rgba(124, 58, 237, calc(var(--better-ui-transparency) * 0.4));
 }
 
 .better-ui-preview__composer {
@@ -2007,7 +2028,7 @@ body.menu-open .scroll-to-bottom-btn {
   padding: 3px 5px 3px 9px;
   border: 1px solid rgba(255, 255, 255, calc(var(--better-ui-border-opacity) * 0.18));
   border-radius: 8px;
-  background: rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-transparency) * 0.45));
+  background: rgba(var(--better-ui-interface-tint-rgb), calc(var(--better-ui-transparency) * 0.45));
   color: rgba(255, 255, 255, 0.68);
   font-size: 9px;
 }
@@ -2182,6 +2203,15 @@ body.menu-open .scroll-to-bottom-btn {
   align-items: start;
 }
 
+.better-ui-interface-tint-select {
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  background: var(--secondary-bg);
+  color: var(--text-primary);
+}
+
 :root.better-ui .better-ui-setting-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -2189,16 +2219,16 @@ body.menu-open .scroll-to-bottom-btn {
   align-items: center;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(var(--better-ui-tint-rgb), 0.08);
-  background: rgba(var(--better-ui-tint-rgb), 0.03);
+  border: 1px solid rgba(var(--better-ui-interface-tint-rgb), 0.08);
+  background: rgba(var(--better-ui-interface-tint-rgb), 0.03);
   transition: opacity 0.2s ease, transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
   opacity: 1;
 }
 
 :root.better-ui .better-ui-setting-row.is-focused {
   opacity: 1;
-  border-color: rgba(var(--better-ui-tint-rgb), 0.22);
-  background: rgba(var(--better-ui-tint-rgb), 0.06);
+  border-color: rgba(var(--better-ui-interface-tint-rgb), 0.22);
+  background: rgba(var(--better-ui-interface-tint-rgb), 0.06);
   transform: translateY(-1px);
 }
 
@@ -2209,7 +2239,7 @@ body.menu-open .scroll-to-bottom-btn {
 :root.better-ui .better-ui-setting-row input[type="range"] {
   grid-column: 1 / -1;
   width: 100%;
-  accent-color: rgba(var(--better-ui-tint-rgb), 1);
+  accent-color: rgba(var(--better-ui-interface-tint-rgb), 1);
 }
 
 :root.better-ui .better-ui-setting-value {
@@ -2226,8 +2256,8 @@ body.menu-open .scroll-to-bottom-btn {
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  border: 1px solid rgba(var(--better-ui-tint-rgb), 0.15);
-  background: rgba(var(--better-ui-tint-rgb), 0.04);
+  border: 1px solid rgba(var(--better-ui-interface-tint-rgb), 0.15);
+  background: rgba(var(--better-ui-interface-tint-rgb), 0.04);
   color: var(--text-primary);
   cursor: pointer;
   margin-right: 8px;
@@ -2267,7 +2297,7 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .message {
-  background: var(--better-ui-soft-background) !important;
+  background: var(--better-ui-message-background) !important;
   border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: var(--better-ui-inner-shadow), 0 12px 30px rgba(0, 0, 0, 0.12) !important;
   backdrop-filter: var(--better-ui-glass-filter) !important;
@@ -2275,12 +2305,12 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .message.sent {
-  background: var(--better-ui-sent-background) !important;
+  background: var(--better-ui-sent-message-background) !important;
   border-color: var(--better-ui-surface-border) !important;
 }
 
 :root.better-ui .message.received {
-  background: var(--better-ui-soft-background) !important;
+  background: var(--better-ui-message-background) !important;
   border-color: var(--better-ui-surface-border) !important;
 }
 
@@ -2385,6 +2415,12 @@ body.menu-open .scroll-to-bottom-btn {
   background-color: #fff !important;
 }
 
+:root.better-ui .better-ui-settings-modal .better-ui-interface-tint-select {
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  color: var(--text-primary) !important;
+}
+
 :root.better-ui .menu-container,
 :root.better-ui .menu-overlay {
   background: var(--better-ui-surface-background) !important;
@@ -2394,10 +2430,13 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .menu-item:hover,
-:root.better-ui .message:hover,
 :root.better-ui .reaction-option:hover,
 :root.better-ui .reaction-user-item:hover {
   background: var(--better-ui-surface-background) !important;
+}
+
+:root.better-ui .message:hover {
+  background: var(--better-ui-theme-surface-background) !important;
 }
 
 :root.better-ui .top-bar,
@@ -3251,7 +3290,7 @@ input:checked + .theme-slider:before {
 }
 
 :root.better-ui .search-overlay {
-  background: rgba(var(--better-ui-tint-rgb), calc(var(--better-ui-transparency) * 0.15)) !important;
+  background: rgba(var(--better-ui-interface-tint-rgb), calc(var(--better-ui-transparency) * 0.15)) !important;
   backdrop-filter: var(--better-ui-glass-filter) !important;
 }
 
@@ -3397,9 +3436,14 @@ input[type="search"]::placeholder,
 
 
 :root.better-ui .chat__messages {
-  background: var(--better-ui-soft-background) !important;
+  background: var(--better-ui-theme-soft-background) !important;
   border: 1px solid var(--better-ui-surface-border) !important;
   box-shadow: var(--better-ui-inner-shadow), 0 30px 60px rgba(0, 0, 0, 0.18) !important;
+}
+
+:root.better-ui .input-area,
+:root.better-ui .chat-footer {
+  background: var(--better-ui-theme-surface-background) !important;
 }
 
 #joinChannelInput {
