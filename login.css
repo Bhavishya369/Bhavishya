@@ -1859,20 +1859,20 @@ body.menu-open .scroll-to-bottom-btn {
 :root {
   --better-ui-tint-rgb: 255, 255, 255;
   --better-ui-interface-tint-rgb: var(--better-ui-tint-rgb);
-  --better-ui-transparency: 0.72;
+  --better-ui-transparency: 0.04;
   --better-ui-tint-intensity: 0.18;
-  --better-ui-blur: 18px;
+  --better-ui-blur: 20px;
   --better-ui-border-opacity: 1;
   --better-ui-shadow-rgb: 255, 255, 255;
   --better-ui-shadow-intensity: 1;
-  --better-ui-inner-shadow: inset 0 0 5px 1px rgba(var(--better-ui-shadow-rgb), 0.36);
+  --better-ui-inner-shadow: inset 0 0 0 transparent;
 }
 
 /* Global Better UI liquid glass theme */
 :root.better-ui {
-  --better-ui-transparency: 0.72;
+  --better-ui-transparency: 0.04;
   --better-ui-tint-intensity: 0.18;
-  --better-ui-blur: 18px;
+  --better-ui-blur: 20px;
   --better-ui-border-opacity: 1;
   --better-ui-surface-background:
     linear-gradient(rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-tint-intensity)), rgba(var(--better-ui-interface-tint-rgb), var(--better-ui-tint-intensity))),
@@ -2203,13 +2203,64 @@ body.menu-open .scroll-to-bottom-btn {
   align-items: start;
 }
 
-.better-ui-interface-tint-select {
+.better-ui-interface-tint-select,
+.better-ui-user-picker {
   min-width: 160px;
   padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--secondary-bg);
   color: var(--text-primary);
+  font: inherit;
+}
+
+.better-ui-settings-modal select option {
+  background-color: var(--secondary-bg);
+  color: var(--text-primary);
+}
+
+:root.--dark-theme .better-ui-settings-modal select {
+  color-scheme: dark;
+}
+
+:root.--light-theme .better-ui-settings-modal select {
+  color-scheme: light;
+}
+
+.better-ui-import-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  width: min(100%, 380px);
+}
+
+.better-ui-user-search {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--search-input-bg);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.better-ui-user-search::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.better-ui-user-picker {
+  width: 100%;
+  min-width: 0;
+}
+
+.better-ui-user-search:focus-visible,
+.better-ui-user-picker:focus-visible,
+.better-ui-interface-tint-select:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
 }
 
 :root.better-ui .better-ui-setting-row {
@@ -2265,6 +2316,7 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .better-ui-user-picker,
+:root.better-ui .better-ui-user-search,
 :root.better-ui .better-ui-settings-modal .settings-text-input,
 :root.better-ui .better-ui-settings-modal .modal-input {
   background: var(--better-ui-soft-background);
@@ -2416,6 +2468,18 @@ body.menu-open .scroll-to-bottom-btn {
 }
 
 :root.better-ui .better-ui-settings-modal .better-ui-interface-tint-select {
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  color: var(--text-primary) !important;
+}
+
+:root.better-ui .better-ui-settings-modal .better-ui-user-picker {
+  background: var(--better-ui-soft-background) !important;
+  border: 1px solid var(--better-ui-surface-border) !important;
+  color: var(--text-primary) !important;
+}
+
+:root.better-ui .better-ui-settings-modal .better-ui-user-search {
   background: var(--better-ui-soft-background) !important;
   border: 1px solid var(--better-ui-surface-border) !important;
   color: var(--text-primary) !important;

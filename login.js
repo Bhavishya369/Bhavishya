@@ -966,12 +966,12 @@ let notificationsEnabled = false;
 let betterUiEnabled = false;
 const DEFAULT_BETTER_UI_SETTINGS = Object.freeze({
   enabled: false,
-  transparency: 72,
-  magnification: 20,
-  blur: 18,
+  transparency: 4,
+  magnification: 0,
+  blur: 20,
   tintIntensity: 18,
   border: true,
-  shadowStyle: 'soft',
+  shadowStyle: 'none',
   shadowIntensity: 100,
   shadowColor: 'white',
   tintColor: 'white',
@@ -1371,6 +1371,23 @@ async function saveSettingsToFirebase() {
     return true;
   } catch (error) {
     console.error('Error saving settings to Firebase:', error);
+    return false;
+  }
+}
+
+async function saveBetterUiSettingsToFirebase() {
+  if (!username) return false;
+
+  try {
+    const settingsRef = db.ref(`users/${getFirebaseSafeUserKey(username)}/settings`);
+    await settingsRef.update({
+      betterUiEnabled,
+      betterUi: getBetterUiSettingsSnapshot(),
+      lastUpdated: firebase.database.ServerValue.TIMESTAMP
+    });
+    return true;
+  } catch (error) {
+    console.error('Error saving Better UI settings to Firebase:', error);
     return false;
   }
 }
@@ -11810,27 +11827,60 @@ async function populateRecentChatsList() {
   function loadBetterUiUserPicker() {
     if (!betterUiUserPicker) return;
     const currentUsername = (username || '').trim();
-    const options = ['<option value="">Choose a user</option>'];
+    const betterUiUserSearch = document.getElementById('betterUiUserSearch');
+    let userNames = [];
+
+    function renderUserOptions() {
+      const query = betterUiUserSearch ? betterUiUserSearch.value.trim().toLocaleLowerCase() : '';
+      const selectedUser = betterUiUserPicker.value;
+      const matchingNames = userNames.filter((name) => name.toLocaleLowerCase().includes(query));
+      const options = ['<option value="">Choose a user</option>'];
+      if (!userNames.length) {
+        options.push('<option value="" disabled>No users available</option>');
+      } else if (!matchingNames.length) {
+        options.push('<option value="" disabled>No matching users</option>');
+      } else {
+        matchingNames.forEach((name) => {
+          options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+        });
+      }
+      betterUiUserPicker.innerHTML = options.join('');
+      if (matchingNames.includes(selectedUser)) {
+        betterUiUserPicker.value = selectedUser;
+      }
+    }
+
+    if (betterUiUserSearch) {
+      betterUiUserSearch.value = '';
+      betterUiUserSearch.oninput = renderUserOptions;
+    }
+    betterUiUserPicker.onchange = () => {
+      if (betterUiUserSearch && betterUiUserSearch.value) {
+        betterUiUserSearch.value = '';
+        renderUserOptions();
+      }
+    };
+    renderUserOptions();
+
     if (db && typeof db.ref === 'function') {
       db.ref('users').once('value').then((snapshot) => {
         const users = snapshot.val() || {};
-        const userNames = Object.keys(users)
+        userNames = [...new Set(Object.keys(users)
           .map((key) => {
             const value = users[key] || {};
             const importedName = typeof value.username === 'string' ? value.username.trim() : '';
             return importedName || key;
           })
-          .filter((name) => name && name !== currentUsername)
-          .sort((first, second) => first.localeCompare(second));
-        const uniqueNames = [...new Set(userNames)];
-        if (!uniqueNames.length) {
-          options.push('<option value="" disabled>No users available</option>');
-        } else {
-          uniqueNames.forEach((name) => {
-            options.push(`<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`);
+          .filter((name) => name && name !== currentUsername))]
+          .sort((first, second) => {
+            const firstStartsWithDot = first.startsWith('.');
+            const secondStartsWithDot = second.startsWith('.');
+            if (firstStartsWithDot !== secondStartsWithDot) {
+              return firstStartsWithDot ? -1 : 1;
+            }
+            return first.localeCompare(second);
           });
-        }
-        betterUiUserPicker.innerHTML = options.join('');
+        renderUserOptions();
       }).catch((error) => {
         console.warn('Unable to load Better UI user import list:', error);
       });
@@ -11964,7 +12014,12 @@ async function populateRecentChatsList() {
           showNotification('Could not find that user’s Better UI configuration.', true);
           return;
         }
-        const importedSettings = normalizeBetterUiSettings(users[targetUser]?.settings?.betterUi || {});
+        const sourceSettings = users[targetUser]?.settings?.betterUi;
+        if (!sourceSettings) {
+          showNotification('That user has no saved Better UI settings to import.', true);
+          return;
+        }
+        const importedSettings = normalizeBetterUiSettings(sourceSettings);
         betterUiSettings = importedSettings;
         localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
         syncBetterUiControlValues();
@@ -11972,7 +12027,10 @@ async function populateRecentChatsList() {
         if (betterUiEnabled) {
           applyBetterUi(true);
         }
-        await saveSettingsToFirebase();
+        if (!await saveBetterUiSettingsToFirebase()) {
+          showNotification('Failed to save the imported Better UI settings.', true);
+          return;
+        }
         showNotification('Imported Better UI settings from ' + selectedUser);
       } catch (error) {
         console.error('Error importing Better UI settings:', error);

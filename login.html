@@ -1950,8 +1950,8 @@ function begin(){
                 <span>Transparency</span>
                 <p class="settings-option-desc">Adjust the transparency of all Better UI elements.</p>
               </div>
-              <div class="better-ui-setting-value" id="betterUiTransparencyValue">72%</div>
-              <input type="range" id="betterUiTransparency" class="better-ui-slider" min="0" max="100" value="72">
+              <div class="better-ui-setting-value" id="betterUiTransparencyValue">4%</div>
+              <input type="range" id="betterUiTransparency" class="better-ui-slider" min="0" max="100" value="4">
             </div>
 
             <div class="better-ui-setting-row" data-better-ui-setting="magnification">
@@ -1959,8 +1959,8 @@ function begin(){
                 <span>Magnification</span>
                 <p class="settings-option-desc">Zoom and bend the background seen through glass panels, like a convex lens.</p>
               </div>
-              <div class="better-ui-setting-value" id="betterUiMagnificationValue">1.10×</div>
-              <input type="range" id="betterUiMagnification" class="better-ui-slider" min="0" max="100" value="20" aria-label="Magnification">
+              <div class="better-ui-setting-value" id="betterUiMagnificationValue">1.00×</div>
+              <input type="range" id="betterUiMagnification" class="better-ui-slider" min="0" max="100" value="0" aria-label="Magnification">
             </div>
 
             <div class="better-ui-setting-row" data-better-ui-setting="blur">
@@ -1968,8 +1968,8 @@ function begin(){
                 <span>Blur</span>
                 <p class="settings-option-desc">Adjust the blur applied to Better UI surfaces.</p>
               </div>
-              <div class="better-ui-setting-value" id="betterUiBlurValue">18px</div>
-              <input type="range" id="betterUiBlur" class="better-ui-slider" min="0" max="60" value="18">
+              <div class="better-ui-setting-value" id="betterUiBlurValue">20px</div>
+              <input type="range" id="betterUiBlur" class="better-ui-slider" min="0" max="60" value="20">
             </div>
 
             <div class="better-ui-setting-row" data-better-ui-setting="tintIntensity">
@@ -1989,7 +1989,7 @@ function begin(){
               <fieldset class="better-ui-shadow-picker" aria-label="Inner shadow style">
                 <legend class="sr-only">Inner shadow style</legend>
                 <label class="better-ui-shadow-option" title="No inner shadow">
-                  <input type="radio" name="betterUiShadowStyle" value="none" aria-label="None">
+                  <input type="radio" name="betterUiShadowStyle" value="none" aria-label="None" checked>
                   <span aria-hidden="true"></span>
                   <small>None</small>
                 </label>
@@ -2098,7 +2098,7 @@ function begin(){
               <fieldset class="better-ui-shadow-color-picker" aria-label="Inner shadow color">
                 <legend class="sr-only">Inner shadow color</legend>
                 <label class="better-ui-shadow-color-option" title="White shadow">
-                  <input type="radio" name="betterUiShadowColor" value="white" aria-label="White">
+                  <input type="radio" name="betterUiShadowColor" value="white" aria-label="White" checked>
                   <span aria-hidden="true"></span>
                 </label>
                 <label class="better-ui-shadow-color-option" title="Black shadow">
@@ -2113,6 +2113,7 @@ function begin(){
                 <p class="settings-option-desc">Import a Better UI setup from another user without affecting their other settings.</p>
               </div>
               <div class="better-ui-import-controls">
+                <input type="search" id="betterUiUserSearch" class="better-ui-user-search" placeholder="Search users..." aria-label="Search users">
                 <select id="betterUiUserPicker" class="better-ui-user-picker">
                   <option value="">Choose a user</option>
                 </select>
