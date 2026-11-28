@@ -2234,6 +2234,22 @@ body.menu-open .scroll-to-bottom-btn {
   width: min(100%, 380px);
 }
 
+.better-ui-import-option {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.better-ui-import-option .settings-option-label {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.better-ui-import-option .better-ui-import-controls {
+  width: 100%;
+  max-width: none;
+}
+
 .better-ui-user-search {
   grid-column: 1 / -1;
   width: 100%;
