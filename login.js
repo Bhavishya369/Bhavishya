@@ -993,6 +993,10 @@ const BETTER_UI_LENS_FILTER_ID = 'betterUiConvexLensFilter';
 let betterUiLensDisplacementMap = null;
 let betterUiSettings = { ...DEFAULT_BETTER_UI_SETTINGS };
 
+function getBetterUiStorageKey(key) {
+  return `${key}:${encodeURIComponent(username.trim())}`;
+}
+
 function initializeBetterUiLensFilter() {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
@@ -1214,7 +1218,7 @@ function getBetterUiSettingsSnapshot() {
 
 function restoreDefaultBetterUiSettings() {
   betterUiSettings = { ...DEFAULT_BETTER_UI_SETTINGS };
-  localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
+  localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
 }
 
 function updateBetterUiSettingsFromControls() {
@@ -1286,7 +1290,7 @@ function syncBetterUiPreviewVars() {
 }
 
 function saveBetterUiSettingsLocally() {
-  localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
+  localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
   syncBetterUiStyleVars();
 }
 
@@ -1376,6 +1380,25 @@ async function loadSettingsFromFirebase() {
   if (!username) return false;
   
   try {
+    const storedBetterUiSettings = localStorage.getItem(getBetterUiStorageKey('better_ui_settings'));
+    if (storedBetterUiSettings) {
+      try {
+        betterUiSettings = normalizeBetterUiSettings(JSON.parse(storedBetterUiSettings));
+      } catch (error) {
+        restoreDefaultBetterUiSettings();
+      }
+    } else {
+      betterUiSettings = { ...DEFAULT_BETTER_UI_SETTINGS };
+    }
+
+    const storedBetterUi = localStorage.getItem(getBetterUiStorageKey('better_ui_enabled'));
+    betterUiEnabled = storedBetterUi === 'true';
+    const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
+    if (menuBetterUiToggle) {
+      menuBetterUiToggle.checked = betterUiEnabled;
+    }
+    applyBetterUi(betterUiEnabled);
+
     const safeKey = getFirebaseSafeUserKey(username);
     const settingsRef = db.ref(`users/${safeKey}/settings`);
     const snapshot = await settingsRef.once('value');
@@ -1443,33 +1466,25 @@ async function loadSettingsFromFirebase() {
 
       if (settings.hasOwnProperty('betterUi')) {
         betterUiSettings = normalizeBetterUiSettings(settings.betterUi);
-        localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
+        localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
       } else {
-        const storedBetterUiSettings = localStorage.getItem('better_ui_settings');
-        if (storedBetterUiSettings) {
-          try {
-            betterUiSettings = normalizeBetterUiSettings(JSON.parse(storedBetterUiSettings));
-          } catch (error) {
-            restoreDefaultBetterUiSettings();
-          }
-        } else {
-          restoreDefaultBetterUiSettings();
-        }
+        localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
       }
 
       // Load Better UI setting
       if (settings.hasOwnProperty('betterUiEnabled')) {
         betterUiEnabled = settings.betterUiEnabled;
-        localStorage.setItem('better_ui_enabled', betterUiEnabled.toString());
+        localStorage.setItem(getBetterUiStorageKey('better_ui_enabled'), betterUiEnabled.toString());
         const menuBetterUiToggle = document.getElementById('menuBetterUiToggle');
         if (menuBetterUiToggle) {
           menuBetterUiToggle.checked = betterUiEnabled;
         }
         applyBetterUi(betterUiEnabled);
       } else {
-        const storedBetterUi = localStorage.getItem('better_ui_enabled');
+        const storedBetterUi = localStorage.getItem(getBetterUiStorageKey('better_ui_enabled'));
         if (storedBetterUi !== null) {
           betterUiEnabled = storedBetterUi === 'true';
+          localStorage.setItem(getBetterUiStorageKey('better_ui_enabled'), betterUiEnabled.toString());
           applyBetterUi(betterUiEnabled);
         } else {
           applyBetterUi(false);
@@ -1563,7 +1578,7 @@ function setupSettingsSyncListener() {
             const importedSettings = normalizeBetterUiSettings(settings.betterUi);
             if (JSON.stringify(importedSettings) !== JSON.stringify(betterUiSettings)) {
               betterUiSettings = importedSettings;
-              localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
+              localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
               syncBetterUiStyleVars();
             }
           }
@@ -11732,7 +11747,7 @@ async function populateRecentChatsList() {
   menuBetterUiToggle.addEventListener('change', async (e) => {
     betterUiEnabled = e.target.checked;
     applyBetterUi(betterUiEnabled);
-    localStorage.setItem('better_ui_enabled', betterUiEnabled);
+    localStorage.setItem(getBetterUiStorageKey('better_ui_enabled'), betterUiEnabled);
     await saveSettingsToFirebase();
     showNotification(betterUiEnabled ? 'Better UI enabled' : 'Better UI disabled');
   });
@@ -11920,7 +11935,7 @@ async function populateRecentChatsList() {
     resetBetterUiSettingsBtn.addEventListener('click', async () => {
       resetBetterUiSettingsToDefaults();
       betterUiEnabled = DEFAULT_BETTER_UI_SETTINGS.enabled;
-      localStorage.setItem('better_ui_enabled', betterUiEnabled.toString());
+      localStorage.setItem(getBetterUiStorageKey('better_ui_enabled'), betterUiEnabled.toString());
       menuBetterUiToggle.checked = betterUiEnabled;
       applyBetterUi(betterUiEnabled);
       syncBetterUiControlValues();
@@ -11951,7 +11966,7 @@ async function populateRecentChatsList() {
         }
         const importedSettings = normalizeBetterUiSettings(users[targetUser]?.settings?.betterUi || {});
         betterUiSettings = importedSettings;
-        localStorage.setItem('better_ui_settings', JSON.stringify(betterUiSettings));
+        localStorage.setItem(getBetterUiStorageKey('better_ui_settings'), JSON.stringify(betterUiSettings));
         syncBetterUiControlValues();
         syncBetterUiStyleVars();
         if (betterUiEnabled) {
